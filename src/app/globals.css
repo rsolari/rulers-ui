@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+:root {
+  --parchment-50: #fdf8f0;
+  --parchment-100: #f5ead6;
+  --parchment-200: #ecdcb8;
+  --parchment-300: #dfc8a0;
+  --parchment-400: #d4b483;
+  --parchment-500: #c9a066;
+
+  --ink-50: #f5f0eb;
+  --ink-100: #e0d5c8;
+  --ink-200: #b8a48e;
+  --ink-300: #8b7355;
+  --ink-400: #6b5435;
+  --ink-500: #4a3728;
+  --ink-600: #3a2a1e;
+  --ink-700: #2d1f16;
+  --ink-800: #1e140e;
+  --ink-900: #140d09;
+
+  --gold-300: #f0d080;
+  --gold-400: #daa520;
+  --gold-500: #c49000;
+  --gold-600: #a07000;
+
+  --red-500: #8b2020;
+  --red-600: #6b1515;
+  --green-500: #2d5a27;
+  --green-600: #1e4a1a;
+  --blue-500: #2a4a7a;
+
+  --background: var(--parchment-50);
+  --foreground: var(--ink-700);
+  --card-bg: var(--parchment-100);
+  --card-border: var(--ink-200);
+  --input-bg: var(--parchment-50);
+  --input-border: var(--ink-200);
+  --primary: var(--ink-500);
+  --primary-hover: var(--ink-600);
+  --accent: var(--gold-400);
+  --accent-hover: var(--gold-500);
+  --muted: var(--ink-200);
+  --muted-foreground: var(--ink-300);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card-bg);
+  --color-card-border: var(--card-border);
+  --color-input-bg: var(--input-bg);
+  --color-input-border: var(--input-border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-muted: var(--muted);
+  --color-muted-fg: var(--muted-foreground);
+  --color-gold-300: var(--gold-300);
+  --color-gold-400: var(--gold-400);
+  --color-gold-500: var(--gold-500);
+  --color-ink-100: var(--ink-100);
+  --color-ink-200: var(--ink-200);
+  --color-ink-300: var(--ink-300);
+  --color-ink-400: var(--ink-400);
+  --color-ink-500: var(--ink-500);
+  --color-ink-600: var(--ink-600);
+  --color-ink-700: var(--ink-700);
+  --color-parchment-50: var(--parchment-50);
+  --color-parchment-100: var(--parchment-100);
+  --color-parchment-200: var(--parchment-200);
+  --color-parchment-300: var(--parchment-300);
+  --color-red-500: var(--red-500);
+  --color-red-600: var(--red-600);
+  --color-green-500: var(--green-500);
+  --color-green-600: var(--green-600);
+  --color-blue-500: var(--blue-500);
+  --font-heading: 'Cinzel', serif;
+  --font-body: 'Crimson Text', serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(139,115,85,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(139,115,85,0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 40% 80%, rgba(139,115,85,0.04) 0%, transparent 50%);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  color: var(--ink-600);
+  letter-spacing: 0.02em;
+}
+
+.medieval-border {
+  border: 2px solid var(--ink-200);
+  box-shadow: inset 0 0 0 1px var(--parchment-200), 0 2px 8px rgba(74,55,40,0.1);
+}
+
+.medieval-border-gold {
+  border: 2px solid var(--gold-400);
+  box-shadow: inset 0 0 0 1px var(--gold-300), 0 2px 8px rgba(218,165,32,0.15);
+}
+
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: var(--parchment-100); }
+::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-300); }

@@ -155,12 +155,20 @@ export async function POST(
           const settlementId = uuid();
           const resourceSiteId = uuid();
 
+          // Realm territory resource settlements are always Villages per
+          // the starting-package rules; neutral territories use whatever
+          // size the map generator rolled.
+          const ownerKind = ownershipByIndex.get(territoryIndex)?.kind;
+          const settlementSize = ownerKind === 'neutral'
+            ? (resource.settlement.size || 'Village')
+            : 'Village';
+
           tx.insert(settlements).values({
             id: settlementId,
             territoryId,
             realmId,
             name: resource.settlement.name,
-            size: resource.settlement.size || 'Village',
+            size: settlementSize,
           }).run();
 
           tx.insert(resourceSites).values({

@@ -1,5 +1,5 @@
 declare module 'agentation' {
   import type { ComponentType } from 'react';
 
-  export const Agentation: ComponentType;
+  export const PageFeedbackToolbarCSS: ComponentType;
 }

@@ -4,6 +4,7 @@ import { guildsOrdersSocieties } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireGM } from '@/lib/auth';
+import { recomputeGameInitState } from '@/lib/game-init-state';
 
 export async function GET(
   _request: Request
@@ -38,6 +39,8 @@ export async function POST(
       leaderId: body.leaderId || null,
       income: body.income || 0,
     });
+
+    await recomputeGameInitState(gameId);
 
     return NextResponse.json({ id, ...body });
   } catch (error) {

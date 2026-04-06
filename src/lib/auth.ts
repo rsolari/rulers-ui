@@ -279,3 +279,28 @@ export async function requireRealmOwner(gameId: string, realmId: string) {
 
   return realm;
 }
+
+export async function requireOwnedRealmAccess(gameId: string, requestedRealmId?: string | null) {
+  const session = await resolveSessionFromCookies();
+  const isPlayerForGame = session.gameId === gameId && session.role === 'player';
+
+  if (isPlayerForGame) {
+    if (!session.realmId) {
+      throw new AuthError('Realm access required', 403);
+    }
+
+    if (requestedRealmId && requestedRealmId !== session.realmId) {
+      throw new AuthError('Realm ownership required', 403);
+    }
+
+    const realm = await requireRealmOwner(gameId, session.realmId);
+    return { realm, realmId: session.realmId, session };
+  }
+
+  if (!requestedRealmId) {
+    throw new AuthError('realmId required', 400);
+  }
+
+  const realm = await requireRealmOwner(gameId, requestedRealmId);
+  return { realm, realmId: requestedRealmId, session };
+}

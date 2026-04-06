@@ -52,7 +52,7 @@ async function fetchArmyData(gameId: string, realmId: string) {
 export default function ArmyPage() {
   const params = useParams();
   const gameId = params.gameId as string;
-  const { realmId } = useRole();
+  const { realmId, territoryId } = useRole();
   const [armies, setArmies] = useState<Army[]>([]);
   const [allTroops, setTroops] = useState<Troop[]>([]);
   const [allSiege, setSiege] = useState<SiegeUnit[]>([]);
@@ -72,16 +72,12 @@ export default function ArmyPage() {
   }, [gameId, realmId]);
 
   async function createArmy() {
-    if (!newArmyName.trim() || !realmId) return;
-    // Need a territory - get first one
-    const terrs = await fetch(`/api/game/${gameId}/territories`).then(r => r.json());
-    const myTerr = terrs.find((t: { realmId: string }) => t.realmId === realmId) || terrs[0];
-    if (!myTerr) return;
+    if (!newArmyName.trim() || !realmId || !territoryId) return;
 
     await fetch(`/api/game/${gameId}/armies`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ realmId, name: newArmyName, locationTerritoryId: myTerr.id }),
+      body: JSON.stringify({ realmId, name: newArmyName, locationTerritoryId: territoryId }),
     });
     const data = await fetchArmyData(gameId, realmId);
     setNewArmyName('');

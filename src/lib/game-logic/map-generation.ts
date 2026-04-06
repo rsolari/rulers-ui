@@ -1,4 +1,4 @@
-import type { ResourceType, SettlementSize } from '@/types/game';
+import type { ResourceType, SettlementSize, TroopType, TroopClass, ArmourType } from '@/types/game';
 import { RESOURCE_RARITY } from './constants';
 
 // ============================================================
@@ -175,4 +175,46 @@ export function generateMap(
     territoryIndex: idx,
     resources: generateTerritoryResources(t.type),
   }));
+}
+
+// ============================================================
+// Realm Starting Package
+// ============================================================
+
+export const REALM_STARTING_COMMON_RESOURCES = 3;
+export const REALM_STARTING_LUXURY_RESOURCES = 1;
+export const REALM_STARTING_VILLAGES = 4;
+export const REALM_STARTING_TOWNS = 1;
+export const REALM_STARTING_SETTLEMENTS = REALM_STARTING_VILLAGES + REALM_STARTING_TOWNS;
+export const REALM_STARTING_TROOPS = 5;
+
+export interface GeneratedTroop {
+  type: TroopType;
+  class: TroopClass;
+  armourType: ArmourType;
+}
+
+export interface RealmStartingPackage {
+  resources: GeneratedResource[];
+  troops: GeneratedTroop[];
+}
+
+/**
+ * Generate the canonical starting package for a new player realm.
+ *
+ * - 3 common resources + 1 luxury resource, each on a Village
+ * - 5 basic Spearmen troops (to be garrisoned in the player's town)
+ *
+ * The town itself is created separately during realm creation since
+ * the player names it.
+ */
+export function generateRealmStartingPackage(): RealmStartingPackage {
+  const resources = generateTerritoryResources('Realm');
+
+  const troops: GeneratedTroop[] = Array.from(
+    { length: REALM_STARTING_TROOPS },
+    () => ({ type: 'Spearmen' as TroopType, class: 'Basic' as TroopClass, armourType: 'Light' as ArmourType }),
+  );
+
+  return { resources, troops };
 }

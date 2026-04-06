@@ -61,6 +61,20 @@ vi.mock('@/db', () => ({ db: mocks.db }));
 const uuidMock = vi.hoisted(() => vi.fn());
 vi.mock('uuid', () => ({ v4: uuidMock }));
 
+const authMocks = vi.hoisted(() => ({
+  resolveSessionFromCookies: vi.fn(),
+  requireRealmOwner: vi.fn(),
+  requireInitState: vi.fn(),
+  isAuthError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'status' in error),
+}));
+
+vi.mock('@/lib/auth', () => authMocks);
+
+const recomputeGameInitStateMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/game-init-state', () => ({
+  recomputeGameInitState: recomputeGameInitStateMock,
+}));
+
 import { GET, POST } from './route';
 
 describe('GET /api/game/[gameId]/ruler', () => {
@@ -117,6 +131,123 @@ describe('POST /api/game/[gameId]/ruler', () => {
     mocks.dbGet.mockReset();
     mocks.txGet.mockReset();
     uuidMock.mockReset();
+    authMocks.resolveSessionFromCookies.mockResolvedValue({
+      role: 'gm',
+      gameId: 'game-1',
+      realmId: null,
+    });
+    authMocks.requireRealmOwner.mockResolvedValue({ id: 'realm-1' });
+    authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'parallel_final_setup' });
+    recomputeGameInitStateMock.mockResolvedValue(null);
+  });
+
+  it('returns 403 for unauthorized requests', async () => {
+    authMocks.requireRealmOwner.mockRejectedValue(Object.assign(new Error('Realm ownership required'), { status: 403 }));
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/ruler', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-1',
+        familyId: 'family-1',
+        name: 'New Ruler',
+        gender: 'Male',
+        age: 'Adult',
+        personality: 'Jovial and Friendly',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: 'Realm ownership required' });
+    expect(authMocks.requireRealmOwner).toHaveBeenCalledWith('game-1', 'realm-1');
+    expect(authMocks.requireInitState).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it('uses the player realm from session instead of the requested realm', async () => {
+    authMocks.resolveSessionFromCookies.mockResolvedValue({
+      role: 'player',
+      gameId: 'game-1',
+      realmId: 'realm-player',
+    });
+    authMocks.requireRealmOwner.mockResolvedValue({ id: 'realm-player' });
+    mocks.txGet
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce({ id: 'family-1', name: 'Storm' });
+    uuidMock.mockReturnValueOnce('ruler-1');
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/ruler', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-other',
+        familyId: 'family-1',
+        name: 'Lady Storm',
+        gender: 'Female',
+        age: 'Adult',
+        personality: 'Intelligent and Subtle',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(authMocks.requireRealmOwner).toHaveBeenCalledWith('game-1', 'realm-player');
+    await expect(response.json()).resolves.toEqual({
+      id: 'ruler-1',
+      familyId: 'family-1',
+      realmId: 'realm-player',
+      name: 'Lady Storm',
+      gender: 'Female',
+      age: 'Adult',
+      race: null,
+      backstory: null,
+      personality: 'Intelligent and Subtle',
+      relationshipWithRuler: null,
+      belief: null,
+      valuedObject: null,
+      valuedPerson: null,
+      greatestDesire: null,
+      familyName: 'Storm',
+    });
+    expect(mocks.operations.at(-1)).toEqual({
+      kind: 'insert',
+      table: nobles,
+      values: expect.objectContaining({
+        realmId: 'realm-player',
+      }),
+    });
+  });
+
+  it('returns 403 when the game is outside the ruler setup window', async () => {
+    authMocks.requireInitState.mockRejectedValue(
+      Object.assign(new Error('Game must be in parallel_final_setup or ready_to_start'), { status: 403 })
+    );
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/ruler', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-1',
+        familyId: 'family-1',
+        name: 'New Ruler',
+        gender: 'Male',
+        age: 'Adult',
+        personality: 'Jovial and Friendly',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Game must be in parallel_final_setup or ready_to_start',
+    });
+    expect(authMocks.requireRealmOwner).toHaveBeenCalledWith('game-1', 'realm-1');
+    expect(authMocks.requireInitState).toHaveBeenCalledWith('game-1', 'parallel_final_setup', 'ready_to_start');
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it('rejects duplicate rulers for the same realm', async () => {
@@ -139,6 +270,8 @@ describe('POST /api/game/[gameId]/ruler', () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: 'Realm already has a ruler' });
+    expect(authMocks.requireRealmOwner).toHaveBeenCalledWith('game-1', 'realm-1');
+    expect(authMocks.requireInitState).toHaveBeenCalledWith('game-1', 'parallel_final_setup', 'ready_to_start');
     expect(mocks.operations).toEqual([]);
   });
 

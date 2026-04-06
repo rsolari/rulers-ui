@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { generateTerritoryResources } from './map-generation';
+import {
+  generateTerritoryResources,
+  generateRealmStartingPackage,
+  REALM_STARTING_COMMON_RESOURCES,
+  REALM_STARTING_LUXURY_RESOURCES,
+  REALM_STARTING_VILLAGES,
+  REALM_STARTING_TOWNS,
+  REALM_STARTING_SETTLEMENTS,
+  REALM_STARTING_TROOPS,
+} from './map-generation';
 import { RESOURCE_RARITY } from './constants';
 
 afterEach(() => {
@@ -118,5 +127,69 @@ describe('RESOURCE_RARITY', () => {
     expect(RESOURCE_RARITY.Opium).toBe('Luxury');
     expect(RESOURCE_RARITY.Salt).toBe('Luxury');
     expect(RESOURCE_RARITY.Sugar).toBe('Luxury');
+  });
+});
+
+describe('starting package constants', () => {
+  it('defines exactly 3 common resources', () => {
+    expect(REALM_STARTING_COMMON_RESOURCES).toBe(3);
+  });
+
+  it('defines exactly 1 luxury resource', () => {
+    expect(REALM_STARTING_LUXURY_RESOURCES).toBe(1);
+  });
+
+  it('defines exactly 4 villages', () => {
+    expect(REALM_STARTING_VILLAGES).toBe(4);
+  });
+
+  it('defines exactly 1 town', () => {
+    expect(REALM_STARTING_TOWNS).toBe(1);
+  });
+
+  it('defines 5 total settlements (4 villages + 1 town)', () => {
+    expect(REALM_STARTING_SETTLEMENTS).toBe(5);
+    expect(REALM_STARTING_SETTLEMENTS).toBe(REALM_STARTING_VILLAGES + REALM_STARTING_TOWNS);
+  });
+
+  it('defines a standing army of 5 troops', () => {
+    expect(REALM_STARTING_TROOPS).toBe(5);
+  });
+});
+
+describe('generateRealmStartingPackage', () => {
+  it('produces exactly 3 common and 1 luxury resource', () => {
+    const pkg = generateRealmStartingPackage();
+
+    const common = pkg.resources.filter((r) => r.rarity === 'Common');
+    const luxury = pkg.resources.filter((r) => r.rarity === 'Luxury');
+
+    expect(common).toHaveLength(REALM_STARTING_COMMON_RESOURCES);
+    expect(luxury).toHaveLength(REALM_STARTING_LUXURY_RESOURCES);
+    expect(pkg.resources).toHaveLength(REALM_STARTING_COMMON_RESOURCES + REALM_STARTING_LUXURY_RESOURCES);
+  });
+
+  it('produces 4 village settlements on resource sites', () => {
+    const pkg = generateRealmStartingPackage();
+
+    const villages = pkg.resources.filter((r) => r.settlement.size === 'Village');
+    expect(villages).toHaveLength(REALM_STARTING_VILLAGES);
+    expect(pkg.resources.every((r) => r.settlement.size === 'Village')).toBe(true);
+  });
+
+  it('produces exactly 5 starting troops', () => {
+    const pkg = generateRealmStartingPackage();
+
+    expect(pkg.troops).toHaveLength(REALM_STARTING_TROOPS);
+  });
+
+  it('produces basic Spearmen with Light armour', () => {
+    const pkg = generateRealmStartingPackage();
+
+    for (const troop of pkg.troops) {
+      expect(troop.type).toBe('Spearmen');
+      expect(troop.class).toBe('Basic');
+      expect(troop.armourType).toBe('Light');
+    }
   });
 });

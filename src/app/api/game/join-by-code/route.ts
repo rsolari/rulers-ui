@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { games, playerSlots } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { canPlayersJoin, recomputeGameInitState, toLegacyGamePhase } from '@/lib/game-init-state';
 import { sessionCookieOptions } from '@/lib/auth';
 
 export async function POST(request: Request) {
@@ -19,7 +20,10 @@ export async function POST(request: Request) {
       gameId: gmGame.id,
       role: 'gm',
       realmId: null,
-      gamePhase: gmGame.gamePhase,
+      gamePhase: toLegacyGamePhase(gmGame.initState),
+      initState: gmGame.initState,
+      gmSetupState: gmGame.gmSetupState,
+      playerSetupState: null,
     });
     response.cookies.set('rulers-gm-code', gmGame.gmCode, sessionCookieOptions);
     response.cookies.set('rulers-game-id', gmGame.id, sessionCookieOptions);
@@ -29,6 +33,14 @@ export async function POST(request: Request) {
 
   const slot = await db.select().from(playerSlots).where(eq(playerSlots.claimCode, code)).get();
   if (!slot) {
+    // Check if this is the legacy game-level player code (not used for joining)
+    const gameByPlayerCode = await db.select().from(games).where(eq(games.playerCode, code)).get();
+    if (gameByPlayerCode) {
+      return NextResponse.json(
+        { error: 'That is the game reference code, not a player claim code. Ask your GM for your individual claim code.' },
+        { status: 404 }
+      );
+    }
     return NextResponse.json({ error: 'Invalid game code' }, { status: 404 });
   }
 
@@ -37,19 +49,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Game not found' }, { status: 404 });
   }
 
-  if (game.gamePhase !== 'RealmCreation') {
+  if (!canPlayersJoin(game.initState)) {
     return NextResponse.json({ error: 'Players can only join during realm creation' }, { status: 403 });
   }
 
+  let currentSlot = slot;
+
+  if (slot.setupState === 'unclaimed') {
+    const claimedAt = new Date();
+    await db.update(playerSlots)
+      .set({
+        claimedAt,
+        setupState: 'claimed',
+      })
+      .where(eq(playerSlots.id, slot.id));
+
+    currentSlot = {
+      ...slot,
+      claimedAt,
+      setupState: 'claimed',
+    };
+  }
+
+  const updatedGame = await recomputeGameInitState(game.id) ?? game;
+
   const response = NextResponse.json({
-    gameId: game.id,
+    gameId: updatedGame.id,
     role: 'player',
-    realmId: slot.realmId ?? null,
-    gamePhase: game.gamePhase,
-    displayName: slot.displayName ?? null,
+    realmId: currentSlot.realmId ?? null,
+    gamePhase: toLegacyGamePhase(updatedGame.initState),
+    initState: updatedGame.initState,
+    gmSetupState: updatedGame.gmSetupState,
+    playerSetupState: currentSlot.setupState,
+    displayName: currentSlot.displayName ?? null,
   });
-  response.cookies.set('rulers-claim-code', slot.claimCode, sessionCookieOptions);
-  response.cookies.set('rulers-game-id', game.id, sessionCookieOptions);
+  response.cookies.set('rulers-claim-code', currentSlot.claimCode, sessionCookieOptions);
+  response.cookies.set('rulers-game-id', updatedGame.id, sessionCookieOptions);
   response.cookies.delete('rulers-gm-code');
 
   return response;

@@ -34,6 +34,7 @@ interface Game {
   currentSeason: string;
   turnPhase: string;
   gamePhase: string;
+  initState: string;
 }
 
 interface Realm {
@@ -64,7 +65,7 @@ export default function RealmDashboard() {
   const params = useParams();
   const router = useRouter();
   const gameId = params.gameId as string;
-  const { role, realmId, gamePhase, loading } = useRole();
+  const { role, realmId, initState, loading } = useRole();
   const [game, setGame] = useState<Game | null>(null);
   const [realm, setRealm] = useState<Realm | null>(null);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -82,10 +83,10 @@ export default function RealmDashboard() {
       return;
     }
 
-    if (!realmId && gamePhase === 'RealmCreation') {
+    if (!realmId && initState && initState !== 'gm_world_setup' && initState !== 'active' && initState !== 'completed') {
       router.replace(`/game/${gameId}/create-realm`);
     }
-  }, [role, realmId, gamePhase, loading, gameId, router]);
+  }, [role, realmId, initState, loading, gameId, router]);
 
   useEffect(() => {
     if (!realmId) {
@@ -171,7 +172,7 @@ export default function RealmDashboard() {
     );
   }
 
-  const canEditIdentity = game.gamePhase === 'RealmCreation';
+  const canEditIdentity = game.initState === 'parallel_final_setup' || game.initState === 'ready_to_start';
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">

@@ -44,7 +44,7 @@ const mocks = vi.hoisted(() => {
 
 const authMocks = vi.hoisted(() => ({
   requireGM: vi.fn(),
-  requireGamePhase: vi.fn(),
+  requireInitState: vi.fn(),
   generateGameCode: vi.fn(),
   isAuthError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'status' in error),
 }));
@@ -83,7 +83,7 @@ describe('POST /api/game/[gameId]/setup', () => {
 
   it('creates player slots, settlements, and transitions to realm creation', async () => {
     authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
-    authMocks.requireGamePhase.mockResolvedValue({ id: 'game-1', gamePhase: 'Setup' });
+    authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'gm_world_setup' });
     authMocks.generateGameCode.mockReturnValue('CLAIM1');
     mocks.selectGet.mockReturnValue(undefined);
 
@@ -141,6 +141,7 @@ describe('POST /api/game/[gameId]/setup', () => {
           territoryId: 'territory-1',
           realmId: null,
           displayName: 'Alice',
+          setupState: 'unclaimed',
           claimedAt: null,
         },
       },
@@ -169,7 +170,12 @@ describe('POST /api/game/[gameId]/setup', () => {
       {
         kind: 'update',
         table: games,
-        values: { gamePhase: 'RealmCreation', turnPhase: 'Submission' },
+        values: {
+          initState: 'player_invites_open',
+          gmSetupState: 'configuring',
+          gamePhase: 'RealmCreation',
+          turnPhase: 'Submission',
+        },
       },
     ]);
 

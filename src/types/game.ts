@@ -2,6 +2,15 @@
 export type Season = 'Spring' | 'Summer' | 'Autumn' | 'Winter';
 export type TurnPhase = 'Submission' | 'Resolution' | 'Complete';
 export type GamePhase = 'Setup' | 'RealmCreation' | 'Active' | 'Completed';
+export type GameInitState =
+  | 'gm_world_setup'
+  | 'player_invites_open'
+  | 'parallel_final_setup'
+  | 'ready_to_start'
+  | 'active'
+  | 'completed';
+export type GMSetupState = 'pending' | 'configuring' | 'ready';
+export type PlayerSetupState = 'unclaimed' | 'claimed' | 'realm_created' | 'ruler_created' | 'ready';
 
 // Government Types
 export type GovernmentType = 'Monarch' | 'ElectedMonarch' | 'Council' | 'Ecclesiastical' | 'Consortium' | 'Magistrate' | 'Warlord';

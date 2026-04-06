@@ -50,7 +50,7 @@ export default function CreateRealmPage() {
   const params = useParams();
   const router = useRouter();
   const gameId = params.gameId as string;
-  const { role, realmId, territoryId, gamePhase, displayName, loading } = useRole();
+  const { role, realmId, territoryId, initState, displayName, loading } = useRole();
 
   const [territory, setTerritory] = useState<Territory | null>(null);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -77,10 +77,11 @@ export default function CreateRealmPage() {
       return;
     }
 
-    if (gamePhase !== 'RealmCreation' || !territoryId) {
+    const canCreateRealm = initState === 'parallel_final_setup' || initState === 'ready_to_start';
+    if (!canCreateRealm || !territoryId) {
       router.replace(`/game/${gameId}`);
     }
-  }, [role, realmId, territoryId, gamePhase, loading, gameId, router]);
+  }, [role, realmId, territoryId, initState, loading, gameId, router]);
 
   useEffect(() => {
     if (!territoryId) {

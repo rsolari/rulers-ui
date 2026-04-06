@@ -34,6 +34,29 @@ describe('generateTerritoryResources', () => {
     expect(resources[3]?.rarity).toBe('Luxury');
   });
 
+  it('keeps realm territories at exactly three common resources and one luxury', () => {
+    const randomSpy = vi.spyOn(Math, 'random');
+
+    randomSpy
+      .mockReturnValueOnce(0.91)
+      .mockReturnValueOnce(0.11)
+      .mockReturnValueOnce(0.01)
+      .mockReturnValueOnce(0.31)
+      .mockReturnValueOnce(0.81)
+      .mockReturnValueOnce(0.51);
+
+    const resources = generateTerritoryResources('Realm');
+
+    expect(resources.filter((resource) => resource.rarity === 'Common')).toHaveLength(3);
+    expect(resources.filter((resource) => resource.rarity === 'Luxury')).toHaveLength(1);
+    expect(resources.map((resource) => resource.resourceType)).toEqual([
+      'Timber',
+      'Clay',
+      'Stone',
+      'Lacquer',
+    ]);
+  });
+
   it('keeps random settlement sizes for neutral territories', () => {
     const randomSpy = vi.spyOn(Math, 'random');
 
@@ -61,6 +84,28 @@ describe('generateTerritoryResources', () => {
       'Village',
       'Village',
     ]);
+  });
+
+  it('keeps neutral territories at exactly two common resources and two luxuries', () => {
+    const randomSpy = vi.spyOn(Math, 'random');
+
+    randomSpy
+      .mockReturnValueOnce(0.91)
+      .mockReturnValueOnce(0.01)
+      .mockReturnValueOnce(0.75)
+      .mockReturnValueOnce(0.31)
+      .mockReturnValueOnce(0.81)
+      .mockReturnValueOnce(0.11)
+      .mockReturnValueOnce(0.65)
+      .mockReturnValueOnce(0.41)
+      .mockReturnValueOnce(0.55);
+
+    const resources = generateTerritoryResources('Neutral');
+
+    expect(resources.filter((resource) => resource.rarity === 'Common')).toHaveLength(2);
+    expect(resources.filter((resource) => resource.rarity === 'Luxury')).toHaveLength(2);
+    expect(resources.slice(0, 2).every((resource) => resource.rarity === 'Common')).toBe(true);
+    expect(resources.slice(2).every((resource) => resource.rarity === 'Luxury')).toBe(true);
   });
 });
 

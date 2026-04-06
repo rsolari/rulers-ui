@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { buildings, games, settlements, territories } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { getGmCode, isAuthError, requireGamePhase, requireRealmOwner } from '@/lib/auth';
+import { getGmCode, isAuthError, requireInitState, requireRealmOwner } from '@/lib/auth';
 
 export async function GET(
   request: Request,
@@ -75,7 +75,7 @@ export async function POST(
         return NextResponse.json({ error: 'realmId required' }, { status: 400 });
       }
 
-      await requireGamePhase(gameId, 'RealmCreation');
+      await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
       await requireRealmOwner(gameId, body.realmId);
 
       if (body.size !== 'Town') {

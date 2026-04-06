@@ -2,7 +2,8 @@ import { cookies } from 'next/headers';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { games, playerSlots, realms } from '@/db/schema';
-import type { GamePhase } from '@/types/game';
+import { toLegacyGamePhase } from '@/lib/game-init-state';
+import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState } from '@/types/game';
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
@@ -19,6 +20,9 @@ export interface PublicSession {
   gameId: string | null;
   realmId: string | null;
   gamePhase: GamePhase | null;
+  initState: GameInitState | null;
+  gmSetupState: GMSetupState | null;
+  playerSetupState: PlayerSetupState | null;
   displayName: string | null;
   territoryId: string | null;
 }
@@ -86,6 +90,9 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       gameId: null,
       realmId: null,
       gamePhase: null,
+      initState: null,
+      gmSetupState: null,
+      playerSetupState: null,
       displayName: null,
       territoryId: null,
     };
@@ -98,6 +105,9 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       gameId: null,
       realmId: null,
       gamePhase: null,
+      initState: null,
+      gmSetupState: null,
+      playerSetupState: null,
       displayName: null,
       territoryId: null,
     };
@@ -109,7 +119,10 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       role: 'gm',
       gameId: game.id,
       realmId: null,
-      gamePhase: game.gamePhase,
+      gamePhase: toLegacyGamePhase(game.initState),
+      initState: game.initState,
+      gmSetupState: game.gmSetupState,
+      playerSetupState: null,
       displayName: null,
       territoryId: null,
     };
@@ -122,6 +135,9 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       gameId: null,
       realmId: null,
       gamePhase: null,
+      initState: null,
+      gmSetupState: null,
+      playerSetupState: null,
       displayName: null,
       territoryId: null,
     };
@@ -140,6 +156,9 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       gameId: null,
       realmId: null,
       gamePhase: null,
+      initState: null,
+      gmSetupState: null,
+      playerSetupState: null,
       displayName: null,
       territoryId: null,
     };
@@ -149,7 +168,10 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
     role: 'player',
     gameId: game.id,
     realmId: slot.realmId ?? null,
-    gamePhase: game.gamePhase,
+    gamePhase: toLegacyGamePhase(game.initState),
+    initState: game.initState,
+    gmSetupState: game.gmSetupState,
+    playerSetupState: slot.setupState,
     displayName: slot.displayName ?? null,
     territoryId: slot.territoryId,
   };
@@ -201,8 +223,20 @@ export async function requirePlayerSlot(gameId: string) {
 export async function requireGamePhase(gameId: string, ...allowedPhases: GamePhase[]) {
   const game = await requireGame(gameId);
 
-  if (!allowedPhases.includes(game.gamePhase)) {
+  const currentPhase = toLegacyGamePhase(game.initState);
+
+  if (!allowedPhases.includes(currentPhase)) {
     throw new AuthError(`Game must be in ${allowedPhases.join(' or ')}`, 403);
+  }
+
+  return game;
+}
+
+export async function requireInitState(gameId: string, ...allowedStates: GameInitState[]) {
+  const game = await requireGame(gameId);
+
+  if (!allowedStates.includes(game.initState)) {
+    throw new AuthError(`Game must be in ${allowedStates.join(' or ')}`, 403);
   }
 
   return game;

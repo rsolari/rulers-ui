@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { games, playerSlots } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { canPlayersJoin, recomputeGameInitState, toLegacyGamePhase } from '@/lib/game-init-state';
 import { sessionCookieOptions } from '@/lib/auth';
 
 export async function POST(
@@ -27,7 +28,10 @@ export async function POST(
       role: 'gm',
       gameId,
       realmId: null,
-      gamePhase: game.gamePhase,
+      gamePhase: toLegacyGamePhase(game.initState),
+      initState: game.initState,
+      gmSetupState: game.gmSetupState,
+      playerSetupState: null,
     });
     response.cookies.set('rulers-gm-code', game.gmCode, sessionCookieOptions);
     response.cookies.set('rulers-game-id', gameId, sessionCookieOptions);
@@ -46,18 +50,41 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid game code' }, { status: 401 });
   }
 
-  if (game.gamePhase !== 'RealmCreation') {
+  if (!canPlayersJoin(game.initState)) {
     return NextResponse.json({ error: 'Players can only join during realm creation' }, { status: 403 });
   }
+
+  let currentSlot = slot;
+
+  if (slot.setupState === 'unclaimed') {
+    const claimedAt = new Date();
+    await db.update(playerSlots)
+      .set({
+        claimedAt,
+        setupState: 'claimed',
+      })
+      .where(eq(playerSlots.id, slot.id));
+
+    currentSlot = {
+      ...slot,
+      claimedAt,
+      setupState: 'claimed',
+    };
+  }
+
+  const updatedGame = await recomputeGameInitState(gameId) ?? game;
 
   const response = NextResponse.json({
     role: 'player',
     gameId,
-    realmId: slot.realmId ?? null,
-    gamePhase: game.gamePhase,
-    displayName: slot.displayName ?? null,
+    realmId: currentSlot.realmId ?? null,
+    gamePhase: toLegacyGamePhase(updatedGame.initState),
+    initState: updatedGame.initState,
+    gmSetupState: updatedGame.gmSetupState,
+    playerSetupState: currentSlot.setupState,
+    displayName: currentSlot.displayName ?? null,
   });
-  response.cookies.set('rulers-claim-code', slot.claimCode, sessionCookieOptions);
+  response.cookies.set('rulers-claim-code', currentSlot.claimCode, sessionCookieOptions);
   response.cookies.set('rulers-game-id', gameId, sessionCookieOptions);
   response.cookies.delete('rulers-gm-code');
   return response;

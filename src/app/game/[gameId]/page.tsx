@@ -16,7 +16,7 @@ export default function GameRedirect() {
   const router = useRouter();
   const params = useParams();
   const gameId = params.gameId as string;
-  const { role, realmId, gamePhase, loading, refresh } = useRole();
+  const { role, realmId, initState, loading, refresh } = useRole();
 
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -30,7 +30,7 @@ export default function GameRedirect() {
     }
 
     if (role === 'gm') {
-      if (gamePhase === 'Setup') {
+      if (initState === 'gm_world_setup') {
         router.replace(`/game/${gameId}/setup`);
         return;
       }
@@ -40,7 +40,7 @@ export default function GameRedirect() {
     }
 
     if (role === 'player') {
-      if (!realmId && gamePhase === 'RealmCreation') {
+      if (!realmId && initState && initState !== 'gm_world_setup' && initState !== 'active' && initState !== 'completed') {
         router.replace(`/game/${gameId}/create-realm`);
         return;
       }
@@ -50,7 +50,7 @@ export default function GameRedirect() {
         return;
       }
     }
-  }, [role, realmId, gamePhase, loading, gameId, router]);
+  }, [role, realmId, initState, loading, gameId, router]);
 
   async function handleJoin() {
     if (!code.trim()) { setError('Please enter a game code'); return; }

@@ -19,7 +19,7 @@ export async function GET(
     return NextResponse.json(slots.map((slot) => ({
       ...slot,
       territoryName: territoryById.get(slot.territoryId)?.name ?? null,
-      status: slot.realmId ? 'claimed' : 'unclaimed',
+      status: slot.setupState === 'unclaimed' ? 'unclaimed' : 'claimed',
     })));
   } catch (error) {
     if (isAuthError(error)) {

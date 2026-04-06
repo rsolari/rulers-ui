@@ -14,6 +14,8 @@ interface Game {
   currentSeason: string;
   turnPhase: string;
   gamePhase: string;
+  initState: string;
+  gmSetupState: string;
   gmCode?: string;
   playerCode?: string;
 }
@@ -36,6 +38,7 @@ interface PlayerSlot {
   realmId: string | null;
   displayName: string | null;
   status: 'claimed' | 'unclaimed';
+  setupState: string;
 }
 
 export default function GMDashboard() {
@@ -45,6 +48,7 @@ export default function GMDashboard() {
   const [realms, setRealms] = useState<Realm[]>([]);
   const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([]);
   const [starting, setStarting] = useState(false);
+  const [markingReady, setMarkingReady] = useState(false);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -74,6 +78,18 @@ export default function GMDashboard() {
     setStarting(false);
   }
 
+  async function markGMReady() {
+    setMarkingReady(true);
+    const response = await fetch(`/api/game/${gameId}/setup/gm-ready`, { method: 'POST' });
+
+    if (response.ok) {
+      const updated = await fetch(`/api/game/${gameId}`, { cache: 'no-store' });
+      setGame(await updated.json());
+    }
+
+    setMarkingReady(false);
+  }
+
   if (!game) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -93,6 +109,8 @@ export default function GMDashboard() {
           <p className="text-ink-300">GM Dashboard</p>
         </div>
         <div className="flex items-center gap-3">
+          <Badge>{game.initState}</Badge>
+          <Badge variant={game.gmSetupState === 'ready' ? 'green' : 'gold'}>GM {game.gmSetupState}</Badge>
           <Badge variant="gold">{game.gamePhase}</Badge>
           <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
           <Badge>{game.turnPhase}</Badge>
@@ -126,7 +144,12 @@ export default function GMDashboard() {
         <Link href={`/game/${gameId}/setup`}>
           <Button variant="outline">Edit Setup</Button>
         </Link>
-        {game.gamePhase === 'RealmCreation' && (
+        {game.initState !== 'active' && game.initState !== 'completed' && game.gmSetupState !== 'ready' && (
+          <Button variant="outline" onClick={() => void markGMReady()} disabled={markingReady}>
+            {markingReady ? 'Saving...' : 'Mark GM Setup Ready'}
+          </Button>
+        )}
+        {game.initState === 'ready_to_start' && (
           <Button variant="accent" onClick={() => void startGame()} disabled={starting}>
             {starting ? 'Starting...' : 'Start Game'}
           </Button>
@@ -148,6 +171,7 @@ export default function GMDashboard() {
                   </div>
                   <div className="text-right">
                     <Badge variant={slot.status === 'claimed' ? 'green' : 'gold'}>{slot.status}</Badge>
+                    <p className="text-xs text-ink-300 mt-1">{slot.setupState}</p>
                     <p className="font-mono text-lg mt-1">{slot.claimCode}</p>
                   </div>
                 </div>

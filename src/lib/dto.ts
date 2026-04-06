@@ -11,6 +11,8 @@ export function toPublicGame(game: GameRecord, role: 'gm' | 'player' | null) {
     id: game.id,
     name: game.name,
     gamePhase: game.gamePhase,
+    initState: game.initState,
+    gmSetupState: game.gmSetupState,
     currentYear: game.currentYear,
     currentSeason: game.currentSeason,
     turnPhase: game.turnPhase,

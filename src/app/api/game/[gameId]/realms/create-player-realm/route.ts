@@ -3,7 +3,8 @@ import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { playerSlots, realms, settlements, territories } from '@/db/schema';
-import { isAuthError, requireGamePhase, requirePlayerSlot } from '@/lib/auth';
+import { recomputeGameInitState } from '@/lib/game-init-state';
+import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -11,7 +12,7 @@ export async function POST(
 ) {
   try {
     const { gameId } = await params;
-    await requireGamePhase(gameId, 'RealmCreation');
+    await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
     const slot = await requirePlayerSlot(gameId);
 
     if (slot.realmId) {
@@ -67,10 +68,12 @@ export async function POST(
         .run();
 
       tx.update(playerSlots)
-        .set({ realmId, claimedAt })
+        .set({ realmId, claimedAt, setupState: 'realm_created' })
         .where(eq(playerSlots.id, slot.id))
         .run();
     });
+
+    await recomputeGameInitState(gameId);
 
     return NextResponse.json({
       id: realmId,

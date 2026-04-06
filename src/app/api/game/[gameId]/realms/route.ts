@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { games, realms } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { getGmCode, isAuthError, requireGamePhase, requireGM, requireRealmOwner } from '@/lib/auth';
+import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
 
 export async function GET(
   _request: Request,
@@ -65,7 +65,7 @@ export async function PATCH(
     const isGM = Boolean(game && gmCode && gmCode === game.gmCode);
 
     if (!isGM) {
-      await requireGamePhase(gameId, 'RealmCreation');
+      await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
     }
 
     const allowedFields = isGM

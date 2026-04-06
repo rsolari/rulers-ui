@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
-import type { GamePhase, ResourceRarity, ResourceType } from '@/types/game';
+import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState, ResourceRarity, ResourceType } from '@/types/game';
 
 // ============================================================
 // GAMES
@@ -12,6 +12,8 @@ export const games = sqliteTable('games', {
   gmCode: text('gm_code').unique().notNull(),
   playerCode: text('player_code').unique().notNull(),
   gamePhase: text('game_phase').$type<GamePhase>().default('Setup').notNull(),
+  initState: text('init_state').$type<GameInitState>().default('gm_world_setup').notNull(),
+  gmSetupState: text('gm_setup_state').$type<GMSetupState>().default('pending').notNull(),
   currentYear: integer('current_year').default(1).notNull(),
   currentSeason: text('current_season').default('Spring').notNull(),
   turnPhase: text('turn_phase').default('Submission').notNull(),
@@ -90,6 +92,7 @@ export const playerSlots = sqliteTable('player_slots', {
   territoryId: text('territory_id').notNull().references(() => territories.id),
   realmId: text('realm_id').references(() => realms.id),
   displayName: text('display_name'),
+  setupState: text('setup_state').$type<PlayerSetupState>().default('unclaimed').notNull(),
   claimedAt: integer('claimed_at', { mode: 'timestamp' }),
 });
 

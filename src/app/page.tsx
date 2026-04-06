@@ -123,9 +123,8 @@ export default function LandingPage() {
                   <p className="text-xs text-ink-300">Keep this secret! This is your GM access code.</p>
                 </div>
                 <div>
-                  <p className="text-sm text-ink-300 font-heading">Game Reference Code</p>
-                  <p className="text-2xl font-heading font-bold text-ink-500 tracking-widest">{createdGame.playerCode}</p>
-                  <p className="text-xs text-ink-300">Player claim codes are generated during setup and shared individually.</p>
+                  <p className="text-sm text-ink-300 font-heading">Player Claim Codes</p>
+                  <p className="text-xs text-ink-300">Individual player codes are generated during setup. Run setup to create and share them with your players.</p>
                 </div>
                 <Button
                   variant="accent"

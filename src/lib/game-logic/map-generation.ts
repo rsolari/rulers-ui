@@ -23,6 +23,16 @@ function rollCommonResource(): ResourceType {
   return rollLuxuryResource();
 }
 
+function rollGuaranteedCommonResource(): ResourceType {
+  let resourceType = rollCommonResource();
+
+  while (RESOURCE_RARITY[resourceType] !== 'Common') {
+    resourceType = rollCommonResource();
+  }
+
+  return resourceType;
+}
+
 // Luxury Resources (1d10)
 // 1-2 Silver→Gold, 3-4 Porcelain, 5-6 Lacquer, 7 Jewels, 8 Cotton→Silk, 9 Marble, 10 Expanded*
 function rollLuxuryResource(): ResourceType {
@@ -119,7 +129,7 @@ export function generateTerritoryResources(type: TerritoryType): GeneratedResour
   if (type === 'Realm') {
     // 3 common + 1 luxury, with exactly one player-selected town.
     for (let i = 0; i < 3; i++) {
-      const resourceType = rollCommonResource();
+      const resourceType = rollGuaranteedCommonResource();
       resources.push({
         resourceType,
         rarity: RESOURCE_RARITY[resourceType],
@@ -135,7 +145,7 @@ export function generateTerritoryResources(type: TerritoryType): GeneratedResour
   } else {
     // Neutral: 2 common + 2 luxury
     for (let i = 0; i < 2; i++) {
-      const resourceType = rollCommonResource();
+      const resourceType = rollGuaranteedCommonResource();
       resources.push({
         resourceType,
         rarity: RESOURCE_RARITY[resourceType],

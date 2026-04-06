@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import type { GamePhase } from '@/types/game';
+import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState } from '@/types/game';
 
 export type GameRole = 'gm' | 'player' | null;
 
@@ -10,6 +10,9 @@ export interface RoleState {
   gameId: string | null;
   realmId: string | null;
   gamePhase: GamePhase | null;
+  initState: GameInitState | null;
+  gmSetupState: GMSetupState | null;
+  playerSetupState: PlayerSetupState | null;
   displayName: string | null;
   territoryId: string | null;
   loading: boolean;
@@ -23,6 +26,9 @@ const initialState: SessionState = {
   gameId: null,
   realmId: null,
   gamePhase: null,
+  initState: null,
+  gmSetupState: null,
+  playerSetupState: null,
   displayName: null,
   territoryId: null,
   loading: true,
@@ -56,6 +62,9 @@ export function useRole(): RoleState {
           gameId: session.gameId ?? null,
           realmId: session.realmId ?? null,
           gamePhase: session.gamePhase ?? null,
+          initState: session.initState ?? null,
+          gmSetupState: session.gmSetupState ?? null,
+          playerSetupState: session.playerSetupState ?? null,
           displayName: session.displayName ?? null,
           territoryId: session.territoryId ?? null,
           loading: false,

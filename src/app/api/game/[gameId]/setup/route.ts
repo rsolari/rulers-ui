@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
-import { generateGameCode, isAuthError, requireGM, requireGamePhase } from '@/lib/auth';
+import { generateGameCode, isAuthError, requireGM, requireInitState } from '@/lib/auth';
 import type { GovernmentType, ResourceRarity, ResourceType, SettlementSize, Tradition } from '@/types/game';
 
 type OwnershipKind = 'player' | 'npc' | 'neutral';
@@ -50,7 +50,7 @@ export async function POST(
   try {
     const { gameId } = await params;
     await requireGM(gameId);
-    await requireGamePhase(gameId, 'Setup');
+    await requireInitState(gameId, 'gm_world_setup');
 
     const body = await request.json();
     const territoryInputs = Array.isArray(body.territories) ? body.territories as SetupTerritoryInput[] : [];
@@ -82,6 +82,7 @@ export async function POST(
           territoryId: '',
           realmId: null,
           displayName: territory.owner?.displayName?.trim() || null,
+          setupState: 'unclaimed',
           claimedAt: null,
         });
         ownershipByIndex.set(territoryIndex, { kind: 'player', realmId: null });
@@ -169,6 +170,8 @@ export async function POST(
 
       tx.update(games)
         .set({
+          initState: 'player_invites_open',
+          gmSetupState: 'configuring',
           gamePhase: 'RealmCreation',
           turnPhase: 'Submission',
         })

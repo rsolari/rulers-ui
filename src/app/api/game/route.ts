@@ -22,12 +22,22 @@ export async function POST(request: Request) {
     gmCode,
     playerCode,
     gamePhase: 'Setup',
+    initState: 'gm_world_setup',
+    gmSetupState: 'pending',
     currentYear: 1,
     currentSeason: 'Spring',
     turnPhase: 'Submission',
   });
 
-  const response = NextResponse.json({ id, name, gmCode, playerCode, gamePhase: 'Setup' });
+  const response = NextResponse.json({
+    id,
+    name,
+    gmCode,
+    playerCode,
+    gamePhase: 'Setup',
+    initState: 'gm_world_setup',
+    gmSetupState: 'pending',
+  });
   response.cookies.set('rulers-gm-code', gmCode, sessionCookieOptions);
   response.cookies.set('rulers-game-id', id, sessionCookieOptions);
   response.cookies.delete('rulers-claim-code');

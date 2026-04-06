@@ -90,6 +90,22 @@ describe('resolveTurn', () => {
     expect(result.realmResults[0].newTreasury).toBe(6000);
   });
 
+  it('rounds tax income after summing settlement wealth for the realm', () => {
+    const result = resolveTurn(createTurnResolutionInput({
+      realms: [createRealmTurnData({
+        treasury: 0,
+        taxType: 'Tribute',
+        settlements: [
+          createSettlementTurnData({ id: 's1', totalWealth: 3333 }),
+          createSettlementTurnData({ id: 's2', totalWealth: 3333 }),
+        ],
+      })],
+    }));
+
+    // floor((3333 + 3333) * 0.15) = floor(999.9) = 999
+    expect(result.realmResults[0].newTreasury).toBe(999);
+  });
+
   // Tax change via report
   it('applies taxChange from report before income calculation', () => {
     const result = resolveTurn(createTurnResolutionInput({
@@ -102,6 +118,17 @@ describe('resolveTurn', () => {
     }));
     // Tax changed to Levy before income: floor(20000 * 0.30) = 6000
     expect(result.realmResults[0].newTreasury).toBe(6000);
+    expect(result.realmResults[0].taxType).toBe('Levy');
+  });
+
+  it('keeps the current tax type when the report does not request a change', () => {
+    const result = resolveTurn(createTurnResolutionInput({
+      realms: [createRealmTurnData({
+        taxType: 'Levy',
+        report: createReportData(),
+      })],
+    }));
+
     expect(result.realmResults[0].taxType).toBe('Levy');
   });
 
@@ -159,6 +186,23 @@ describe('resolveTurn', () => {
     expect(sources.find(s => s.id === 'perm')).toBeDefined();
     expect(sources.find(s => s.id === 'keep')).toBeDefined();
     expect(sources.find(s => s.id === 'exp')).toBeUndefined();
+  });
+
+  it('does not mutate the input realm state while resolving the next turn', () => {
+    const turmoilSources = [createTurmoilSource({ id: 'seasonal', seasonsRemaining: 2 })];
+    const realm = createRealmTurnData({
+      treasury: 1000,
+      turmoilSources,
+      settlements: [createSettlementTurnData({ totalWealth: 10000 })],
+    });
+    const input = createTurnResolutionInput({ realms: [realm] });
+
+    const result = resolveTurn(input);
+
+    expect(realm.treasury).toBe(1000);
+    expect(realm.taxType).toBe('Tribute');
+    expect(turmoilSources[0].seasonsRemaining).toBe(2);
+    expect(result.realmResults[0].updatedTurmoilSources[0].seasonsRemaining).toBe(1);
   });
 
   // Multi-realm independence

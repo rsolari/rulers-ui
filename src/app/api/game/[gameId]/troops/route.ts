@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { troops } from '@/db/schema';
-import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { TROOP_DEFS } from '@/lib/game-logic/constants';
 import type { TroopType } from '@/types/game';
 
 export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ gameId: string }> }
+  request: Request
 ) {
-  const { gameId } = await params;
   const body = await request.json();
   const def = TROOP_DEFS[body.type as TroopType];
 

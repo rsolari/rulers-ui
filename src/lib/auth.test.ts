@@ -32,13 +32,11 @@ describe('generateGameCode', () => {
   });
 
   it('produces deterministic output with mocked Math.random', () => {
-    const safeChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     vi.spyOn(Math, 'random').mockReturnValue(0); // Always picks index 0 → 'A'
     expect(generateGameCode()).toBe('AAAAAA');
   });
 
   it('picks last character when Math.random is near 1', () => {
-    const safeChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     vi.spyOn(Math, 'random').mockReturnValue(0.999);
     // floor(0.999 * 32) = 31 → '9' (last char in safeChars)
     expect(generateGameCode()).toBe('999999');

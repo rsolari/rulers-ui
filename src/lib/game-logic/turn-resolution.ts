@@ -1,5 +1,5 @@
 import type { Season, TaxType, TurmoilSource } from '@/types/game';
-import { SEASONS, getNextSeason, TAX_RATES } from './constants';
+import { getNextSeason, TAX_RATES } from './constants';
 import { advanceTurmoilSources } from './turmoil';
 
 export interface TurnResolutionInput {

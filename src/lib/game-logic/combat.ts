@@ -1,4 +1,4 @@
-import type { TroopClass, ArmourType, Tradition } from '@/types/game';
+import type { TroopClass, ArmourType } from '@/types/game';
 
 export function calculateMovementSpeed(
   armourTypes: ArmourType[][],

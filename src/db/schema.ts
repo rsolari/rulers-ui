@@ -191,6 +191,8 @@ export const nobles = sqliteTable('nobles', {
   age: text('age').notNull(),
   isRuler: integer('is_ruler', { mode: 'boolean' }).default(false).notNull(),
   isHeir: integer('is_heir', { mode: 'boolean' }).default(false).notNull(),
+  backstory: text('backstory'),
+  race: text('race'),
 
   // Personality
   personality: text('personality'),

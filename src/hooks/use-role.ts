@@ -1,14 +1,17 @@
 'use client';
 
+import { useState, useCallback } from 'react';
+
 export type GameRole = 'gm' | 'player' | null;
 
-interface RoleState {
+export interface RoleState {
   role: GameRole;
   gameId: string | null;
   realmId: string | null;
+  refresh: () => void;
 }
 
-function readRoleState(): RoleState {
+function readRoleState(): Omit<RoleState, 'refresh'> {
   if (typeof document === 'undefined') {
     return { role: null, gameId: null, realmId: null };
   }
@@ -27,5 +30,11 @@ function readRoleState(): RoleState {
 }
 
 export function useRole(): RoleState {
-  return readRoleState();
+  const [state, setState] = useState<Omit<RoleState, 'refresh'>>(readRoleState);
+
+  const refresh = useCallback(() => {
+    setState(readRoleState());
+  }, []);
+
+  return { ...state, refresh };
 }

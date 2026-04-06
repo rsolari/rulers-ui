@@ -41,10 +41,19 @@ npm run dev
 
 3. Open `http://localhost:3000`.
 
+If you see `Watchpack Error (watcher): Error: EMFILE: too many open files, watch`, run:
+
+```bash
+npm run dev
+```
+
+`npm run dev` is configured to use polling-based webpack watching in this repo, which avoids the `EMFILE` watcher overflow in some environments.
+
 ## Useful Commands
 
 ```bash
 npm run dev
+npm run dev:turbopack
 npm run build
 npm run start
 npm run lint

@@ -30,7 +30,8 @@ export type FortificationMaterial = 'Timber' | 'Stone';
 // Resource Types
 export type ResourceType =
   | 'Timber' | 'Clay' | 'Ore' | 'Stone'
-  | 'Gold' | 'Lacquer' | 'Porcelain' | 'Jewels' | 'Marble' | 'Silk';
+  | 'Gold' | 'Lacquer' | 'Porcelain' | 'Jewels' | 'Marble' | 'Silk'
+  | 'Spices' | 'Tea' | 'Coffee' | 'Tobacco' | 'Opium' | 'Salt' | 'Sugar';
 export type ResourceRarity = 'Common' | 'Luxury';
 
 // Troop Types

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { DevTools } from "./dev-tools";
 
 export const metadata: Metadata = {
   title: "Rulers - Game Tracker",
@@ -17,6 +18,7 @@ export default function RootLayout({
         <div className="relative z-10">
           {children}
         </div>
+        <DevTools />
       </body>
     </html>
   );

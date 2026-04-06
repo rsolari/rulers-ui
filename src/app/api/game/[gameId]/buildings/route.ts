@@ -4,30 +4,42 @@ import { buildings } from '@/db/schema';
 import { v4 as uuid } from 'uuid';
 import { BUILDING_DEFS, BUILDING_SIZE_DATA } from '@/lib/game-logic/constants';
 import type { BuildingType } from '@/types/game';
+import { isAuthError, requireGM } from '@/lib/auth';
 
 export async function POST(
-  request: Request
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
-  const body = await request.json();
-  const def = BUILDING_DEFS[body.type as BuildingType];
+  try {
+    const { gameId } = await params;
+    await requireGM(gameId);
+    const body = await request.json();
+    const def = BUILDING_DEFS[body.type as BuildingType];
 
-  if (!def) {
-    return NextResponse.json({ error: 'Unknown building type' }, { status: 400 });
+    if (!def) {
+      return NextResponse.json({ error: 'Unknown building type' }, { status: 400 });
+    }
+
+    const sizeData = BUILDING_SIZE_DATA[def.size];
+    const id = uuid();
+    await db.insert(buildings).values({
+      id,
+      settlementId: body.settlementId,
+      type: body.type,
+      category: def.category,
+      size: def.size,
+      material: body.material || null,
+      constructionTurnsRemaining: body.instant ? 0 : sizeData.buildTime,
+      isGuildOwned: body.isGuildOwned || false,
+      guildId: body.guildId || null,
+    });
+
+    return NextResponse.json({ id, type: body.type, constructionTurns: sizeData.buildTime });
+  } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
   }
-
-  const sizeData = BUILDING_SIZE_DATA[def.size];
-  const id = uuid();
-  await db.insert(buildings).values({
-    id,
-    settlementId: body.settlementId,
-    type: body.type,
-    category: def.category,
-    size: def.size,
-    material: body.material || null,
-    constructionTurnsRemaining: body.instant ? 0 : sizeData.buildTime,
-    isGuildOwned: body.isGuildOwned || false,
-    guildId: body.guildId || null,
-  });
-
-  return NextResponse.json({ id, type: body.type, constructionTurns: sizeData.buildTime });
 }

@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs } from '@/components/ui/tabs';
 
 interface Game {
   id: string;
@@ -14,8 +13,11 @@ interface Game {
   currentYear: number;
   currentSeason: string;
   turnPhase: string;
-  gmCode: string;
-  playerCode: string;
+  gamePhase: string;
+  initState: string;
+  gmSetupState: string;
+  gmCode?: string;
+  playerCode?: string;
 }
 
 interface Realm {
@@ -24,8 +26,19 @@ interface Realm {
   governmentType: string;
   treasury: number;
   turmoil: number;
-  taxType: string;
+  isNPC: boolean;
   traditions: string;
+}
+
+interface PlayerSlot {
+  id: string;
+  claimCode: string;
+  territoryId: string;
+  territoryName: string | null;
+  realmId: string | null;
+  displayName: string | null;
+  status: 'claimed' | 'unclaimed';
+  setupState: string;
 }
 
 export default function GMDashboard() {
@@ -33,17 +46,60 @@ export default function GMDashboard() {
   const gameId = params.gameId as string;
   const [game, setGame] = useState<Game | null>(null);
   const [realms, setRealms] = useState<Realm[]>([]);
+  const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([]);
+  const [starting, setStarting] = useState(false);
+  const [markingReady, setMarkingReady] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/game/${gameId}`).then(r => r.json()).then(setGame);
-    fetch(`/api/game/${gameId}/realms`).then(r => r.json()).then(setRealms);
+    async function loadDashboard() {
+      const [gameResponse, realmsResponse, slotsResponse] = await Promise.all([
+        fetch(`/api/game/${gameId}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/player-slots`, { cache: 'no-store' }),
+      ]);
+
+      setGame(await gameResponse.json());
+      setRealms(await realmsResponse.json());
+      setPlayerSlots(slotsResponse.ok ? await slotsResponse.json() : []);
+    }
+
+    void loadDashboard();
   }, [gameId]);
 
-  if (!game) {
-    return <main className="min-h-screen flex items-center justify-center">
-      <p className="font-heading text-ink-300 text-lg">Loading...</p>
-    </main>;
+  async function startGame() {
+    setStarting(true);
+    const response = await fetch(`/api/game/${gameId}/start`, { method: 'POST' });
+
+    if (response.ok) {
+      const updated = await fetch(`/api/game/${gameId}`, { cache: 'no-store' });
+      setGame(await updated.json());
+    }
+
+    setStarting(false);
   }
+
+  async function markGMReady() {
+    setMarkingReady(true);
+    const response = await fetch(`/api/game/${gameId}/setup/gm-ready`, { method: 'POST' });
+
+    if (response.ok) {
+      const updated = await fetch(`/api/game/${gameId}`, { cache: 'no-store' });
+      setGame(await updated.json());
+    }
+
+    setMarkingReady(false);
+  }
+
+  if (!game) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="font-heading text-ink-300 text-lg">Loading GM dashboard...</p>
+      </main>
+    );
+  }
+
+  const npcRealms = realms.filter((realm) => realm.isNPC);
+  const playerRealms = realms.filter((realm) => !realm.isNPC);
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
@@ -52,81 +108,117 @@ export default function GMDashboard() {
           <h1 className="text-3xl font-bold">{game.name}</h1>
           <p className="text-ink-300">GM Dashboard</p>
         </div>
-        <div className="flex items-center gap-4">
-          <Badge variant="gold">Year {game.currentYear}, {game.currentSeason}</Badge>
+        <div className="flex items-center gap-3">
+          <Badge>{game.initState}</Badge>
+          <Badge variant={game.gmSetupState === 'ready' ? 'green' : 'gold'}>GM {game.gmSetupState}</Badge>
+          <Badge variant="gold">{game.gamePhase}</Badge>
+          <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
           <Badge>{game.turnPhase}</Badge>
         </div>
       </div>
 
-      <Tabs
-        defaultTab="overview"
-        tabs={[
-          {
-            id: 'overview',
-            label: 'Overview',
-            content: <OverviewPanel gameId={gameId} game={game} realms={realms} />,
-          },
-          {
-            id: 'realms',
-            label: 'Realms',
-            content: <GMRealmsPanel realms={realms} />,
-          },
-          {
-            id: 'turn',
-            label: 'Turn',
-            content: <GMTurnPanel gameId={gameId} game={game} realms={realms} />,
-          },
-          {
-            id: 'events',
-            label: 'Events',
-            content: <GMEventsPanel gameId={gameId} game={game} />,
-          },
-        ]}
-      />
-    </main>
-  );
-}
-
-function OverviewPanel({ gameId, game, realms }: { gameId: string; game: Game; realms: Realm[] }) {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid gap-4 md:grid-cols-3 mb-6">
         <Card>
           <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Game Codes</p>
-            <p className="font-mono text-lg">GM: <strong>{game.gmCode}</strong></p>
-            <p className="font-mono text-lg">Player: <strong>{game.playerCode}</strong></p>
+            <p className="text-sm text-ink-300 pt-4">GM Code</p>
+            <p className="font-mono text-2xl">{game.gmCode}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Current Turn</p>
-            <p className="text-2xl font-bold font-heading">Year {game.currentYear}</p>
-            <p className="text-lg">{game.currentSeason} - {game.turnPhase}</p>
+            <p className="text-sm text-ink-300 pt-4">Player Slots</p>
+            <p className="text-3xl font-heading font-bold">{playerSlots.length}</p>
+            <p className="text-sm text-ink-300">{playerSlots.filter((slot) => slot.status === 'claimed').length} claimed</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <p className="text-sm text-ink-300 pt-4">Realms</p>
-            <p className="text-2xl font-bold font-heading">{realms.length}</p>
+            <p className="text-3xl font-heading font-bold">{realms.length}</p>
+            <p className="text-sm text-ink-300">{npcRealms.length} NPC / {playerRealms.length} player</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Realms Overview</CardTitle></CardHeader>
+      <div className="flex gap-3 mb-6">
+        <Link href={`/game/${gameId}/setup`}>
+          <Button variant="outline">Edit Setup</Button>
+        </Link>
+        {game.initState !== 'active' && game.initState !== 'completed' && game.gmSetupState !== 'ready' && (
+          <Button variant="outline" onClick={() => void markGMReady()} disabled={markingReady}>
+            {markingReady ? 'Saving...' : 'Mark GM Setup Ready'}
+          </Button>
+        )}
+        {game.initState === 'ready_to_start' && (
+          <Button variant="accent" onClick={() => void startGame()} disabled={starting}>
+            {starting ? 'Starting...' : 'Start Game'}
+          </Button>
+        )}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Player Slots</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {playerSlots.map((slot) => (
+                <div key={slot.id} className="p-3 medieval-border rounded flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-heading font-semibold">{slot.territoryName || slot.territoryId}</p>
+                    <p className="text-sm text-ink-300">{slot.displayName || 'Unlabeled player slot'}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant={slot.status === 'claimed' ? 'green' : 'gold'}>{slot.status}</Badge>
+                    <p className="text-xs text-ink-300 mt-1">{slot.setupState}</p>
+                    <p className="font-mono text-lg mt-1">{slot.claimCode}</p>
+                  </div>
+                </div>
+              ))}
+              {playerSlots.length === 0 && <p className="text-ink-300 text-sm">No player slots yet.</p>}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>NPC Realms</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {npcRealms.map((realm) => (
+                <div key={realm.id} className="p-3 medieval-border rounded">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-semibold">{realm.name}</span>
+                    <Badge variant="gold">NPC</Badge>
+                  </div>
+                  <p className="text-sm text-ink-300">{realm.governmentType}</p>
+                </div>
+              ))}
+              {npcRealms.length === 0 && <p className="text-ink-300 text-sm">No NPC realms configured.</p>}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>All Realms</CardTitle>
+        </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {realms.map(realm => (
+            {realms.map((realm) => (
               <div key={realm.id} className="flex items-center justify-between p-3 medieval-border rounded">
                 <div>
-                  <span className="font-heading font-bold text-lg">{realm.name}</span>
+                  <span className="font-heading font-semibold">{realm.name}</span>
                   <span className="text-ink-300 ml-2">{realm.governmentType}</span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span>Treasury: <strong>{realm.treasury.toLocaleString()}</strong></span>
+                <div className="flex items-center gap-3">
+                  <Badge variant={realm.isNPC ? 'gold' : 'default'}>{realm.isNPC ? 'NPC' : 'Player'}</Badge>
+                  <span className="text-sm">Treasury {realm.treasury.toLocaleString()}</span>
                   <Badge variant={realm.turmoil > 5 ? 'red' : realm.turmoil > 2 ? 'gold' : 'green'}>
-                    Turmoil: {realm.turmoil}
+                    Turmoil {realm.turmoil}
                   </Badge>
                 </div>
               </div>
@@ -134,150 +226,6 @@ function OverviewPanel({ gameId, game, realms }: { gameId: string; game: Game; r
           </div>
         </CardContent>
       </Card>
-
-      <div className="flex gap-4">
-        <Link href={`/game/${gameId}/setup`}>
-          <Button variant="outline">Edit Setup</Button>
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-function GMRealmsPanel({ realms }: { realms: Realm[] }) {
-  return (
-    <div className="space-y-4">
-      {realms.map(realm => {
-        const traditions = JSON.parse(realm.traditions || '[]');
-        return (
-          <Card key={realm.id} variant="gold">
-            <CardHeader>
-              <CardTitle>{realm.name}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p><strong>Government:</strong> {realm.governmentType}</p>
-                  <p><strong>Tax Policy:</strong> {realm.taxType}</p>
-                  <p><strong>Treasury:</strong> {realm.treasury.toLocaleString()} coins</p>
-                  <p><strong>Turmoil:</strong> {realm.turmoil}</p>
-                </div>
-                <div>
-                  <p className="font-semibold mb-1">Traditions:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {traditions.map((t: string) => (
-                      <Badge key={t} variant="gold">{t}</Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-function GMTurnPanel({ gameId, game, realms }: { gameId: string; game: Game; realms: Realm[] }) {
-  const [reports, setReports] = useState<Array<{ id: string; realmId: string; status: string }>>([]);
-  const [advancing, setAdvancing] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/game/${gameId}/turn`).then(r => r.json()).then(data => {
-      setReports(data.reports || []);
-    });
-  }, [gameId]);
-
-  async function advanceSeason() {
-    setAdvancing(true);
-    await fetch(`/api/game/${gameId}/turn/advance`, { method: 'POST' });
-    window.location.reload();
-  }
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader><CardTitle>Turn Reports - Year {game.currentYear}, {game.currentSeason}</CardTitle></CardHeader>
-        <CardContent>
-          {realms.map(realm => {
-            const report = reports.find(r => r.realmId === realm.id);
-            return (
-              <div key={realm.id} className="flex items-center justify-between py-2 border-b border-ink-100 last:border-0">
-                <span className="font-heading">{realm.name}</span>
-                <Badge variant={report?.status === 'Submitted' ? 'gold' : report?.status === 'Resolved' ? 'green' : 'default'}>
-                  {report?.status || 'Not Submitted'}
-                </Badge>
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end gap-4">
-        <Button variant="accent" onClick={advanceSeason} disabled={advancing}>
-          {advancing ? 'Advancing...' : 'Advance to Next Season'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function GMEventsPanel({ gameId, game }: { gameId: string; game: Game }) {
-  const [events, setEvents] = useState<Array<{ id: string; year: number; season: string; description: string; realmId: string | null }>>([]);
-  const [newEvent, setNewEvent] = useState('');
-  const [adding, setAdding] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/game/${gameId}/events`).then(r => r.json()).then(setEvents);
-  }, [gameId]);
-
-  async function addEvent() {
-    if (!newEvent.trim()) return;
-    setAdding(true);
-    await fetch(`/api/game/${gameId}/events`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        year: game.currentYear,
-        season: game.currentSeason,
-        description: newEvent,
-      }),
-    });
-    setNewEvent('');
-    const res = await fetch(`/api/game/${gameId}/events`);
-    setEvents(await res.json());
-    setAdding(false);
-  }
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader><CardTitle>Event Log</CardTitle></CardHeader>
-        <CardContent>
-          <div className="flex gap-2 mb-4">
-            <input
-              className="flex-1 px-3 py-2 bg-parchment-50 border border-ink-200 rounded font-body"
-              value={newEvent}
-              onChange={e => setNewEvent(e.target.value)}
-              placeholder="Describe a new event..."
-              onKeyDown={e => e.key === 'Enter' && addEvent()}
-            />
-            <Button variant="accent" onClick={addEvent} disabled={adding}>Add</Button>
-          </div>
-          <div className="space-y-2">
-            {events.map(ev => (
-              <div key={ev.id} className="p-2 medieval-border rounded">
-                <div className="flex items-center gap-2 mb-1">
-                  <Badge>Year {ev.year}, {ev.season}</Badge>
-                </div>
-                <p className="text-sm">{ev.description}</p>
-              </div>
-            ))}
-            {events.length === 0 && <p className="text-ink-300 text-sm">No events yet.</p>}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </main>
   );
 }

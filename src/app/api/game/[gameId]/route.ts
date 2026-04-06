@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { games } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { resolveSessionFromCookies } from '@/lib/auth';
+import { toPublicGame } from '@/lib/dto';
 
 export async function GET(
   _request: Request,
@@ -14,5 +16,8 @@ export async function GET(
     return NextResponse.json({ error: 'Game not found' }, { status: 404 });
   }
 
-  return NextResponse.json(game);
+  const session = await resolveSessionFromCookies();
+  const role = session.gameId === gameId ? session.role : null;
+
+  return NextResponse.json(toPublicGame(game, role));
 }

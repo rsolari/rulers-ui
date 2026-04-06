@@ -114,6 +114,8 @@ describe('POST /api/game/[gameId]/ruler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.operations.length = 0;
+    mocks.dbGet.mockReset();
+    mocks.txGet.mockReset();
     uuidMock.mockReset();
   });
 
@@ -131,7 +133,9 @@ describe('POST /api/game/[gameId]/ruler', () => {
         age: 'Adult',
         personality: 'Jovial and Friendly',
       }),
-    }));
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: 'Realm already has a ruler' });
@@ -161,7 +165,9 @@ describe('POST /api/game/[gameId]/ruler', () => {
         valuedPerson: 'A Friend',
         greatestDesire: 'Power',
       }),
-    }));
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
 
     expect(response.status).toBe(201);
     expect(mocks.operations).toEqual([
@@ -244,7 +250,9 @@ describe('POST /api/game/[gameId]/ruler', () => {
         valuedPerson: 'A Mentor',
         greatestDesire: 'Knowledge',
       }),
-    }));
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
 
     expect(createResponse.status).toBe(201);
     expect(mocks.operations.at(-1)).toEqual({
@@ -322,7 +330,9 @@ describe('POST /api/game/[gameId]/ruler', () => {
         valuedPerson: 'A Sibling/Cousin',
         greatestDesire: 'Glory',
       }),
-    }));
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
 
     expect(response.status).toBe(201);
     expect(mocks.operations).toEqual([

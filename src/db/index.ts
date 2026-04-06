@@ -21,6 +21,9 @@ function createBaseSchema(database: Database.Database) {
       name text NOT NULL,
       gm_code text NOT NULL UNIQUE,
       player_code text NOT NULL UNIQUE,
+      game_phase text NOT NULL DEFAULT 'Setup',
+      init_state text NOT NULL DEFAULT 'gm_world_setup',
+      gm_setup_state text NOT NULL DEFAULT 'pending',
       current_year integer NOT NULL DEFAULT 1,
       current_season text NOT NULL DEFAULT 'Spring',
       turn_phase text NOT NULL DEFAULT 'Submission',
@@ -231,16 +234,6 @@ function createBaseSchema(database: Database.Database) {
   `);
 }
 
-function settlementsRealmIdIsNotNull(database: Database.Database) {
-  if (!tableExists(database, 'settlements')) {
-    return false;
-  }
-
-  const columns = getTableInfo(database, 'settlements');
-  const realmIdColumn = columns.find((column) => column.name === 'realm_id');
-  return realmIdColumn?.notnull === 1;
-}
-
 type TableInfoRow = {
   name: string;
   notnull: number;
@@ -256,6 +249,21 @@ function tableExists(database: Database.Database, tableName: string) {
   ).get(tableName) as { name: string } | undefined;
 
   return row?.name === tableName;
+}
+
+function columnExists(database: Database.Database, tableName: string, columnName: string) {
+  const columns = getTableInfo(database, tableName);
+  return columns.some((column) => column.name === columnName);
+}
+
+function settlementsRealmIdIsNotNull(database: Database.Database) {
+  if (!tableExists(database, 'settlements')) {
+    return false;
+  }
+
+  const columns = getTableInfo(database, 'settlements');
+  const realmIdColumn = columns.find((column) => column.name === 'realm_id');
+  return realmIdColumn?.notnull === 1;
 }
 
 function noblesMissingColumns(database: Database.Database) {
@@ -285,6 +293,43 @@ function migrateNoblesColumns(database: Database.Database) {
   if (missingColumns.race) {
     database.exec('ALTER TABLE nobles ADD COLUMN race text;');
   }
+}
+
+function backfillInitStateFromLegacyGamePhase(database: Database.Database) {
+  if (!tableExists(database, 'games')) {
+    return;
+  }
+
+  database.exec(`
+    UPDATE games
+    SET init_state = CASE game_phase
+      WHEN 'Setup' THEN 'gm_world_setup'
+      WHEN 'RealmCreation' THEN 'parallel_final_setup'
+      WHEN 'Active' THEN 'active'
+      WHEN 'Completed' THEN 'completed'
+      ELSE COALESCE(init_state, 'gm_world_setup')
+    END
+    WHERE init_state IS NULL
+      OR init_state = ''
+      OR init_state = 'gm_world_setup';
+  `);
+}
+
+function backfillPlayerSlotSetupState(database: Database.Database) {
+  if (!tableExists(database, 'player_slots') || !columnExists(database, 'player_slots', 'setup_state')) {
+    return;
+  }
+
+  database.exec(`
+    UPDATE player_slots
+    SET setup_state = CASE
+      WHEN realm_id IS NOT NULL THEN 'realm_created'
+      WHEN claimed_at IS NOT NULL THEN 'claimed'
+      ELSE 'unclaimed'
+    END
+    WHERE setup_state IS NULL
+      OR setup_state = '';
+  `);
 }
 
 function migrateSettlementsRealmIdToNullable(database: Database.Database) {
@@ -327,11 +372,6 @@ function migrateSettlementsRealmIdToNullable(database: Database.Database) {
   if (foreignKeyViolations.length > 0) {
     throw new Error('SQLite schema migration left foreign key violations in settlements.');
   }
-}
-
-function columnExists(database: Database.Database, tableName: string, columnName: string) {
-  const columns = getTableInfo(database, tableName);
-  return columns.some((column) => column.name === columnName);
 }
 
 function addColumnIfMissing(database: Database.Database, tableName: string, columnSql: string, columnName: string) {
@@ -415,10 +455,50 @@ if (settlementsRealmIdIsNotNull(sqlite)) {
 }
 
 ensureEconomySchema(sqlite);
+if (tableExists(sqlite, 'games') && !columnExists(sqlite, 'games', 'game_phase')) {
+  sqlite.exec("ALTER TABLE games ADD COLUMN game_phase text NOT NULL DEFAULT 'Setup';");
+}
+
+if (tableExists(sqlite, 'games') && !columnExists(sqlite, 'games', 'init_state')) {
+  sqlite.exec("ALTER TABLE games ADD COLUMN init_state text NOT NULL DEFAULT 'gm_world_setup';");
+}
+
+if (tableExists(sqlite, 'games') && !columnExists(sqlite, 'games', 'gm_setup_state')) {
+  sqlite.exec("ALTER TABLE games ADD COLUMN gm_setup_state text NOT NULL DEFAULT 'pending';");
+}
+
+if (tableExists(sqlite, 'realms') && !columnExists(sqlite, 'realms', 'is_npc')) {
+  sqlite.exec("ALTER TABLE realms ADD COLUMN is_npc integer NOT NULL DEFAULT 0;");
+}
+
+if (tableExists(sqlite, 'games') && tableExists(sqlite, 'territories') && tableExists(sqlite, 'realms') && !tableExists(sqlite, 'player_slots')) {
+  sqlite.exec(`
+    CREATE TABLE player_slots (
+      id text PRIMARY KEY NOT NULL,
+      game_id text NOT NULL,
+      claim_code text NOT NULL UNIQUE,
+      territory_id text NOT NULL,
+      realm_id text,
+      display_name text,
+      setup_state text NOT NULL DEFAULT 'unclaimed',
+      claimed_at integer,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+    );
+  `);
+}
+
+if (tableExists(sqlite, 'player_slots') && !columnExists(sqlite, 'player_slots', 'setup_state')) {
+  sqlite.exec("ALTER TABLE player_slots ADD COLUMN setup_state text NOT NULL DEFAULT 'unclaimed';");
+}
 const missingNobleColumns = noblesMissingColumns(sqlite);
 if (missingNobleColumns.backstory || missingNobleColumns.race) {
   migrateNoblesColumns(sqlite);
 }
+
+backfillInitStateFromLegacyGamePhase(sqlite);
+backfillPlayerSlotSetupState(sqlite);
 
 sqlite.pragma('foreign_keys = ON');
 

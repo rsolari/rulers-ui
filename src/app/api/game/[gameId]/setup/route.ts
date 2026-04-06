@@ -113,6 +113,11 @@ export async function POST(
             isNPC: true,
             treasury: 0,
             taxType: 'Tribute',
+            levyExpiresYear: null,
+            levyExpiresSeason: null,
+            foodBalance: 0,
+            consecutiveFoodShortageSeasons: 0,
+            consecutiveFoodRecoverySeasons: 0,
             turmoil: 0,
             turmoilSources: '[]',
           }).run();

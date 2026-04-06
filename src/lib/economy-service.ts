@@ -1,7 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
+import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import {
   buildings,
+  economicEntries,
+  economicSnapshots,
   games,
   guildsOrdersSocieties,
   industries,
@@ -15,8 +18,10 @@ import {
   troops,
   turnReports,
 } from '@/db/schema';
+import { BUILDING_DEFS, getNextSeason, SEASONS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import {
   projectEconomyForRealm,
+  resolveEconomyForRealm,
   type EconomyRealmInput,
   type EconomyResult,
 } from '@/lib/game-logic/economy';
@@ -39,7 +44,22 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
-function loadGameEconomyState(gameId: string) {
+function compareResolvedTurns(a: { year: number; season: string }, b: { year: number; season: string }) {
+  if (a.year !== b.year) return b.year - a.year;
+  return SEASONS.indexOf(b.season as Season) - SEASONS.indexOf(a.season as Season);
+}
+
+interface LoadedEconomyState {
+  game: typeof games.$inferSelect;
+  realmRows: Array<typeof realms.$inferSelect>;
+  buildingRows: Array<typeof buildings.$inferSelect>;
+  troopRows: Array<typeof troops.$inferSelect>;
+  siegeUnitRows: Array<typeof siegeUnits.$inferSelect>;
+  reportRows: Array<typeof turnReports.$inferSelect>;
+  economyRealms: EconomyRealmInput[];
+}
+
+function loadGameEconomyState(gameId: string): LoadedEconomyState | null {
   const game = db.select().from(games).where(eq(games.id, gameId)).get();
   if (!game) return null;
 
@@ -158,6 +178,11 @@ function loadGameEconomyState(gameId: string) {
     name: realm.name,
     treasury: realm.treasury,
     taxType: realm.taxType as TaxType,
+    levyExpiresYear: realm.levyExpiresYear,
+    levyExpiresSeason: realm.levyExpiresSeason as Season | null,
+    foodBalance: realm.foodBalance,
+    consecutiveFoodShortageSeasons: realm.consecutiveFoodShortageSeasons,
+    consecutiveFoodRecoverySeasons: realm.consecutiveFoodRecoverySeasons,
     traditions: parseJson<Tradition[]>(realm.traditions, []),
     settlements: (settlementsByRealm.get(realm.id) ?? []).map((settlement) => ({
       id: settlement.id,
@@ -235,6 +260,11 @@ function loadGameEconomyState(gameId: string) {
 
   return {
     game,
+    realmRows,
+    buildingRows,
+    troopRows,
+    siegeUnitRows,
+    reportRows,
     economyRealms,
   };
 }
@@ -311,5 +341,204 @@ export function getEconomyOverview(gameId: string) {
         warningCount: result.warnings.length,
       };
     }),
+  };
+}
+
+export function getEconomyHistory(
+  gameId: string,
+  realmId: string,
+  filters?: { year?: number; season?: Season },
+) {
+  const snapshotConditions = [
+    eq(economicSnapshots.gameId, gameId),
+    eq(economicSnapshots.realmId, realmId),
+  ];
+
+  if (filters?.year !== undefined) {
+    snapshotConditions.push(eq(economicSnapshots.year, filters.year));
+  }
+
+  if (filters?.season !== undefined) {
+    snapshotConditions.push(eq(economicSnapshots.season, filters.season));
+  }
+
+  const snapshots = db.select().from(economicSnapshots).where(and(...snapshotConditions)).all();
+  snapshots.sort(compareResolvedTurns);
+
+  if (snapshots.length === 0) {
+    return { snapshots: [] };
+  }
+
+  const snapshotIds = snapshots.map((snapshot) => snapshot.id);
+  const entries = db.select().from(economicEntries).where(inArray(economicEntries.snapshotId, snapshotIds)).all();
+  const entriesBySnapshot = new Map<string, Array<typeof economicEntries.$inferSelect>>();
+  for (const entry of entries) {
+    const snapshotEntries = entriesBySnapshot.get(entry.snapshotId) ?? [];
+    snapshotEntries.push(entry);
+    entriesBySnapshot.set(entry.snapshotId, snapshotEntries);
+  }
+
+  return {
+    snapshots: snapshots.map((snapshot) => ({
+      ...snapshot,
+      summary: parseJson<Record<string, unknown>>(snapshot.summary, {}),
+      entries: (entriesBySnapshot.get(snapshot.id) ?? []).map((entry) => ({
+        ...entry,
+        metadata: parseJson<Record<string, unknown>>(entry.metadata, {}),
+      })),
+    })),
+  };
+}
+
+export function advanceGameTurn(gameId: string) {
+  const state = loadGameEconomyState(gameId);
+  if (!state) return null;
+
+  const resolvedRealms = state.economyRealms.map((realm) => ({
+    realm,
+    result: resolveEconomyForRealm(
+      realm,
+      state.game.currentYear,
+      state.game.currentSeason as Season,
+    ),
+  }));
+
+  const { season: nextSeason, yearIncrement } = getNextSeason(state.game.currentSeason as Season);
+  const nextYear = state.game.currentYear + yearIncrement;
+
+  db.transaction((tx) => {
+    for (const { realm, result } of resolvedRealms) {
+      const snapshotId = uuid();
+      tx.insert(economicSnapshots).values({
+        id: snapshotId,
+        gameId,
+        realmId: realm.id,
+        year: state.game.currentYear,
+        season: state.game.currentSeason,
+        openingTreasury: result.openingTreasury,
+        totalRevenue: result.totalRevenue,
+        totalCosts: result.totalCosts,
+        netChange: result.netChange,
+        closingTreasury: result.closingTreasury,
+        taxTypeApplied: result.taxTypeApplied,
+        summary: JSON.stringify({
+          ...result.summary,
+          warnings: result.warnings,
+        }),
+      }).run();
+
+      for (const entry of result.ledgerEntries) {
+        tx.insert(economicEntries).values({
+          id: uuid(),
+          snapshotId,
+          gameId,
+          realmId: realm.id,
+          year: state.game.currentYear,
+          season: state.game.currentSeason,
+          kind: entry.kind,
+          category: entry.category,
+          label: entry.label,
+          amount: entry.amount,
+          settlementId: entry.settlementId ?? null,
+          buildingId: entry.buildingId ?? null,
+          troopId: entry.troopId ?? null,
+          siegeUnitId: entry.siegeUnitId ?? null,
+          tradeRouteId: entry.tradeRouteId ?? null,
+          reportId: entry.reportId ?? null,
+          metadata: JSON.stringify(entry.metadata ?? {}),
+        }).run();
+      }
+
+      tx.update(realms)
+        .set({
+          treasury: result.closingTreasury,
+          taxType: result.nextTaxType,
+          levyExpiresYear: result.levyExpiresYear,
+          levyExpiresSeason: result.levyExpiresSeason,
+          foodBalance: result.food.surplus,
+          consecutiveFoodShortageSeasons: result.food.consecutiveShortageSeasons,
+          consecutiveFoodRecoverySeasons: result.food.consecutiveRecoverySeasons,
+        })
+        .where(eq(realms.id, realm.id))
+        .run();
+
+      for (const pendingBuilding of result.pendingBuildings) {
+        const buildingDef = BUILDING_DEFS[pendingBuilding.type];
+        const remainingTurns = Math.max(pendingBuilding.constructionTurnsRemaining - 1, 0);
+        tx.insert(buildings).values({
+          id: uuid(),
+          settlementId: pendingBuilding.settlementId,
+          type: pendingBuilding.type,
+          category: buildingDef.category,
+          size: buildingDef.size,
+          material: pendingBuilding.material ?? null,
+          constructionTurnsRemaining: remainingTurns,
+          isGuildOwned: pendingBuilding.isGuildOwned,
+          guildId: pendingBuilding.guildId ?? null,
+        }).run();
+      }
+
+      for (const pendingTroop of result.pendingTroops) {
+        const troopDef = TROOP_DEFS[pendingTroop.type];
+        tx.insert(troops).values({
+          id: uuid(),
+          realmId: realm.id,
+          type: pendingTroop.type,
+          class: troopDef.class,
+          armourType: troopDef.armourTypes[0],
+          condition: 'Healthy',
+          armyId: null,
+          garrisonSettlementId: pendingTroop.garrisonSettlementId ?? null,
+          recruitmentTurnsRemaining: Math.max(pendingTroop.recruitmentTurnsRemaining - 1, 0),
+        }).run();
+      }
+    }
+
+    for (const building of state.buildingRows) {
+      if (building.constructionTurnsRemaining <= 0) continue;
+      tx.update(buildings)
+        .set({ constructionTurnsRemaining: Math.max(building.constructionTurnsRemaining - 1, 0) })
+        .where(eq(buildings.id, building.id))
+        .run();
+    }
+
+    for (const troop of state.troopRows) {
+      if (troop.recruitmentTurnsRemaining <= 0) continue;
+      tx.update(troops)
+        .set({ recruitmentTurnsRemaining: Math.max(troop.recruitmentTurnsRemaining - 1, 0) })
+        .where(eq(troops.id, troop.id))
+        .run();
+    }
+
+    for (const unit of state.siegeUnitRows) {
+      if (unit.constructionTurnsRemaining <= 0) continue;
+      tx.update(siegeUnits)
+        .set({ constructionTurnsRemaining: Math.max(unit.constructionTurnsRemaining - 1, 0) })
+        .where(eq(siegeUnits.id, unit.id))
+        .run();
+    }
+
+    for (const report of state.reportRows) {
+      tx.update(turnReports)
+        .set({ status: 'Resolved' })
+        .where(eq(turnReports.id, report.id))
+        .run();
+    }
+
+    tx.update(games)
+      .set({
+        currentSeason: nextSeason,
+        currentYear: nextYear,
+        turnPhase: 'Submission',
+      })
+      .where(eq(games.id, gameId))
+      .run();
+  });
+
+  return {
+    year: nextYear,
+    season: nextSeason,
+    phase: 'Submission' as const,
+    realmsResolved: resolvedRealms.length,
   };
 }

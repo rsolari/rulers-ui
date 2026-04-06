@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/db';
-import { games } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { getNextSeason } from '@/lib/game-logic/constants';
-import type { Season } from '@/types/game';
+import { advanceGameTurn } from '@/lib/economy-service';
 import { isAuthError, requireGM } from '@/lib/auth';
 
 export async function POST(
@@ -12,23 +8,13 @@ export async function POST(
 ) {
   try {
     const { gameId } = await params;
-    const game = await requireGM(gameId);
+    await requireGM(gameId);
+    const result = advanceGameTurn(gameId);
+    if (!result) {
+      return NextResponse.json({ error: 'Game not found' }, { status: 404 });
+    }
 
-    const { season: nextSeason, yearIncrement } = getNextSeason(game.currentSeason as Season);
-
-    await db.update(games)
-      .set({
-        currentSeason: nextSeason,
-        currentYear: game.currentYear + yearIncrement,
-        turnPhase: 'Submission',
-      })
-      .where(eq(games.id, gameId));
-
-    return NextResponse.json({
-      year: game.currentYear + yearIncrement,
-      season: nextSeason,
-      phase: 'Submission',
-    });
+    return NextResponse.json(result);
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -33,6 +33,11 @@ export async function POST(
       isNPC: body.isNPC || false,
       treasury: body.treasury || 0,
       taxType: body.taxType || 'Tribute',
+      levyExpiresYear: body.levyExpiresYear ?? null,
+      levyExpiresSeason: body.levyExpiresSeason ?? null,
+      foodBalance: body.foodBalance ?? 0,
+      consecutiveFoodShortageSeasons: body.consecutiveFoodShortageSeasons ?? 0,
+      consecutiveFoodRecoverySeasons: body.consecutiveFoodRecoverySeasons ?? 0,
       turmoil: 0,
       turmoilSources: '[]',
     });
@@ -69,7 +74,20 @@ export async function PATCH(
     }
 
     const allowedFields = isGM
-      ? ['name', 'governmentType', 'traditions', 'treasury', 'taxType', 'turmoil', 'turmoilSources']
+      ? [
+        'name',
+        'governmentType',
+        'traditions',
+        'treasury',
+        'taxType',
+        'levyExpiresYear',
+        'levyExpiresSeason',
+        'foodBalance',
+        'consecutiveFoodShortageSeasons',
+        'consecutiveFoodRecoverySeasons',
+        'turmoil',
+        'turmoilSources',
+      ]
       : ['name', 'governmentType', 'traditions'];
 
     const disallowedKeys = Object.keys(body).filter((key) => key !== 'realmId' && !allowedFields.includes(key));
@@ -83,6 +101,15 @@ export async function PATCH(
     if (body.traditions !== undefined) updates.traditions = JSON.stringify(body.traditions);
     if (isGM && body.treasury !== undefined) updates.treasury = body.treasury;
     if (isGM && body.taxType !== undefined) updates.taxType = body.taxType;
+    if (isGM && body.levyExpiresYear !== undefined) updates.levyExpiresYear = body.levyExpiresYear;
+    if (isGM && body.levyExpiresSeason !== undefined) updates.levyExpiresSeason = body.levyExpiresSeason;
+    if (isGM && body.foodBalance !== undefined) updates.foodBalance = body.foodBalance;
+    if (isGM && body.consecutiveFoodShortageSeasons !== undefined) {
+      updates.consecutiveFoodShortageSeasons = body.consecutiveFoodShortageSeasons;
+    }
+    if (isGM && body.consecutiveFoodRecoverySeasons !== undefined) {
+      updates.consecutiveFoodRecoverySeasons = body.consecutiveFoodRecoverySeasons;
+    }
     if (isGM && body.turmoil !== undefined) updates.turmoil = body.turmoil;
     if (isGM && body.turmoilSources !== undefined) updates.turmoilSources = JSON.stringify(body.turmoilSources);
 

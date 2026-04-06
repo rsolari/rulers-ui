@@ -123,9 +123,8 @@ export default function LandingPage() {
                   <p className="text-xs text-ink-300">Keep this secret! This is your GM access code.</p>
                 </div>
                 <div>
-                  <p className="text-sm text-ink-300 font-heading">Player Code</p>
-                  <p className="text-2xl font-heading font-bold text-ink-500 tracking-widest">{createdGame.playerCode}</p>
-                  <p className="text-xs text-ink-300">Share this with your players to join.</p>
+                  <p className="text-sm text-ink-300 font-heading">Player Claim Codes</p>
+                  <p className="text-xs text-ink-300">Individual player codes are generated during setup. Run setup to create and share them with your players.</p>
                 </div>
                 <Button
                   variant="accent"
@@ -147,7 +146,7 @@ export default function LandingPage() {
             <CardContent>
               <div className="flex flex-col gap-4">
                 <Input
-                  label="Game Code"
+                  label="Claim or GM Code"
                   placeholder="Enter your 6-character code"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}

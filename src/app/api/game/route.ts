@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { games } from '@/db/schema';
-import { generateGameCode } from '@/lib/auth';
+import { generateGameCode, sessionCookieOptions } from '@/lib/auth';
 import { v4 as uuid } from 'uuid';
 
 export async function POST(request: Request) {
@@ -21,10 +21,26 @@ export async function POST(request: Request) {
     name,
     gmCode,
     playerCode,
+    gamePhase: 'Setup',
+    initState: 'gm_world_setup',
+    gmSetupState: 'pending',
     currentYear: 1,
     currentSeason: 'Spring',
     turnPhase: 'Submission',
   });
 
-  return NextResponse.json({ id, name, gmCode, playerCode });
+  const response = NextResponse.json({
+    id,
+    name,
+    gmCode,
+    playerCode,
+    gamePhase: 'Setup',
+    initState: 'gm_world_setup',
+    gmSetupState: 'pending',
+  });
+  response.cookies.set('rulers-gm-code', gmCode, sessionCookieOptions);
+  response.cookies.set('rulers-game-id', id, sessionCookieOptions);
+  response.cookies.delete('rulers-claim-code');
+
+  return response;
 }

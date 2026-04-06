@@ -1,4 +1,44 @@
 import { cookies } from 'next/headers';
+import { and, eq } from 'drizzle-orm';
+import { db } from '@/db';
+import { games, playerSlots, realms } from '@/db/schema';
+import { toLegacyGamePhase } from '@/lib/game-init-state';
+import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState } from '@/types/game';
+
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+
+export const sessionCookieOptions = {
+  path: '/',
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: COOKIE_MAX_AGE,
+};
+
+export interface PublicSession {
+  role: 'gm' | 'player' | null;
+  gameId: string | null;
+  realmId: string | null;
+  gamePhase: GamePhase | null;
+  initState: GameInitState | null;
+  gmSetupState: GMSetupState | null;
+  playerSetupState: PlayerSetupState | null;
+  displayName: string | null;
+  territoryId: string | null;
+}
+
+export class AuthError extends Error {
+  status: number;
+
+  constructor(message: string, status = 403) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export function isAuthError(error: unknown): error is AuthError {
+  return error instanceof AuthError;
+}
 
 export function generateGameCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -9,19 +49,233 @@ export function generateGameCode(): string {
   return code;
 }
 
-export async function getGameRole(): Promise<'gm' | 'player' | null> {
+async function getCookieValue(name: string) {
   const cookieStore = await cookies();
-  const role = cookieStore.get('rulers-role')?.value;
-  if (role === 'gm' || role === 'player') return role;
-  return null;
+  return cookieStore.get(name)?.value ?? null;
+}
+
+export async function getGameIdCookie(): Promise<string | null> {
+  return getCookieValue('rulers-game-id');
+}
+
+export async function getClaimCode(): Promise<string | null> {
+  return getCookieValue('rulers-claim-code');
+}
+
+export async function getGmCode(): Promise<string | null> {
+  return getCookieValue('rulers-gm-code');
+}
+
+export async function getGameRole(): Promise<'gm' | 'player' | null> {
+  const session = await resolveSessionFromCookies();
+  return session.role;
 }
 
 export async function getGameId(): Promise<string | null> {
-  const cookieStore = await cookies();
-  return cookieStore.get('rulers-game-id')?.value ?? null;
+  const session = await resolveSessionFromCookies();
+  return session.gameId;
 }
 
 export async function getRealmId(): Promise<string | null> {
-  const cookieStore = await cookies();
-  return cookieStore.get('rulers-realm-id')?.value ?? null;
+  const session = await resolveSessionFromCookies();
+  return session.realmId;
+}
+
+export async function resolveSessionFromCookies(): Promise<PublicSession> {
+  const gameId = await getGameIdCookie();
+
+  if (!gameId) {
+    return {
+      role: null,
+      gameId: null,
+      realmId: null,
+      gamePhase: null,
+      initState: null,
+      gmSetupState: null,
+      playerSetupState: null,
+      displayName: null,
+      territoryId: null,
+    };
+  }
+
+  const game = await db.select().from(games).where(eq(games.id, gameId)).get();
+  if (!game) {
+    return {
+      role: null,
+      gameId: null,
+      realmId: null,
+      gamePhase: null,
+      initState: null,
+      gmSetupState: null,
+      playerSetupState: null,
+      displayName: null,
+      territoryId: null,
+    };
+  }
+
+  const gmCode = await getGmCode();
+  if (gmCode && gmCode === game.gmCode) {
+    return {
+      role: 'gm',
+      gameId: game.id,
+      realmId: null,
+      gamePhase: toLegacyGamePhase(game.initState),
+      initState: game.initState,
+      gmSetupState: game.gmSetupState,
+      playerSetupState: null,
+      displayName: null,
+      territoryId: null,
+    };
+  }
+
+  const claimCode = await getClaimCode();
+  if (!claimCode) {
+    return {
+      role: null,
+      gameId: null,
+      realmId: null,
+      gamePhase: null,
+      initState: null,
+      gmSetupState: null,
+      playerSetupState: null,
+      displayName: null,
+      territoryId: null,
+    };
+  }
+
+  const slot = await db.select().from(playerSlots)
+    .where(and(
+      eq(playerSlots.gameId, game.id),
+      eq(playerSlots.claimCode, claimCode),
+    ))
+    .get();
+
+  if (!slot) {
+    return {
+      role: null,
+      gameId: null,
+      realmId: null,
+      gamePhase: null,
+      initState: null,
+      gmSetupState: null,
+      playerSetupState: null,
+      displayName: null,
+      territoryId: null,
+    };
+  }
+
+  return {
+    role: 'player',
+    gameId: game.id,
+    realmId: slot.realmId ?? null,
+    gamePhase: toLegacyGamePhase(game.initState),
+    initState: game.initState,
+    gmSetupState: game.gmSetupState,
+    playerSetupState: slot.setupState,
+    displayName: slot.displayName ?? null,
+    territoryId: slot.territoryId,
+  };
+}
+
+export async function requireGame(gameId: string) {
+  const game = await db.select().from(games).where(eq(games.id, gameId)).get();
+
+  if (!game) {
+    throw new AuthError('Game not found', 404);
+  }
+
+  return game;
+}
+
+export async function requireGM(gameId: string) {
+  const game = await requireGame(gameId);
+  const gmCode = await getGmCode();
+
+  if (!gmCode || gmCode !== game.gmCode) {
+    throw new AuthError('GM access required', 403);
+  }
+
+  return game;
+}
+
+export async function requirePlayerSlot(gameId: string) {
+  await requireGame(gameId);
+
+  const claimCode = await getClaimCode();
+  if (!claimCode) {
+    throw new AuthError('Player access required', 403);
+  }
+
+  const slot = await db.select().from(playerSlots)
+    .where(and(
+      eq(playerSlots.gameId, gameId),
+      eq(playerSlots.claimCode, claimCode),
+    ))
+    .get();
+
+  if (!slot) {
+    throw new AuthError('Player access required', 403);
+  }
+
+  return slot;
+}
+
+export async function requireGamePhase(gameId: string, ...allowedPhases: GamePhase[]) {
+  const game = await requireGame(gameId);
+
+  const currentPhase = toLegacyGamePhase(game.initState);
+
+  if (!allowedPhases.includes(currentPhase)) {
+    throw new AuthError(`Game must be in ${allowedPhases.join(' or ')}`, 403);
+  }
+
+  return game;
+}
+
+export async function requireInitState(gameId: string, ...allowedStates: GameInitState[]) {
+  const game = await requireGame(gameId);
+
+  if (!allowedStates.includes(game.initState)) {
+    throw new AuthError(`Game must be in ${allowedStates.join(' or ')}`, 403);
+  }
+
+  return game;
+}
+
+export async function requireRealmOwner(gameId: string, realmId: string) {
+  const game = await requireGame(gameId);
+  const realm = await db.select().from(realms)
+    .where(and(
+      eq(realms.id, realmId),
+      eq(realms.gameId, gameId),
+    ))
+    .get();
+
+  if (!realm) {
+    throw new AuthError('Realm not found', 404);
+  }
+
+  const gmCode = await getGmCode();
+  if (gmCode && gmCode === game.gmCode) {
+    return realm;
+  }
+
+  const claimCode = await getClaimCode();
+  if (!claimCode) {
+    throw new AuthError('Realm ownership required', 403);
+  }
+
+  const slot = await db.select().from(playerSlots)
+    .where(and(
+      eq(playerSlots.gameId, gameId),
+      eq(playerSlots.claimCode, claimCode),
+      eq(playerSlots.realmId, realmId),
+    ))
+    .get();
+
+  if (!slot) {
+    throw new AuthError('Realm ownership required', 403);
+  }
+
+  return realm;
 }

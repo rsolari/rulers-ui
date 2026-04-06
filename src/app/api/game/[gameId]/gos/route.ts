@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { guildsOrdersSocieties } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
+import { isAuthError, requireGM } from '@/lib/auth';
 
 export async function GET(
   _request: Request
@@ -19,20 +20,31 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
-  const body = await request.json();
+  try {
+    const { gameId } = await params;
+    await requireGM(gameId);
+    const body = await request.json();
 
-  const id = uuid();
-  await db.insert(guildsOrdersSocieties).values({
-    id,
-    realmId: body.realmId,
-    name: body.name,
-    type: body.type,
-    focus: body.focus || null,
-    leaderId: body.leaderId || null,
-    income: body.income || 0,
-  });
+    const id = uuid();
+    await db.insert(guildsOrdersSocieties).values({
+      id,
+      realmId: body.realmId,
+      name: body.name,
+      type: body.type,
+      focus: body.focus || null,
+      leaderId: body.leaderId || null,
+      income: body.income || 0,
+    });
 
-  return NextResponse.json({ id, ...body });
+    return NextResponse.json({ id, ...body });
+  } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
+  }
 }

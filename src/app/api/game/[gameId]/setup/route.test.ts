@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { games, realms, resourceSites, settlements, territories } from '@/db/schema';
+import { games, playerSlots, resourceSites, settlements, territories } from '@/db/schema';
 
 const mocks = vi.hoisted(() => {
   const operations: Array<{
@@ -15,23 +15,19 @@ const mocks = vi.hoisted(() => {
 
   const tx = {
     insert: vi.fn((table: unknown) => ({
-      values: (values: Record<string, unknown>) => {
-        return {
-          run: () => {
-            operations.push({ kind: 'insert', table, values });
-          },
-        };
-      },
+      values: (values: Record<string, unknown>) => ({
+        run: () => {
+          operations.push({ kind: 'insert', table, values });
+        },
+      }),
     })),
     update: vi.fn((table: unknown) => ({
       set: (values: Record<string, unknown>) => ({
-        where: () => {
-          return {
-            run: () => {
-              operations.push({ kind: 'update', table, values });
-            },
-          };
-        },
+        where: () => ({
+          run: () => {
+            operations.push({ kind: 'update', table, values });
+          },
+        }),
       }),
     })),
   };
@@ -46,7 +42,15 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+const authMocks = vi.hoisted(() => ({
+  requireGM: vi.fn(),
+  requireInitState: vi.fn(),
+  generateGameCode: vi.fn(),
+  isAuthError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'status' in error),
+}));
+
 vi.mock('@/db', () => ({ db: mocks.db }));
+vi.mock('@/lib/auth', () => authMocks);
 
 const uuidMock = vi.hoisted(() => vi.fn());
 vi.mock('uuid', () => ({ v4: uuidMock }));
@@ -58,15 +62,16 @@ describe('POST /api/game/[gameId]/setup', () => {
     vi.clearAllMocks();
     mocks.operations.length = 0;
     uuidMock.mockReset();
+    authMocks.generateGameCode.mockReset();
   });
 
   it('returns 404 when the game does not exist', async () => {
-    mocks.selectGet.mockReturnValue(undefined);
+    authMocks.requireGM.mockRejectedValue(Object.assign(new Error('Game not found'), { status: 404 }));
 
     const response = await POST(new Request('http://localhost/api/game/game-1/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ territories: [], realms: [] }),
+      body: JSON.stringify({ territories: [] }),
     }), {
       params: Promise.resolve({ gameId: 'game-1' }),
     });
@@ -76,11 +81,15 @@ describe('POST /api/game/[gameId]/setup', () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
-  it('creates realms before assigning them to territories and settlements', async () => {
-    mocks.selectGet.mockReturnValue({ id: 'game-1' });
+  it('creates player slots, settlements, and transitions to realm creation', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+    authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'gm_world_setup' });
+    authMocks.generateGameCode.mockReturnValue('CLAIM1');
+    mocks.selectGet.mockReturnValue(undefined);
+
     uuidMock
+      .mockReturnValueOnce('slot-1')
       .mockReturnValueOnce('territory-1')
-      .mockReturnValueOnce('realm-1')
       .mockReturnValueOnce('settlement-1')
       .mockReturnValueOnce('resource-1');
 
@@ -92,17 +101,16 @@ describe('POST /api/game/[gameId]/setup', () => {
           name: 'T1',
           climate: 'Temperate',
           description: '',
+          type: 'Realm',
+          owner: {
+            kind: 'player',
+            displayName: 'Alice',
+          },
           resources: [{
-            resourceType: 'Iron',
+            resourceType: 'Ore',
             rarity: 'Common',
             settlement: { name: 'S1', size: 'Village' },
           }],
-        }],
-        realms: [{
-          name: 'R1',
-          governmentType: 'Monarchy',
-          traditions: ['A', 'B', 'C'],
-          territoryIndex: 0,
         }],
       }),
     }), {
@@ -120,27 +128,22 @@ describe('POST /api/game/[gameId]/setup', () => {
           name: 'T1',
           climate: 'Temperate',
           description: null,
+          realmId: null,
         },
       },
       {
         kind: 'insert',
-        table: realms,
+        table: playerSlots,
         values: {
-          id: 'realm-1',
+          id: 'slot-1',
           gameId: 'game-1',
-          name: 'R1',
-          governmentType: 'Monarchy',
-          traditions: JSON.stringify(['A', 'B', 'C']),
-          treasury: 0,
-          taxType: 'Tribute',
-          turmoil: 0,
-          turmoilSources: '[]',
+          claimCode: 'CLAIM1',
+          territoryId: 'territory-1',
+          realmId: null,
+          displayName: 'Alice',
+          setupState: 'unclaimed',
+          claimedAt: null,
         },
-      },
-      {
-        kind: 'update',
-        table: territories,
-        values: { realmId: 'realm-1' },
       },
       {
         kind: 'insert',
@@ -148,7 +151,7 @@ describe('POST /api/game/[gameId]/setup', () => {
         values: {
           id: 'settlement-1',
           territoryId: 'territory-1',
-          realmId: 'realm-1',
+          realmId: null,
           name: 'S1',
           size: 'Village',
         },
@@ -160,20 +163,27 @@ describe('POST /api/game/[gameId]/setup', () => {
           id: 'resource-1',
           territoryId: 'territory-1',
           settlementId: 'settlement-1',
-          resourceType: 'Iron',
+          resourceType: 'Ore',
           rarity: 'Common',
         },
       },
       {
         kind: 'update',
         table: games,
-        values: { turnPhase: 'Submission' },
+        values: {
+          initState: 'player_invites_open',
+          gmSetupState: 'configuring',
+          gamePhase: 'RealmCreation',
+          turnPhase: 'Submission',
+        },
       },
     ]);
 
     await expect(response.json()).resolves.toEqual({
       territories: 1,
-      realms: 1,
+      npcRealms: 0,
+      playerSlots: 1,
+      claimCodes: ['CLAIM1'],
       success: true,
     });
   });

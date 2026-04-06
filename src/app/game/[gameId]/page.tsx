@@ -16,25 +16,45 @@ export default function GameRedirect() {
   const router = useRouter();
   const params = useParams();
   const gameId = params.gameId as string;
-  const { role, realmId, refresh } = useRole();
+  const { role, realmId, initState, loading, refresh } = useRole();
 
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [realmChoices, setRealmChoices] = useState<RealmOption[] | null>(null);
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (role === 'gm') {
-      router.replace(`/game/${gameId}/gm`);
-    } else if (role === 'player' && realmId) {
-      router.replace(`/game/${gameId}/realm`);
+    if (loading) {
+      return;
     }
-  }, [role, realmId, gameId, router]);
+
+    if (role === 'gm') {
+      if (initState === 'gm_world_setup') {
+        router.replace(`/game/${gameId}/setup`);
+        return;
+      }
+
+      router.replace(`/game/${gameId}/gm`);
+      return;
+    }
+
+    if (role === 'player') {
+      if (!realmId && initState && initState !== 'gm_world_setup' && initState !== 'active' && initState !== 'completed') {
+        router.replace(`/game/${gameId}/create-realm`);
+        return;
+      }
+
+      if (realmId) {
+        router.replace(`/game/${gameId}/realm`);
+        return;
+      }
+    }
+  }, [role, realmId, initState, loading, gameId, router]);
 
   async function handleJoin() {
     if (!code.trim()) { setError('Please enter a game code'); return; }
-    setLoading(true);
+    setJoining(true);
     setError('');
     try {
       const res = await fetch(`/api/game/${gameId}/join`, {
@@ -53,12 +73,12 @@ export default function GameRedirect() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to join game');
     } finally {
-      setLoading(false);
+      setJoining(false);
     }
   }
 
   async function handleSelectRealm(selectedRealmId: string) {
-    setLoading(true);
+    setJoining(true);
     setError('');
     try {
       const res = await fetch(`/api/game/${gameId}/join`, {
@@ -72,7 +92,7 @@ export default function GameRedirect() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to select realm');
     } finally {
-      setLoading(false);
+      setJoining(false);
     }
   }
 
@@ -100,7 +120,7 @@ export default function GameRedirect() {
                   key={realm.id}
                   variant="outline"
                   onClick={() => handleSelectRealm(realm.id)}
-                  disabled={loading}
+                  disabled={joining}
                   className="w-full"
                 >
                   {realm.name}
@@ -133,8 +153,8 @@ export default function GameRedirect() {
               className="text-center text-2xl tracking-[0.3em] font-heading"
             />
             {error && <p className="text-red-500 text-sm">{error}</p>}
-            <Button variant="accent" onClick={handleJoin} disabled={loading} className="w-full">
-              {loading ? 'Joining...' : 'Join Game'}
+            <Button variant="accent" onClick={handleJoin} disabled={joining} className="w-full">
+              {joining ? 'Joining...' : 'Join Game'}
             </Button>
           </div>
         </CardContent>

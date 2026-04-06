@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { nobleFamilies, nobles } from '@/db/schema';
+import { nobleFamilies, nobles, playerSlots } from '@/db/schema';
+import { recomputeGameInitState } from '@/lib/game-init-state';
 
 type RulerRecord = {
   id: string;
@@ -58,7 +59,11 @@ export async function GET(request: Request) {
   return NextResponse.json(ruler ?? null);
 }
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
+) {
+  const { gameId } = await params;
   const body = await request.json();
 
   if (!body.realmId || !body.name || !body.gender || !body.age || !body.personality) {
@@ -177,6 +182,21 @@ export async function POST(request: Request) {
 
     if ('error' in created) {
       return NextResponse.json({ error: created.error }, { status: created.status });
+    }
+
+    const slot = await db.select({ id: playerSlots.id })
+      .from(playerSlots)
+      .where(and(
+        eq(playerSlots.gameId, gameId),
+        eq(playerSlots.realmId, body.realmId),
+      ))
+      .get();
+
+    if (slot) {
+      await db.update(playerSlots)
+        .set({ setupState: 'ready' })
+        .where(eq(playerSlots.id, slot.id));
+      await recomputeGameInitState(gameId);
     }
 
     return NextResponse.json(created.ruler, { status: created.status });

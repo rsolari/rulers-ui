@@ -1,0 +1,92 @@
+import { NextResponse } from 'next/server';
+import { and, eq } from 'drizzle-orm';
+import { v4 as uuid } from 'uuid';
+import { db } from '@/db';
+import { playerSlots, realms, settlements, territories } from '@/db/schema';
+import { recomputeGameInitState } from '@/lib/game-init-state';
+import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
+) {
+  try {
+    const { gameId } = await params;
+    await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
+    const slot = await requirePlayerSlot(gameId);
+
+    if (slot.realmId) {
+      return NextResponse.json({ error: 'This slot already has a realm' }, { status: 409 });
+    }
+
+    const body = await request.json();
+    if (!body.name || !body.governmentType || !body.townName) {
+      return NextResponse.json({ error: 'name, governmentType, and townName are required' }, { status: 400 });
+    }
+
+    const territory = await db.select().from(territories)
+      .where(and(
+        eq(territories.id, slot.territoryId),
+        eq(territories.gameId, gameId),
+      ))
+      .get();
+
+    if (!territory) {
+      return NextResponse.json({ error: 'Assigned territory not found' }, { status: 404 });
+    }
+
+    const realmId = uuid();
+    const townId = uuid();
+    const claimedAt = new Date();
+
+    await db.transaction((tx) => {
+      tx.insert(realms).values({
+        id: realmId,
+        gameId,
+        name: body.name,
+        governmentType: body.governmentType,
+        traditions: JSON.stringify(body.traditions || []),
+        isNPC: false,
+        treasury: 0,
+        taxType: 'Tribute',
+        turmoil: 0,
+        turmoilSources: '[]',
+      }).run();
+
+      tx.insert(settlements).values({
+        id: townId,
+        territoryId: territory.id,
+        realmId,
+        name: body.townName,
+        size: 'Town',
+        governingNobleId: null,
+      }).run();
+
+      tx.update(territories)
+        .set({ realmId })
+        .where(eq(territories.id, territory.id))
+        .run();
+
+      tx.update(playerSlots)
+        .set({ realmId, claimedAt, setupState: 'realm_created' })
+        .where(eq(playerSlots.id, slot.id))
+        .run();
+    });
+
+    await recomputeGameInitState(gameId);
+
+    return NextResponse.json({
+      id: realmId,
+      name: body.name,
+      governmentType: body.governmentType,
+      traditions: body.traditions || [],
+      townId,
+    });
+  } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
+  }
+}

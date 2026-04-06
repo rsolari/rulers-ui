@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState } from '@/types/game';
 
 export type GameRole = 'gm' | 'player' | null;
 
@@ -8,33 +9,77 @@ export interface RoleState {
   role: GameRole;
   gameId: string | null;
   realmId: string | null;
+  gamePhase: GamePhase | null;
+  initState: GameInitState | null;
+  gmSetupState: GMSetupState | null;
+  playerSetupState: PlayerSetupState | null;
+  displayName: string | null;
+  territoryId: string | null;
+  loading: boolean;
   refresh: () => void;
 }
 
-function readRoleState(): Omit<RoleState, 'refresh'> {
-  if (typeof document === 'undefined') {
-    return { role: null, gameId: null, realmId: null };
-  }
+type SessionState = Omit<RoleState, 'refresh'>;
 
-  const cookies = document.cookie.split(';').reduce((acc, cookie) => {
-    const [key, val] = cookie.trim().split('=');
-    acc[key] = val;
-    return acc;
-  }, {} as Record<string, string>);
-
-  return {
-    role: (cookies['rulers-role'] as GameRole) || null,
-    gameId: cookies['rulers-game-id'] || null,
-    realmId: cookies['rulers-realm-id'] || null,
-  };
-}
+const initialState: SessionState = {
+  role: null,
+  gameId: null,
+  realmId: null,
+  gamePhase: null,
+  initState: null,
+  gmSetupState: null,
+  playerSetupState: null,
+  displayName: null,
+  territoryId: null,
+  loading: true,
+};
 
 export function useRole(): RoleState {
-  const [state, setState] = useState<Omit<RoleState, 'refresh'>>(readRoleState);
+  const [state, setState] = useState<SessionState>(initialState);
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   const refresh = useCallback(() => {
-    setState(readRoleState());
+    setRefreshCounter((count) => count + 1);
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadSession() {
+      try {
+        const response = await fetch('/api/auth/session', {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch session');
+        }
+
+        const session = await response.json();
+        setState({
+          role: session.role ?? null,
+          gameId: session.gameId ?? null,
+          realmId: session.realmId ?? null,
+          gamePhase: session.gamePhase ?? null,
+          initState: session.initState ?? null,
+          gmSetupState: session.gmSetupState ?? null,
+          playerSetupState: session.playerSetupState ?? null,
+          displayName: session.displayName ?? null,
+          territoryId: session.territoryId ?? null,
+          loading: false,
+        });
+      } catch {
+        if (!controller.signal.aborted) {
+          setState({ ...initialState, loading: false });
+        }
+      }
+    }
+
+    loadSession();
+
+    return () => controller.abort();
+  }, [refreshCounter]);
 
   return { ...state, refresh };
 }

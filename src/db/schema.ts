@@ -27,6 +27,8 @@ export const gamesRelations = relations(games, ({ many }) => ({
   tradeRoutes: many(tradeRoutes),
   turnReports: many(turnReports),
   turnEvents: many(turnEvents),
+  economicSnapshots: many(economicSnapshots),
+  economicEntries: many(economicEntries),
 }));
 
 // ============================================================
@@ -42,6 +44,11 @@ export const realms = sqliteTable('realms', {
   isNPC: integer('is_npc', { mode: 'boolean' }).default(false).notNull(),
   treasury: integer('treasury').default(0).notNull(),
   taxType: text('tax_type').default('Tribute').notNull(),
+  levyExpiresYear: integer('levy_expires_year'),
+  levyExpiresSeason: text('levy_expires_season'),
+  foodBalance: integer('food_balance').default(0).notNull(),
+  consecutiveFoodShortageSeasons: integer('consecutive_food_shortage_seasons').default(0).notNull(),
+  consecutiveFoodRecoverySeasons: integer('consecutive_food_recovery_seasons').default(0).notNull(),
   turmoil: integer('turmoil').default(0).notNull(),
   turmoilSources: text('turmoil_sources').default('[]').notNull(), // JSON array
 });
@@ -58,6 +65,8 @@ export const realmsRelations = relations(realms, ({ one, many }) => ({
   siegeUnits: many(siegeUnits),
   guildsOrdersSocieties: many(guildsOrdersSocieties),
   turnReports: many(turnReports),
+  economicSnapshots: many(economicSnapshots),
+  economicEntries: many(economicEntries),
 }));
 
 // ============================================================
@@ -384,4 +393,57 @@ export const turnEvents = sqliteTable('turn_events', {
 export const turnEventsRelations = relations(turnEvents, ({ one }) => ({
   game: one(games, { fields: [turnEvents.gameId], references: [games.id] }),
   realm: one(realms, { fields: [turnEvents.realmId], references: [realms.id] }),
+}));
+
+// ============================================================
+// ECONOMY
+// ============================================================
+
+export const economicSnapshots = sqliteTable('economic_snapshots', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+  year: integer('year').notNull(),
+  season: text('season').notNull(),
+  openingTreasury: integer('opening_treasury').notNull(),
+  totalRevenue: integer('total_revenue').notNull(),
+  totalCosts: integer('total_costs').notNull(),
+  netChange: integer('net_change').notNull(),
+  closingTreasury: integer('closing_treasury').notNull(),
+  taxTypeApplied: text('tax_type_applied').notNull(),
+  summary: text('summary').default('{}').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const economicSnapshotsRelations = relations(economicSnapshots, ({ one, many }) => ({
+  game: one(games, { fields: [economicSnapshots.gameId], references: [games.id] }),
+  realm: one(realms, { fields: [economicSnapshots.realmId], references: [realms.id] }),
+  entries: many(economicEntries),
+}));
+
+export const economicEntries = sqliteTable('economic_entries', {
+  id: text('id').primaryKey(),
+  snapshotId: text('snapshot_id').notNull().references(() => economicSnapshots.id),
+  gameId: text('game_id').notNull().references(() => games.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+  year: integer('year').notNull(),
+  season: text('season').notNull(),
+  kind: text('kind').notNull(),
+  category: text('category').notNull(),
+  label: text('label').notNull(),
+  amount: integer('amount').notNull(),
+  settlementId: text('settlement_id'),
+  buildingId: text('building_id'),
+  troopId: text('troop_id'),
+  siegeUnitId: text('siege_unit_id'),
+  tradeRouteId: text('trade_route_id'),
+  reportId: text('report_id'),
+  metadata: text('metadata').default('{}').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const economicEntriesRelations = relations(economicEntries, ({ one }) => ({
+  snapshot: one(economicSnapshots, { fields: [economicEntries.snapshotId], references: [economicSnapshots.id] }),
+  game: one(games, { fields: [economicEntries.gameId], references: [games.id] }),
+  realm: one(realms, { fields: [economicEntries.realmId], references: [realms.id] }),
 }));

@@ -119,11 +119,11 @@ export async function POST(
         }
       }
 
-      for (const [territoryIndex, territory] of territoryInputs.entries()) {
-        const ownership = ownershipByIndex.get(territoryIndex);
+    for (const [territoryIndex, territory] of territoryInputs.entries()) {
+      const ownership = ownershipByIndex.get(territoryIndex);
 
-        if (ownership?.kind === 'npc' && ownership.realmId) {
-          tx.insert(realms).values({
+      if (ownership?.kind === 'npc' && ownership.realmId) {
+        tx.insert(realms).values({
             id: ownership.realmId,
             gameId,
             name: territory.owner?.realmName?.trim() || `${territory.name} NPC Realm`,
@@ -132,6 +132,11 @@ export async function POST(
             isNPC: true,
             treasury: 0,
             taxType: 'Tribute',
+            levyExpiresYear: null,
+            levyExpiresSeason: null,
+            foodBalance: 0,
+            consecutiveFoodShortageSeasons: 0,
+            consecutiveFoodRecoverySeasons: 0,
             turmoil: 0,
             turmoilSources: '[]',
           }).run();

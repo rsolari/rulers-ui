@@ -176,7 +176,7 @@ export default function CreateRealmPage() {
             {territory.description && <p className="text-sm text-ink-300">{territory.description}</p>}
 
             <div>
-              <p className="font-heading font-semibold mb-2">Generated Villages</p>
+              <p className="font-heading font-semibold mb-2">Settlements</p>
               <div className="space-y-2">
                 {settlements.map((settlement) => (
                   <div key={settlement.id} className="flex items-center justify-between p-2 medieval-border rounded">
@@ -184,6 +184,12 @@ export default function CreateRealmPage() {
                     <Badge>{settlement.size}</Badge>
                   </div>
                 ))}
+                {townName.trim() && (
+                  <div className="flex items-center justify-between p-2 medieval-border rounded border-gold-500 bg-gold-500/5">
+                    <span>{townName}</span>
+                    <Badge variant="gold">Town</Badge>
+                  </div>
+                )}
               </div>
             </div>
 

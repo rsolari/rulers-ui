@@ -62,6 +62,11 @@ export async function POST(
         governingNobleId: null,
       }).run();
 
+      tx.update(settlements)
+        .set({ realmId })
+        .where(eq(settlements.territoryId, territory.id))
+        .run();
+
       tx.update(territories)
         .set({ realmId })
         .where(eq(territories.id, territory.id))

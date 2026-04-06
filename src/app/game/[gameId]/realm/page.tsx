@@ -47,10 +47,18 @@ interface Realm {
   traditions: string;
 }
 
+interface Territory {
+  id: string;
+  name: string;
+  climate: string | null;
+  realmId: string | null;
+}
+
 interface Settlement {
   id: string;
   name: string;
   size: string;
+  territoryId: string;
   buildings: Array<{ id: string; type: string }>;
 }
 
@@ -68,6 +76,7 @@ export default function RealmDashboard() {
   const { role, realmId, initState, loading } = useRole();
   const [game, setGame] = useState<Game | null>(null);
   const [realm, setRealm] = useState<Realm | null>(null);
+  const [territories, setTerritories] = useState<Territory[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [ruler, setRuler] = useState<Ruler | null>(null);
   const [form, setForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
@@ -94,9 +103,10 @@ export default function RealmDashboard() {
     }
 
     async function loadRealm() {
-      const [gameResponse, realmsResponse, settlementsResponse, rulerResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`),
         fetch(`/api/game/${gameId}/realms`),
+        fetch(`/api/game/${gameId}/territories`),
         fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/ruler?realmId=${realmId}`),
       ]);
@@ -104,11 +114,14 @@ export default function RealmDashboard() {
       const gameData = await gameResponse.json();
       const realmList = await realmsResponse.json();
       const realmData = realmList.find((entry: Realm) => entry.id === realmId) || null;
+      const allTerritories: Territory[] = await territoriesResponse.json();
+      const realmTerritories = allTerritories.filter((t) => t.realmId === realmId);
       const settlementsList = await settlementsResponse.json();
       const rulerData = await rulerResponse.json();
 
       setGame(gameData);
       setRealm(realmData);
+      setTerritories(realmTerritories);
       setSettlements(settlementsList);
       setRuler(rulerData);
 
@@ -297,19 +310,35 @@ export default function RealmDashboard() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Settlements</CardTitle>
+          <CardTitle>Territories</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {settlements.map((settlement) => (
-              <div key={settlement.id} className="flex items-center justify-between p-3 medieval-border rounded">
-                <div className="flex items-center gap-3">
-                  <span className="font-heading font-semibold">{settlement.name}</span>
-                  <Badge>{settlement.size}</Badge>
+          <div className="space-y-4">
+            {territories.map((territory) => {
+              const territorySettlements = settlements.filter((s) => s.territoryId === territory.id);
+              return (
+                <div key={territory.id} className="p-3 medieval-border rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-semibold">{territory.name}</span>
+                    {territory.climate && <Badge>{territory.climate}</Badge>}
+                  </div>
+                  {territorySettlements.length > 0 && (
+                    <div className="space-y-1 ml-4">
+                      {territorySettlements.map((settlement) => (
+                        <div key={settlement.id} className="flex items-center justify-between p-2 rounded bg-parchment-100/50">
+                          <div className="flex items-center gap-3">
+                            <span>{settlement.name}</span>
+                            <Badge>{settlement.size}</Badge>
+                          </div>
+                          <span className="text-sm text-ink-300">{settlement.buildings?.length || 0} buildings</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <span className="text-sm text-ink-300">{settlement.buildings?.length || 0} buildings</span>
-              </div>
-            ))}
+              );
+            })}
+            {territories.length === 0 && <p className="text-ink-300 text-sm">No territories yet.</p>}
           </div>
         </CardContent>
       </Card>

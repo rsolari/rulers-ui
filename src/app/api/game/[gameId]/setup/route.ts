@@ -101,25 +101,6 @@ export async function POST(
 
     db.transaction((tx) => {
       for (const [territoryIndex, territory] of territoryInputs.entries()) {
-        const territoryId = uuid();
-        territoryIds.push(territoryId);
-
-        tx.insert(territories).values({
-          id: territoryId,
-          gameId,
-          name: territory.name,
-          climate: territory.climate || null,
-          description: territory.description || null,
-          realmId: ownershipByIndex.get(territoryIndex)?.realmId ?? null,
-        }).run();
-
-        const pendingSlot = playerSlotRows.find((slot) => slot.territoryId === '');
-        if (ownershipByIndex.get(territoryIndex)?.kind === 'player' && pendingSlot) {
-          pendingSlot.territoryId = territoryId;
-        }
-      }
-
-      for (const [territoryIndex, territory] of territoryInputs.entries()) {
         const ownership = ownershipByIndex.get(territoryIndex);
 
         if (ownership?.kind === 'npc' && ownership.realmId) {
@@ -135,6 +116,25 @@ export async function POST(
             turmoil: 0,
             turmoilSources: '[]',
           }).run();
+        }
+      }
+
+      for (const [territoryIndex, territory] of territoryInputs.entries()) {
+        const territoryId = uuid();
+        territoryIds.push(territoryId);
+
+        tx.insert(territories).values({
+          id: territoryId,
+          gameId,
+          name: territory.name,
+          climate: territory.climate || null,
+          description: territory.description || null,
+          realmId: ownershipByIndex.get(territoryIndex)?.realmId ?? null,
+        }).run();
+
+        const pendingSlot = playerSlotRows.find((slot) => slot.territoryId === '');
+        if (ownershipByIndex.get(territoryIndex)?.kind === 'player' && pendingSlot) {
+          pendingSlot.territoryId = territoryId;
         }
       }
 

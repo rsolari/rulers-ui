@@ -1,11 +1,29 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { TRADITION_DEFS } from '@/lib/game-logic/constants';
+import type { GovernmentType, Tradition } from '@/types/game';
+
+const GOVERNMENT_OPTIONS = [
+  { value: 'Monarch', label: 'Monarch' },
+  { value: 'ElectedMonarch', label: 'Elected Monarch' },
+  { value: 'Council', label: 'Council' },
+  { value: 'Ecclesiastical', label: 'Ecclesiastical' },
+  { value: 'Consortium', label: 'Consortium' },
+  { value: 'Magistrate', label: 'Magistrate' },
+  { value: 'Warlord', label: 'Warlord' },
+];
+
+const TRADITION_OPTIONS = Object.entries(TRADITION_DEFS).map(([key, def]) => ({
+  value: key,
+  label: `${def.displayName} (${def.category})`,
+}));
 
 interface Game {
   id: string;
@@ -49,6 +67,10 @@ export default function GMDashboard() {
   const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([]);
   const [starting, setStarting] = useState(false);
   const [markingReady, setMarkingReady] = useState(false);
+  const [npcForm, setNpcForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
+  const [editingNpcId, setEditingNpcId] = useState<string | null>(null);
+  const [savingNpc, setSavingNpc] = useState(false);
+  const [showNpcForm, setShowNpcForm] = useState(false);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -88,6 +110,63 @@ export default function GMDashboard() {
     }
 
     setMarkingReady(false);
+  }
+
+  function openNpcForm(realm?: Realm) {
+    if (realm) {
+      setEditingNpcId(realm.id);
+      setNpcForm({
+        name: realm.name,
+        governmentType: realm.governmentType as GovernmentType,
+        traditions: JSON.parse(realm.traditions || '[]'),
+      });
+    } else {
+      setEditingNpcId(null);
+      setNpcForm({ name: '', governmentType: 'Monarch', traditions: [] });
+    }
+    setShowNpcForm(true);
+  }
+
+  function toggleNpcTradition(tradition: Tradition) {
+    setNpcForm((current) => {
+      if (current.traditions.includes(tradition)) {
+        return { ...current, traditions: current.traditions.filter((v) => v !== tradition) };
+      }
+      if (current.traditions.length >= 3) return current;
+      return { ...current, traditions: [...current.traditions, tradition] };
+    });
+  }
+
+  async function saveNpcRealm() {
+    setSavingNpc(true);
+    if (editingNpcId) {
+      await fetch(`/api/game/${gameId}/realms`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          realmId: editingNpcId,
+          name: npcForm.name,
+          governmentType: npcForm.governmentType,
+          traditions: npcForm.traditions,
+        }),
+      });
+    } else {
+      await fetch(`/api/game/${gameId}/realms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: npcForm.name,
+          governmentType: npcForm.governmentType,
+          traditions: npcForm.traditions,
+          isNPC: true,
+        }),
+      });
+    }
+
+    const updated = await fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' });
+    setRealms(await updated.json());
+    setShowNpcForm(false);
+    setSavingNpc(false);
   }
 
   if (!game) {
@@ -141,9 +220,6 @@ export default function GMDashboard() {
       </div>
 
       <div className="flex gap-3 mb-6">
-        <Link href={`/game/${gameId}/setup`}>
-          <Button variant="outline">Edit Setup</Button>
-        </Link>
         {game.initState !== 'active' && game.initState !== 'completed' && game.gmSetupState !== 'ready' && (
           <Button variant="outline" onClick={() => void markGMReady()} disabled={markingReady}>
             {markingReady ? 'Saving...' : 'Mark GM Setup Ready'}
@@ -182,21 +258,68 @@ export default function GMDashboard() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>NPC Realms</CardTitle>
+            {!showNpcForm && (
+              <Button variant="outline" onClick={() => openNpcForm()}>
+                + Add NPC Realm
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
+            {showNpcForm && (
+              <div className="p-4 medieval-border rounded mb-4 space-y-3">
+                <p className="font-heading font-semibold">{editingNpcId ? 'Edit NPC Realm' : 'New NPC Realm'}</p>
+                <Input
+                  label="Realm Name"
+                  value={npcForm.name}
+                  onChange={(e) => setNpcForm((c) => ({ ...c, name: e.target.value }))}
+                />
+                <Select
+                  label="Government"
+                  options={GOVERNMENT_OPTIONS}
+                  value={npcForm.governmentType}
+                  onChange={(e) => setNpcForm((c) => ({ ...c, governmentType: e.target.value as GovernmentType }))}
+                />
+                <div>
+                  <p className="font-heading text-sm font-medium text-ink-500 mb-2">Traditions ({npcForm.traditions.length}/3)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TRADITION_OPTIONS.map((option) => (
+                      <Badge
+                        key={option.value}
+                        variant={npcForm.traditions.includes(option.value as Tradition) ? 'gold' : 'default'}
+                        className="cursor-pointer"
+                        onClick={() => toggleNpcTradition(option.value as Tradition)}
+                      >
+                        {option.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="accent" onClick={() => void saveNpcRealm()} disabled={savingNpc || !npcForm.name.trim()}>
+                    {savingNpc ? 'Saving...' : editingNpcId ? 'Update Realm' : 'Create Realm'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowNpcForm(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {npcRealms.map((realm) => (
                 <div key={realm.id} className="p-3 medieval-border rounded">
                   <div className="flex items-center justify-between">
                     <span className="font-heading font-semibold">{realm.name}</span>
-                    <Badge variant="gold">NPC</Badge>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" onClick={() => openNpcForm(realm)}>
+                        Edit
+                      </Button>
+                      <Badge variant="gold">NPC</Badge>
+                    </div>
                   </div>
                   <p className="text-sm text-ink-300">{realm.governmentType}</p>
                 </div>
               ))}
-              {npcRealms.length === 0 && <p className="text-ink-300 text-sm">No NPC realms configured.</p>}
+              {npcRealms.length === 0 && !showNpcForm && <p className="text-ink-300 text-sm">No NPC realms configured.</p>}
             </div>
           </CardContent>
         </Card>

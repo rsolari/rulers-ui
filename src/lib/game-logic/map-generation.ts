@@ -127,13 +127,13 @@ export function generateTerritoryResources(type: TerritoryType): GeneratedResour
   const resources: GeneratedResource[] = [];
 
   if (type === 'Realm') {
-    // 3 common + 1 luxury, with exactly one player-selected town.
+    // 3 common + 1 luxury, all starting as villages during setup.
     for (let i = 0; i < 3; i++) {
       const resourceType = rollGuaranteedCommonResource();
       resources.push({
         resourceType,
         rarity: RESOURCE_RARITY[resourceType],
-        settlement: createRealmSettlement(i, i === 0 ? 'Town' : 'Village'),
+        settlement: createRealmSettlement(i, 'Village'),
       });
     }
     const luxuryType = rollLuxuryResource();

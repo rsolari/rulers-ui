@@ -9,7 +9,6 @@ import type {
   PlayerSetupState,
   ResourceRarity,
   ResourceType,
-  TechnicalKnowledgeKey,
   TradeRoutePathMode,
 } from '@/types/game';
 

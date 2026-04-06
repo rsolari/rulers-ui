@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -22,6 +23,8 @@ interface Noble {
   name: string;
   gender: string;
   age: string;
+  race: string | null;
+  backstory: string | null;
   isRuler: boolean;
   isHeir: boolean;
   personality: string | null;
@@ -85,7 +88,17 @@ export default function NoblesPage() {
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Noble Families</h1>
-        <Button variant="accent" onClick={() => setAddFamilyOpen(true)}>+ New Family</Button>
+        <div className="flex items-center gap-3">
+          <Link href={`/game/${gameId}/realm`}>
+            <Button variant="ghost">Back to Realm</Button>
+          </Link>
+          {!nobles.some((noble) => noble.isRuler) ? (
+            <Link href={`/game/${gameId}/realm/ruler/create`}>
+              <Button variant="outline">Create Ruler</Button>
+            </Link>
+          ) : null}
+          <Button variant="accent" onClick={() => setAddFamilyOpen(true)}>+ New Family</Button>
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -144,6 +157,7 @@ export default function NoblesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <p><strong>Gender:</strong> {selectedNoble.gender}</p>
                 <p><strong>Age:</strong> {selectedNoble.age}</p>
+                <p><strong>Race:</strong> {selectedNoble.race || 'Unknown'}</p>
                 <p><strong>Estate:</strong> {selectedNoble.estateLevel} ({ESTATE_COSTS[selectedNoble.estateLevel as keyof typeof ESTATE_COSTS]?.toLocaleString()} /season)</p>
                 <p><strong>Reason:</strong> {selectedNoble.reasonSkill}</p>
                 <p><strong>Cunning:</strong> {selectedNoble.cunningSkill}</p>
@@ -152,13 +166,19 @@ export default function NoblesPage() {
                 <div className="medieval-border rounded p-3 space-y-1">
                   <p className="font-heading font-semibold mb-2">Character</p>
                   <p><strong>Personality:</strong> {selectedNoble.personality}</p>
-                  <p><strong>Relationship with Ruler:</strong> {selectedNoble.relationshipWithRuler}</p>
+                  {selectedNoble.relationshipWithRuler ? <p><strong>Relationship with Ruler:</strong> {selectedNoble.relationshipWithRuler}</p> : null}
                   <p><strong>Belief:</strong> {selectedNoble.belief}</p>
                   <p><strong>Valued Object:</strong> {selectedNoble.valuedObject}</p>
                   <p><strong>Valued Person:</strong> {selectedNoble.valuedPerson}</p>
                   <p><strong>Greatest Desire:</strong> {selectedNoble.greatestDesire}</p>
                 </div>
               )}
+              {selectedNoble.backstory ? (
+                <div className="medieval-border rounded p-3">
+                  <p className="mb-2 font-heading font-semibold">Backstory</p>
+                  <p className="text-sm leading-6 text-ink-500">{selectedNoble.backstory}</p>
+                </div>
+              ) : null}
             </div>
           </DialogContent>
           <DialogFooter>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 export type GameRole = 'gm' | 'player' | null;
 
@@ -30,19 +30,11 @@ function readRoleState(): Omit<RoleState, 'refresh'> {
 }
 
 export function useRole(): RoleState {
-  const [state, setState] = useState<Omit<RoleState, 'refresh'>>({
-    role: null,
-    gameId: null,
-    realmId: null,
-  });
+  const [state, setState] = useState<Omit<RoleState, 'refresh'>>(readRoleState);
 
   const refresh = useCallback(() => {
     setState(readRoleState());
   }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
 
   return { ...state, refresh };
 }

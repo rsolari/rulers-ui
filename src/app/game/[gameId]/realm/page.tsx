@@ -9,8 +9,10 @@ import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
-import { TRADITION_DEFS } from '@/lib/game-logic/constants';
-import type { GovernmentType, Tradition } from '@/types/game';
+import { TRADITION_DEFS, MAX_ACTION_WORDS_PER_TURN } from '@/lib/game-logic/constants';
+import type { EconomyProjectionDto } from '@/lib/economy-dto';
+import { ACTION_WORDS } from '@/types/game';
+import type { GovernmentType, Tradition, PoliticalAction, FinancialAction, ActionWord } from '@/types/game';
 
 const GOVERNMENT_OPTIONS = [
   { value: 'Monarch', label: 'Monarch' },
@@ -59,7 +61,7 @@ interface Settlement {
   name: string;
   size: string;
   territoryId: string;
-  buildings: Array<{ id: string; type: string }>;
+  buildings: Array<{ id: string; type: string; size: string; constructionTurnsRemaining: number }>;
 }
 
 interface Ruler {
@@ -79,8 +81,18 @@ export default function RealmDashboard() {
   const [territories, setTerritories] = useState<Territory[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [ruler, setRuler] = useState<Ruler | null>(null);
+  const [resources, setResources] = useState<Array<{ resourceType: string; rarity: string }>>([]);
+  const [militaryData, setMilitaryData] = useState<{ troops: Array<{ type: string }>; siegeUnits: Array<{ type: string }> }>({ troops: [], siegeUnits: [] });
+  const [nobles, setNobles] = useState<Array<{ estateLevel: string }>>([]);
+  const [gos, setGos] = useState<Array<{ id: string; name: string; type: string; focus: string | null }>>([]);
   const [form, setForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
   const [saving, setSaving] = useState(false);
+  const [gosOpen, setGosOpen] = useState(false);
+  const [economyProjection, setEconomyProjection] = useState<EconomyProjectionDto | null>(null);
+  const [turnReport, setTurnReport] = useState<{ id: string; status: string } | null>(null);
+  const [politicalActions, setPoliticalActions] = useState<PoliticalAction[]>([]);
+  const [financialActions, setFinancialActions] = useState<FinancialAction[]>([]);
+  const [savingReport, setSavingReport] = useState(false);
 
   useEffect(() => {
     if (loading) {
@@ -103,12 +115,17 @@ export default function RealmDashboard() {
     }
 
     async function loadRealm() {
-      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse, resourcesResponse, armiesResponse, noblesResponse, gosResponse, projectionResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`),
         fetch(`/api/game/${gameId}/realms`),
         fetch(`/api/game/${gameId}/territories`),
         fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/ruler?realmId=${realmId}`),
+        fetch(`/api/game/${gameId}/resources`),
+        fetch(`/api/game/${gameId}/armies?realmId=${realmId}`),
+        fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`),
+        fetch(`/api/game/${gameId}/gos?realmId=${realmId}`),
+        fetch(`/api/game/${gameId}/economy/projection?realmId=${realmId}`, { cache: 'no-store' }),
       ]);
 
       const gameData = await gameResponse.json();
@@ -124,6 +141,21 @@ export default function RealmDashboard() {
       setTerritories(realmTerritories);
       setSettlements(settlementsList);
       setRuler(rulerData);
+      setResources(await resourcesResponse.json());
+      setMilitaryData(await armiesResponse.json());
+      setNobles(await noblesResponse.json());
+      setGos(gosResponse.ok ? await gosResponse.json() : []);
+      setEconomyProjection(projectionResponse.ok ? await projectionResponse.json() : null);
+
+      const turnResponse = await fetch(`/api/game/${gameId}/turn?realmId=${realmId}`);
+      if (turnResponse.ok) {
+        const turnData = await turnResponse.json();
+        if (turnData.report) {
+          setTurnReport(turnData.report);
+          setPoliticalActions(JSON.parse(turnData.report.politicalActions || '[]'));
+          setFinancialActions(JSON.parse(turnData.report.financialActions || '[]'));
+        }
+      }
 
       if (realmData) {
         setForm({
@@ -175,6 +207,48 @@ export default function RealmDashboard() {
       traditions: JSON.stringify(form.traditions),
     } : current);
     setSaving(false);
+  }
+
+  const usedActionWords = politicalActions.reduce((sum, a) => sum + a.actionWords.length, 0);
+
+  function addPoliticalAction() {
+    setPoliticalActions([...politicalActions, { actionWords: [], description: '' }]);
+  }
+
+  function updatePoliticalAction(idx: number, field: keyof PoliticalAction, value: unknown) {
+    const updated = [...politicalActions];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (updated[idx] as any)[field] = value;
+    setPoliticalActions(updated);
+  }
+
+  function toggleActionWord(actionIdx: number, word: ActionWord) {
+    const updated = [...politicalActions];
+    const action = updated[actionIdx];
+    if (action.actionWords.includes(word)) {
+      action.actionWords = action.actionWords.filter(w => w !== word);
+    } else if (usedActionWords < MAX_ACTION_WORDS_PER_TURN) {
+      action.actionWords = [...action.actionWords, word];
+    }
+    setPoliticalActions(updated);
+  }
+
+  function addFinancialAction() {
+    setFinancialActions([...financialActions, { type: 'spending', description: '', cost: 0 }]);
+  }
+
+  async function saveReport(status: 'Draft' | 'Submitted') {
+    if (!realmId) return;
+    setSavingReport(true);
+    await fetch(`/api/game/${gameId}/turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realmId, politicalActions, financialActions, status }),
+    });
+    setSavingReport(false);
+    if (status === 'Submitted') {
+      window.location.reload();
+    }
   }
 
   if (!game || !realm) {
@@ -288,11 +362,11 @@ export default function RealmDashboard() {
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
               <span>Treasury</span>
-              <strong>{realm.treasury.toLocaleString()}</strong>
+              <strong>{realm.treasury.toLocaleString()}gc</strong>
             </div>
             <div className="flex items-center justify-between">
               <span>Tax Policy</span>
-              <strong>{realm.taxType}</strong>
+              <strong>{economyProjection?.realm.taxTypeApplied ?? realm.taxType}</strong>
             </div>
             <div className="flex items-center justify-between">
               <span>Turmoil</span>
@@ -303,6 +377,63 @@ export default function RealmDashboard() {
             <div className="flex items-center justify-between">
               <span>Settlements</span>
               <strong>{settlements.length}</strong>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Net Income / Season</span>
+              <strong className={(economyProjection?.netChange ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}>
+                {economyProjection
+                  ? `${economyProjection.netChange >= 0 ? '+' : ''}${economyProjection.netChange.toLocaleString()}gc`
+                  : '...'}
+              </strong>
+            </div>
+            {economyProjection && (
+              <div className="flex items-center justify-between">
+                <span>Projected Treasury</span>
+                <strong>{economyProjection.projectedTreasury.toLocaleString()}gc</strong>
+              </div>
+            )}
+            {economyProjection && economyProjection.warnings.length > 0 && (
+              <div className="flex items-center justify-between">
+                <span>Warnings</span>
+                <Badge variant="gold">{economyProjection.warnings.length}</Badge>
+              </div>
+            )}
+            <Link href={`/game/${gameId}/realm/nobles`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
+              <span>Nobles</span>
+              <strong>{nobles.length}</strong>
+            </Link>
+            <Link href={`/game/${gameId}/realm/army`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
+              <span>Troops</span>
+              <strong>{(militaryData.troops || []).length}</strong>
+            </Link>
+            <Link href={`/game/${gameId}/realm/trade`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
+              <span>Resources</span>
+              <strong>{resources.length}</strong>
+            </Link>
+            <div>
+              <div
+                className="flex items-center justify-between cursor-pointer hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors"
+                onClick={() => setGosOpen(!gosOpen)}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <span className={`inline-block text-xs transition-transform ${gosOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                  Guilds, Orders & Societies
+                </span>
+                <strong>{gos.length}</strong>
+              </div>
+              {gosOpen && gos.length > 0 && (
+                <div className="mt-1 ml-4 space-y-1">
+                  {gos.map((g) => (
+                    <div key={g.id} className="flex items-center justify-between text-sm">
+                      <span>{g.name}</span>
+                      <Badge>{g.type}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {gosOpen && gos.length === 0 && (
+                <p className="mt-1 ml-4 text-sm text-ink-300">None yet.</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -359,11 +490,6 @@ export default function RealmDashboard() {
             <CardContent><p className="font-heading font-bold pt-4">Settlements & Buildings</p></CardContent>
           </Card>
         </Link>
-        <Link href={`/game/${gameId}/realm/nobles`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Noble Families</p></CardContent>
-          </Card>
-        </Link>
         <Link href={`/game/${gameId}/realm/army`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent><p className="font-heading font-bold pt-4">Armies & Troops</p></CardContent>
@@ -371,25 +497,140 @@ export default function RealmDashboard() {
         </Link>
         <Link href={`/game/${gameId}/realm/treasury`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Treasury & Trade</p></CardContent>
+            <CardContent><p className="font-heading font-bold pt-4">Treasury</p></CardContent>
           </Card>
         </Link>
         <Link href={`/game/${gameId}/realm/trade`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Trade Routes</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/report`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Turn Report</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/settlements`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Settlement Details</p></CardContent>
+            <CardContent><p className="font-heading font-bold pt-4">Trade & Resources</p></CardContent>
           </Card>
         </Link>
       </div>
+
+      {/* Turn Report */}
+      {(() => {
+        const isSubmitted = turnReport?.status === 'Submitted' || turnReport?.status === 'Resolved';
+        return (
+          <>
+            {isSubmitted && (
+              <Card className="mt-6" variant="gold">
+                <CardContent>
+                  <p className="font-heading font-bold pt-4">Report {turnReport?.status}</p>
+                  <p className="text-sm text-ink-300">Your report has been submitted. Await the GM&apos;s resolution.</p>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Political Actions</CardTitle>
+                  <Badge>Action Words: {usedActionWords}/{MAX_ACTION_WORDS_PER_TURN}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {politicalActions.map((action, aIdx) => (
+                    <div key={aIdx} className="p-3 medieval-border rounded space-y-3">
+                      <div>
+                        <p className="text-sm font-semibold mb-1">Action Words ({action.actionWords.length})</p>
+                        <div className="flex flex-wrap gap-1">
+                          {ACTION_WORDS.map(word => (
+                            <Badge
+                              key={word}
+                              variant={action.actionWords.includes(word) ? 'gold' : 'default'}
+                              className="cursor-pointer text-xs"
+                              onClick={() => !isSubmitted && toggleActionWord(aIdx, word)}
+                            >
+                              {word}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <Input
+                        label="Description"
+                        value={action.description}
+                        onChange={e => updatePoliticalAction(aIdx, 'description', e.target.value)}
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {!isSubmitted && (
+                  <Button variant="outline" size="sm" className="mt-3" onClick={addPoliticalAction}>
+                    + Add Political Action
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader><CardTitle>Financial Actions</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {financialActions.map((action, fIdx) => (
+                    <div key={fIdx} className="grid grid-cols-3 gap-3 p-3 medieval-border rounded">
+                      <Select
+                        label="Type"
+                        options={[
+                          { value: 'build', label: 'Build' },
+                          { value: 'recruit', label: 'Recruit' },
+                          { value: 'taxChange', label: 'Tax Change' },
+                          { value: 'spending', label: 'Spending' },
+                        ]}
+                        value={action.type}
+                        onChange={e => {
+                          const updated = [...financialActions];
+                          updated[fIdx].type = e.target.value as FinancialAction['type'];
+                          setFinancialActions(updated);
+                        }}
+                        disabled={isSubmitted}
+                      />
+                      <Input
+                        label="Description"
+                        value={action.description || ''}
+                        onChange={e => {
+                          const updated = [...financialActions];
+                          updated[fIdx].description = e.target.value;
+                          setFinancialActions(updated);
+                        }}
+                        disabled={isSubmitted}
+                      />
+                      <Input
+                        label="Cost"
+                        type="number"
+                        value={String(action.cost)}
+                        onChange={e => {
+                          const updated = [...financialActions];
+                          updated[fIdx].cost = parseInt(e.target.value) || 0;
+                          setFinancialActions(updated);
+                        }}
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {!isSubmitted && (
+                  <Button variant="outline" size="sm" className="mt-3" onClick={addFinancialAction}>
+                    + Add Financial Action
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {!isSubmitted && (
+              <div className="flex justify-between mt-6">
+                <Button variant="ghost" onClick={() => void saveReport('Draft')} disabled={savingReport}>
+                  {savingReport ? 'Saving...' : 'Save Draft'}
+                </Button>
+                <Button variant="accent" size="lg" onClick={() => void saveReport('Submitted')} disabled={savingReport}>
+                  {savingReport ? 'Submitting...' : 'Submit Report'}
+                </Button>
+              </div>
+            )}
+          </>
+        );
+      })()}
     </main>
   );
 }

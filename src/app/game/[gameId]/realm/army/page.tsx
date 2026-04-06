@@ -206,7 +206,7 @@ export default function ArmyPage() {
               <div className="mt-3 p-3 medieval-border rounded text-sm space-y-1">
                 <p><strong>Class:</strong> {TROOP_DEFS[selectedTroopType].class}</p>
                 <p><strong>Armour:</strong> {TROOP_DEFS[selectedTroopType].armourTypes.join(', ')}</p>
-                <p><strong>Upkeep:</strong> {TROOP_DEFS[selectedTroopType].upkeep.toLocaleString()} /season</p>
+                <p><strong>Upkeep:</strong> {TROOP_DEFS[selectedTroopType].upkeep.toLocaleString()}gc /season</p>
                 <p><strong>Bonus:</strong> {TROOP_DEFS[selectedTroopType].bonus}</p>
                 {TROOP_DEFS[selectedTroopType].requires.length > 0 && (
                   <p><strong>Requires:</strong> {TROOP_DEFS[selectedTroopType].requires.join(', ')}</p>

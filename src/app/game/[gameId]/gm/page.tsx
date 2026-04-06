@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import type { EconomyOverviewRealmDto } from '@/lib/economy-dto';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import type { GovernmentType, Tradition } from '@/types/game';
 
@@ -65,6 +66,7 @@ export default function GMDashboard() {
   const [game, setGame] = useState<Game | null>(null);
   const [realms, setRealms] = useState<Realm[]>([]);
   const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([]);
+  const [economyOverview, setEconomyOverview] = useState<Record<string, EconomyOverviewRealmDto>>({});
   const [starting, setStarting] = useState(false);
   const [markingReady, setMarkingReady] = useState(false);
   const [npcForm, setNpcForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
@@ -74,15 +76,24 @@ export default function GMDashboard() {
 
   useEffect(() => {
     async function loadDashboard() {
-      const [gameResponse, realmsResponse, slotsResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, slotsResponse, overviewResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/player-slots`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/economy/overview`, { cache: 'no-store' }),
       ]);
 
       setGame(await gameResponse.json());
       setRealms(await realmsResponse.json());
       setPlayerSlots(slotsResponse.ok ? await slotsResponse.json() : []);
+      if (overviewResponse.ok) {
+        const overviewData = await overviewResponse.json();
+        setEconomyOverview(Object.fromEntries(
+          overviewData.realms.map((entry: EconomyOverviewRealmDto) => [entry.realmId, entry]),
+        ));
+      } else {
+        setEconomyOverview({});
+      }
     }
 
     void loadDashboard();
@@ -339,7 +350,15 @@ export default function GMDashboard() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant={realm.isNPC ? 'gold' : 'default'}>{realm.isNPC ? 'NPC' : 'Player'}</Badge>
-                  <span className="text-sm">Treasury {realm.treasury.toLocaleString()}</span>
+                  <span className="text-sm">Treasury {realm.treasury.toLocaleString()}gc</span>
+                  {economyOverview[realm.id] && (
+                    <span className="text-sm text-ink-300">
+                      Projected {economyOverview[realm.id].projectedTreasury.toLocaleString()}gc
+                    </span>
+                  )}
+                  {economyOverview[realm.id]?.warningCount ? (
+                    <Badge variant="gold">{economyOverview[realm.id].warningCount} warnings</Badge>
+                  ) : null}
                   <Badge variant={realm.turmoil > 5 ? 'red' : realm.turmoil > 2 ? 'gold' : 'green'}>
                     Turmoil {realm.turmoil}
                   </Badge>

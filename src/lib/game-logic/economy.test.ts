@@ -5,6 +5,7 @@ import {
   type EconomyBuildingInput,
   type EconomyRealmInput,
 } from './economy';
+import { resolveTradeNetwork } from './trade';
 
 function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput {
   return {
@@ -17,6 +18,9 @@ function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput 
     foodBalance: 0,
     consecutiveFoodShortageSeasons: 0,
     consecutiveFoodRecoverySeasons: 0,
+    technicalKnowledge: [],
+    turmoil: 0,
+    turmoilSources: [],
     traditions: [],
     settlements: [{
       id: 'settlement-1',
@@ -30,6 +34,7 @@ function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput 
         industry: null,
       }],
     }],
+    standaloneBuildings: [],
     troops: [],
     siegeUnits: [],
     nobles: [{
@@ -41,6 +46,7 @@ function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput 
     }],
     tradeRoutes: [],
     guildsOrdersSocieties: [],
+    seasonalModifiers: [],
     report: null,
     ...overrides,
   };
@@ -52,6 +58,7 @@ function createOccupiedBuildings(count: number): EconomyBuildingInput[] {
     type: 'Theatre',
     size: 'Medium',
     constructionTurnsRemaining: 1,
+    takesBuildingSlot: true,
     isGuildOwned: false,
     guildId: null,
     material: null,
@@ -119,9 +126,213 @@ describe('projectEconomyForRealm', () => {
       }),
     ]));
   });
+
+  it('uses the canonical product resolver for combined industry wealth', () => {
+    const result = projectEconomyForRealm(createRealm({
+      settlements: [{
+        id: 'settlement-1',
+        name: 'Capital',
+        size: 'Village',
+        buildings: [],
+        resourceSites: [{
+          id: 'resource-1',
+          resourceType: 'Timber',
+          rarity: 'Common',
+          industry: {
+            id: 'industry-1',
+            outputProduct: 'Timber',
+            quality: 'HighQuality',
+            ingredients: ['Gold', 'Lacquer', 'Jewels'],
+          },
+        }],
+      }],
+    }), 1, 'Spring');
+
+    expect(result.settlementBreakdown[0]).toMatchObject({
+      resourceWealth: 25000,
+      foodWealth: 8000,
+      totalWealth: 33000,
+    });
+  });
+
+  it('downgrades illegal product combinations to base wealth and records a warning', () => {
+    const result = projectEconomyForRealm(createRealm({
+      settlements: [{
+        id: 'settlement-1',
+        name: 'Capital',
+        size: 'Village',
+        buildings: [],
+        resourceSites: [{
+          id: 'resource-1',
+          resourceType: 'Stone',
+          rarity: 'Common',
+          industry: {
+            id: 'industry-1',
+            outputProduct: 'Stone',
+            quality: 'Basic',
+            ingredients: ['Lacquer'],
+          },
+        }],
+      }],
+    }), 1, 'Spring');
+
+    expect(result.settlementBreakdown[0]).toMatchObject({
+      resourceWealth: 10000,
+      foodWealth: 8000,
+      totalWealth: 18000,
+    });
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('Capital: Stone industry fell back to a base product'),
+    ]));
+  });
+
+  it('consumes derived trade results for imports and export bonuses instead of stored route exports', () => {
+    const routeA = {
+      id: 'route-a',
+      isActive: true,
+      realm1Id: 'source-low',
+      realm2Id: 'importer',
+      settlement1Id: 'source-low-port',
+      settlement2Id: 'importer-port',
+      productsExported1to2: ['Gold'],
+      productsExported2to1: ['Ore'],
+      protectedProducts: [],
+      importSelectionState: [],
+    };
+    const routeB = {
+      id: 'route-b',
+      isActive: true,
+      realm1Id: 'source-high',
+      realm2Id: 'importer',
+      settlement1Id: 'source-high-port',
+      settlement2Id: 'importer-port',
+      productsExported1to2: [],
+      productsExported2to1: [],
+      protectedProducts: [],
+      importSelectionState: [],
+    };
+
+    const importer = createRealm({
+      id: 'importer',
+      settlements: [{
+        id: 'importer-port',
+        name: 'Importer Port',
+        size: 'Village',
+        buildings: [],
+        resourceSites: [{
+          id: 'jewel-site',
+          resourceType: 'Jewels',
+          rarity: 'Luxury',
+          industry: null,
+        }],
+      }],
+      tradeRoutes: [routeA, routeB],
+    });
+    const sourceLow = createRealm({
+      id: 'source-low',
+      settlements: [{
+        id: 'source-low-port',
+        name: 'Low Port',
+        size: 'Village',
+        buildings: [],
+        resourceSites: [{
+          id: 'gold-low-site',
+          resourceType: 'Gold',
+          rarity: 'Luxury',
+          industry: null,
+        }],
+      }],
+      tradeRoutes: [routeA, routeB],
+    });
+    const sourceHigh = createRealm({
+      id: 'source-high',
+      settlements: [{
+        id: 'source-high-port',
+        name: 'High Port',
+        size: 'Village',
+        buildings: [],
+        resourceSites: [{
+          id: 'gold-high-site',
+          resourceType: 'Gold',
+          rarity: 'Luxury',
+          industry: {
+            id: 'gold-high-industry',
+            outputProduct: 'Gold',
+            quality: 'HighQuality',
+            ingredients: [],
+          },
+        }],
+      }],
+      tradeRoutes: [routeA, routeB],
+    });
+
+    const tradeResolution = resolveTradeNetwork([importer, sourceLow, sourceHigh], {
+      currentYear: 1,
+      currentSeason: 'Spring',
+    });
+
+    const importerResult = projectEconomyForRealm(importer, 1, 'Spring', {
+      tradeState: tradeResolution.realms.importer,
+    });
+    const exporterResult = projectEconomyForRealm(sourceHigh, 1, 'Spring', {
+      tradeState: tradeResolution.realms['source-high'],
+    });
+
+    expect(tradeResolution.routes['route-a'].productsExported1to2).toEqual([]);
+    expect(tradeResolution.routes['route-b'].productsExported1to2).toEqual(['Gold']);
+    expect(importerResult.settlementBreakdown[0]).toMatchObject({
+      resourceWealth: 15000,
+      totalWealth: 24150,
+    });
+    expect(exporterResult.settlementBreakdown[0]).toMatchObject({
+      tradeBonusRate: 0.05,
+      totalWealth: 24150,
+    });
+  });
 });
 
 describe('resolveEconomyForRealm', () => {
+  it('does not consume food-producing slots for buildings that do not take a slot', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      settlements: [{
+        id: 'settlement-1',
+        name: 'Tower Town',
+        size: 'Village',
+        buildings: [{
+          id: 'building-1',
+          type: 'Watchtower',
+          size: 'Small',
+          takesBuildingSlot: false,
+          constructionTurnsRemaining: 0,
+          isGuildOwned: false,
+          guildId: null,
+          material: 'Stone',
+        }],
+        resourceSites: [],
+      }],
+    }), 1, 'Summer');
+
+    expect(result.food.produced).toBe(4);
+    expect(result.food.needed).toBe(1);
+  });
+
+  it('counts standalone forts toward realm food needs', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      standaloneBuildings: [{
+        id: 'fort-1',
+        type: 'Fort',
+        size: 'Medium',
+        constructionTurnsRemaining: 0,
+        territoryId: 'territory-2',
+        territoryName: 'Border March',
+      }],
+    }), 1, 'Summer');
+
+    expect(result.food.produced).toBe(4);
+    expect(result.food.needed).toBe(2);
+    expect(result.food.surplus).toBe(2);
+  });
+
   it('increments food shortage counters when the realm has a deficit', () => {
     const result = resolveEconomyForRealm(createRealm({
       settlements: [{
@@ -153,6 +364,160 @@ describe('resolveEconomyForRealm', () => {
     expect(result.food.consecutiveShortageSeasons).toBe(2);
     expect(result.food.consecutiveRecoverySeasons).toBe(1);
     expect(result.warnings).toContain('Realm is in food recovery after a shortage.');
+  });
+
+  it('adds escalating shortage turmoil and clears it after two recovery seasons', () => {
+    const shortage = resolveEconomyForRealm(createRealm({
+      settlements: [{
+        id: 'settlement-1',
+        name: 'Hungry Capital',
+        size: 'Village',
+        buildings: createOccupiedBuildings(4),
+        resourceSites: [],
+      }],
+      consecutiveFoodShortageSeasons: 1,
+      turmoil: 8,
+    }), 1, 'Summer');
+
+    expect(shortage.food.consecutiveShortageSeasons).toBe(2);
+    expect(shortage.turmoil.foodShortageIncrement).toBe(1);
+    expect(shortage.turmoil.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'food-shortage:realm-1',
+        amount: 1,
+      }),
+    ]));
+
+    const recovery = resolveEconomyForRealm(createRealm({
+      consecutiveFoodShortageSeasons: 3,
+      consecutiveFoodRecoverySeasons: 1,
+      turmoil: 5,
+      turmoilSources: [{
+        id: 'food-shortage:realm-1',
+        description: 'Food shortage unrest',
+        amount: 1,
+        durationType: 'permanent',
+      }],
+    }), 1, 'Winter');
+
+    expect(recovery.food.consecutiveShortageSeasons).toBe(0);
+    expect(recovery.food.consecutiveRecoverySeasons).toBe(0);
+    expect(recovery.turmoil.sources).toEqual([]);
+  });
+
+  it('suspends maintained buildings when upkeep cannot be paid', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      treasury: -1000,
+      settlements: [{
+        id: 'settlement-1',
+        name: 'Capital',
+        size: 'Village',
+        buildings: [{
+          id: 'theatre-1',
+          type: 'Theatre',
+          size: 'Medium',
+          constructionTurnsRemaining: 0,
+          takesBuildingSlot: true,
+          isOperational: true,
+          maintenanceState: 'active',
+          isGuildOwned: false,
+          guildId: null,
+          material: null,
+        }],
+        resourceSites: [],
+      }],
+    }), 1, 'Spring');
+
+    expect(result.buildingStates).toEqual([
+      expect.objectContaining({
+        buildingId: 'theatre-1',
+        upkeepPaid: false,
+        isOperational: false,
+        maintenanceState: 'suspended-unpaid',
+      }),
+    ]);
+    expect(result.turmoil.buildingReduction).toBe(0);
+    expect(result.warnings).toContain('Capital: Theatre is inactive because upkeep was unpaid.');
+  });
+
+  it('applies building turmoil reduction only while upkeep is paid', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      turmoil: 6,
+      settlements: [{
+        id: 'settlement-1',
+        name: 'Capital',
+        size: 'Village',
+        buildings: [{
+          id: 'theatre-1',
+          type: 'Theatre',
+          size: 'Medium',
+          constructionTurnsRemaining: 0,
+          takesBuildingSlot: true,
+          isOperational: true,
+          maintenanceState: 'active',
+          isGuildOwned: false,
+          guildId: null,
+          material: null,
+        }],
+        resourceSites: [],
+      }],
+    }), 1, 'Spring');
+
+    expect(result.buildingStates[0]).toMatchObject({
+      upkeepPaid: true,
+      isOperational: true,
+    });
+    expect(result.turmoil.buildingReduction).toBe(2);
+    expect(result.turmoil.closing).toBe(2);
+  });
+
+  it('applies GM seasonal modifiers through the shared economy input path', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      settlements: [{
+        id: 'settlement-1',
+        name: 'Capital',
+        size: 'Village',
+        buildings: createOccupiedBuildings(4),
+        resourceSites: [],
+      }],
+      seasonalModifiers: [{
+        id: 'event-1:modifier-1',
+        source: 'gm-event',
+        description: 'Royal granary release',
+        treasuryDelta: 0,
+        foodProducedDelta: 2,
+        foodNeededDelta: 0,
+        grantedTechnicalKnowledge: ['Gunsmith'],
+        turmoilSources: [],
+      }],
+    }), 1, 'Autumn');
+
+    expect(result.food.produced).toBe(2);
+    expect(result.food.surplus).toBe(1);
+    expect(result.technicalKnowledge).toContain('Gunsmith');
+  });
+
+  it('applies a 25% surcharge when build actions require foreign technical knowledge', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      report: {
+        id: 'report-1',
+        financialActions: [{
+          type: 'build',
+          buildingType: 'Gunsmith',
+          settlementId: 'settlement-1',
+          cost: 800,
+        }],
+      },
+    }), 1, 'Winter');
+
+    expect(result.totalCosts).toBe(1000);
+    expect(result.ledgerEntries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'adjustment',
+        category: 'technical-knowledge-surcharge',
+        amount: 200,
+      }),
+    ]));
   });
 
   it('expires levy after the marked turn resolves', () => {

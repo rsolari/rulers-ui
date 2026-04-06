@@ -4,6 +4,7 @@ import { turnEvents } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireGM } from '@/lib/auth';
+import { normalizeEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 
 export async function GET(
   _request: Request,
@@ -26,6 +27,17 @@ export async function POST(
     const body = await request.json();
 
     const id = uuid();
+    const modifiers = normalizeEconomicModifiers(body.modifiers ?? body.mechanicalEffect, {
+      description: body.description,
+      idPrefix: id,
+    });
+    const mechanicalEffect =
+      modifiers.length > 0
+        ? JSON.stringify(modifiers)
+        : typeof body.mechanicalEffect === 'string'
+          ? body.mechanicalEffect
+          : null;
+
     await db.insert(turnEvents).values({
       id,
       gameId,
@@ -33,10 +45,10 @@ export async function POST(
       season: body.season,
       realmId: body.realmId || null,
       description: body.description,
-      mechanicalEffect: body.mechanicalEffect || null,
+      mechanicalEffect,
     });
 
-    return NextResponse.json({ id, ...body });
+    return NextResponse.json({ id, ...body, mechanicalEffect });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

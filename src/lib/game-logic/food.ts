@@ -25,9 +25,14 @@ export interface FoodBalanceInput {
     size: SettlementSize;
     occupiedSlots: number;
     totalSlots: number;
+    foodProducedModifier?: number;
+    fortificationFoodNeeded?: number;
+    foodNeededModifier?: number;
   }>;
   standaloneForts: number;
   standaloneCastles: number;
+  foodProducedModifier?: number;
+  foodNeededModifier?: number;
 }
 
 export function calculateRealmFoodBalance(input: FoodBalanceInput) {
@@ -36,12 +41,14 @@ export function calculateRealmFoodBalance(input: FoodBalanceInput) {
 
   for (const s of input.settlements) {
     const emptySlots = s.totalSlots - s.occupiedSlots;
-    totalProduced += emptySlots;
-    totalNeeded += calculateFoodNeeded(s.size);
+    totalProduced += calculateFoodProduced(emptySlots) + (s.foodProducedModifier ?? 0);
+    totalNeeded += calculateFoodNeeded(s.size) + (s.fortificationFoodNeeded ?? 0) + (s.foodNeededModifier ?? 0);
   }
 
   totalNeeded += input.standaloneForts * FORTIFICATION_FOOD_NEED.Fort;
   totalNeeded += input.standaloneCastles * FORTIFICATION_FOOD_NEED.Castle;
+  totalProduced += input.foodProducedModifier ?? 0;
+  totalNeeded += input.foodNeededModifier ?? 0;
 
   return {
     produced: totalProduced,

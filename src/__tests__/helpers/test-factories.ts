@@ -27,14 +27,19 @@ export function createFoodBalanceInput(overrides?: Partial<FoodBalanceInput>): F
   };
 }
 
-export function createProductSource(overrides?: Partial<ProductSource>): ProductSource {
+export function createProductSource(
+  overrides?: Partial<ProductSource> & { qualityTier?: number },
+): ProductSource {
+  const { qualityTier, ...rest } = overrides ?? {};
+
   return {
     realmId: 'r-1',
+    routeId: 'route-1',
+    settlementId: 'settlement-1',
     resourceType: 'Ore',
-    quality: 'Basic',
-    ingredientCount: 0,
+    qualityTier: qualityTier ?? 1,
     taxType: 'Tribute',
-    ...overrides,
+    ...rest,
   };
 }
 

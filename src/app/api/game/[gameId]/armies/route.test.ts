@@ -34,6 +34,11 @@ const authMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => authMocks);
 
+const recomputeGameInitStateMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/game-init-state', () => ({
+  recomputeGameInitState: recomputeGameInitStateMock,
+}));
+
 import { POST } from './route';
 
 describe('POST /api/game/[gameId]/armies', () => {
@@ -43,6 +48,7 @@ describe('POST /api/game/[gameId]/armies', () => {
     dbMocks.insertValues.mockReset();
     uuidMock.mockReset();
     authMocks.requireOwnedRealmAccess.mockReset();
+    recomputeGameInitStateMock.mockReset();
   });
 
   it('allows a player to create an army for their own realm', async () => {
@@ -74,6 +80,7 @@ describe('POST /api/game/[gameId]/armies', () => {
       locationTerritoryId: 'territory-1',
     });
     expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
+    expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');
     expect(dbMocks.insert).toHaveBeenCalledWith(armies);
     expect(dbMocks.insertValues).toHaveBeenCalledWith({
       id: 'army-1',

@@ -511,24 +511,23 @@ export default function RealmDashboard() {
       {(() => {
         const isSubmitted = turnReport?.status === 'Submitted' || turnReport?.status === 'Resolved';
         return (
-          <>
-            {isSubmitted && (
-              <Card className="mt-6" variant="gold">
-                <CardContent>
-                  <p className="font-heading font-bold pt-4">Report {turnReport?.status}</p>
-                  <p className="text-sm text-ink-300">Your report has been submitted. Await the GM&apos;s resolution.</p>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card className="mt-6">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Political Actions</CardTitle>
+          <Card className="mt-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Turn Report</CardTitle>
+                {isSubmitted && <Badge variant="gold">{turnReport?.status}</Badge>}
+              </div>
+              {isSubmitted && (
+                <p className="text-sm text-ink-300">Your report has been submitted. Await the GM&apos;s resolution.</p>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Political Actions */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-heading font-semibold">Political Actions</h3>
                   <Badge>Action Words: {usedActionWords}/{MAX_ACTION_WORDS_PER_TURN}</Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
                 <div className="space-y-4">
                   {politicalActions.map((action, aIdx) => (
                     <div key={aIdx} className="p-3 medieval-border rounded space-y-3">
@@ -561,12 +560,11 @@ export default function RealmDashboard() {
                     + Add Political Action
                   </Button>
                 )}
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card className="mt-6">
-              <CardHeader><CardTitle>Financial Actions</CardTitle></CardHeader>
-              <CardContent>
+              {/* Financial Actions */}
+              <div>
+                <h3 className="font-heading font-semibold mb-3">Financial Actions</h3>
                 <div className="space-y-3">
                   {financialActions.map((action, fIdx) => (
                     <div key={fIdx} className="grid grid-cols-3 gap-3 p-3 medieval-border rounded">
@@ -615,20 +613,21 @@ export default function RealmDashboard() {
                     + Add Financial Action
                   </Button>
                 )}
-              </CardContent>
-            </Card>
-
-            {!isSubmitted && (
-              <div className="flex justify-between mt-6">
-                <Button variant="ghost" onClick={() => void saveReport('Draft')} disabled={savingReport}>
-                  {savingReport ? 'Saving...' : 'Save Draft'}
-                </Button>
-                <Button variant="accent" size="lg" onClick={() => void saveReport('Submitted')} disabled={savingReport}>
-                  {savingReport ? 'Submitting...' : 'Submit Report'}
-                </Button>
               </div>
-            )}
-          </>
+
+              {/* Submit / Save */}
+              {!isSubmitted && (
+                <div className="flex justify-between border-t border-ink-100 pt-4">
+                  <Button variant="ghost" onClick={() => void saveReport('Draft')} disabled={savingReport}>
+                    {savingReport ? 'Saving...' : 'Save Draft'}
+                  </Button>
+                  <Button variant="accent" size="lg" onClick={() => void saveReport('Submitted')} disabled={savingReport}>
+                    {savingReport ? 'Submitting...' : 'Submit Report'}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         );
       })()}
     </main>

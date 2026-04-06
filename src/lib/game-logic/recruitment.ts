@@ -1,5 +1,5 @@
-import type { TroopType, BuildingType, SettlementSize } from '@/types/game';
-import { TROOP_DEFS, SETTLEMENT_DATA, TRADED_RESOURCE_SURCHARGE, BUILDING_SIZE_DATA } from './constants';
+import type { BuildingSize, TroopType, BuildingType, SettlementSize } from '@/types/game';
+import { BUILDING_DEFS, TROOP_DEFS, SETTLEMENT_DATA, TRADED_RESOURCE_SURCHARGE, BUILDING_SIZE_DATA } from './constants';
 
 export function canRecruitTroop(
   troopType: TroopType,
@@ -26,10 +26,17 @@ export function getRecruitPerSeason(settlementSize: SettlementSize): number {
   return SETTLEMENT_DATA[settlementSize].recruitPerSeason;
 }
 
-export function getBuildingCost(size: BuildingType | string, isTraded: boolean): number {
-  // This is a simplified version - in practice, look up the building def
-  const sizeData = BUILDING_SIZE_DATA;
-  // Default to Medium if not found
-  const cost = sizeData['Medium'].buildCost;
+export function getBuildCostForSize(size: BuildingSize, isTraded: boolean): number {
+  const cost = BUILDING_SIZE_DATA[size].buildCost;
   return isTraded ? Math.floor(cost * (1 + TRADED_RESOURCE_SURCHARGE)) : cost;
+}
+
+export function getBuildingCost(
+  buildingType: BuildingType | string,
+  isTraded: boolean,
+  sizeOverride?: BuildingSize,
+): number {
+  const resolvedSize = sizeOverride
+    ?? (buildingType in BUILDING_DEFS ? BUILDING_DEFS[buildingType as BuildingType].size : 'Medium');
+  return getBuildCostForSize(resolvedSize, isTraded);
 }

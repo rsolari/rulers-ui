@@ -1,6 +1,17 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
-import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState, ResourceRarity, ResourceType } from '@/types/game';
+import type {
+  BuildingLocationType,
+  BuildingMaintenanceState,
+  GameInitState,
+  GamePhase,
+  GMSetupState,
+  PlayerSetupState,
+  ResourceRarity,
+  ResourceType,
+  TechnicalKnowledgeKey,
+  TradeRoutePathMode,
+} from '@/types/game';
 
 // ============================================================
 // GAMES
@@ -49,6 +60,10 @@ export const realms = sqliteTable('realms', {
   foodBalance: integer('food_balance').default(0).notNull(),
   consecutiveFoodShortageSeasons: integer('consecutive_food_shortage_seasons').default(0).notNull(),
   consecutiveFoodRecoverySeasons: integer('consecutive_food_recovery_seasons').default(0).notNull(),
+  technicalKnowledge: text('technical_knowledge').default('[]').$type<string>().notNull(),
+  borrowedAmount: integer('borrowed_amount').default(0).notNull(),
+  loanRepaymentPerSeason: integer('loan_repayment_per_season').default(0).notNull(),
+  loanRepaymentSeasonsRemaining: integer('loan_repayment_seasons_remaining').default(0).notNull(),
   turmoil: integer('turmoil').default(0).notNull(),
   turmoilSources: text('turmoil_sources').default('[]').notNull(), // JSON array
 });
@@ -80,6 +95,10 @@ export const territories = sqliteTable('territories', {
   realmId: text('realm_id').references(() => realms.id),
   climate: text('climate'),
   description: text('description'),
+  foodCapBase: integer('food_cap_base').default(30).notNull(),
+  foodCapBonus: integer('food_cap_bonus').default(0).notNull(),
+  hasRiverAccess: integer('has_river_access', { mode: 'boolean' }).default(false).notNull(),
+  hasSeaAccess: integer('has_sea_access', { mode: 'boolean' }).default(false).notNull(),
 });
 
 export const territoriesRelations = relations(territories, ({ one, many }) => ({
@@ -139,19 +158,28 @@ export const settlementsRelations = relations(settlements, ({ one, many }) => ({
 
 export const buildings = sqliteTable('buildings', {
   id: text('id').primaryKey(),
-  settlementId: text('settlement_id').notNull().references(() => settlements.id),
+  settlementId: text('settlement_id').references(() => settlements.id),
+  territoryId: text('territory_id').references(() => territories.id),
+  locationType: text('location_type').$type<BuildingLocationType>().default('settlement').notNull(),
   type: text('type').notNull(),
   category: text('category').notNull(),
   size: text('size').notNull(),
   material: text('material'), // Timber | Stone (for fortifications)
+  takesBuildingSlot: integer('takes_building_slot', { mode: 'boolean' }).default(true).notNull(),
+  isOperational: integer('is_operational', { mode: 'boolean' }).default(true).notNull(),
+  maintenanceState: text('maintenance_state').$type<BuildingMaintenanceState>().default('active').notNull(),
   constructionTurnsRemaining: integer('construction_turns_remaining').default(0).notNull(),
   isGuildOwned: integer('is_guild_owned', { mode: 'boolean' }).default(false).notNull(),
   guildId: text('guild_id'),
+  allottedGosId: text('allotted_gos_id'),
+  customDefinitionId: text('custom_definition_id'),
 });
 
 export const buildingsRelations = relations(buildings, ({ one }) => ({
   settlement: one(settlements, { fields: [buildings.settlementId], references: [settlements.id] }),
+  territory: one(territories, { fields: [buildings.territoryId], references: [territories.id] }),
   guild: one(guildsOrdersSocieties, { fields: [buildings.guildId], references: [guildsOrdersSocieties.id] }),
+  allottedGos: one(guildsOrdersSocieties, { fields: [buildings.allottedGosId], references: [guildsOrdersSocieties.id] }),
 }));
 
 // ============================================================
@@ -164,6 +192,7 @@ export const resourceSites = sqliteTable('resource_sites', {
   settlementId: text('settlement_id').references(() => settlements.id),
   resourceType: text('resource_type').$type<ResourceType>().notNull(),
   rarity: text('rarity').$type<ResourceRarity>().notNull(),
+  industryCapacity: integer('industry_capacity').default(1).notNull(),
 });
 
 export const resourceSitesRelations = relations(resourceSites, ({ one, many }) => ({
@@ -179,8 +208,10 @@ export const resourceSitesRelations = relations(resourceSites, ({ one, many }) =
 export const industries = sqliteTable('industries', {
   id: text('id').primaryKey(),
   resourceSiteId: text('resource_site_id').notNull().references(() => resourceSites.id),
+  outputProduct: text('output_product').$type<ResourceType>().default('Ore').notNull(),
   quality: text('quality').default('Basic').notNull(),
   ingredients: text('ingredients').default('[]').notNull(), // JSON array of resource types
+  isOperational: integer('is_operational', { mode: 'boolean' }).default(true).notNull(),
   wealthGenerated: integer('wealth_generated').default(0).notNull(),
   guildId: text('guild_id').references(() => guildsOrdersSocieties.id),
 });
@@ -328,9 +359,11 @@ export const tradeRoutes = sqliteTable('trade_routes', {
   settlement1Id: text('settlement1_id').notNull().references(() => settlements.id),
   settlement2Id: text('settlement2_id').notNull().references(() => settlements.id),
   isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
+  pathMode: text('path_mode').$type<TradeRoutePathMode>().default('land').notNull(),
   productsExported1to2: text('products_exported_1to2').default('[]').notNull(), // JSON
   productsExported2to1: text('products_exported_2to1').default('[]').notNull(), // JSON
   protectedProducts: text('protected_products').default('[]').notNull(), // JSON
+  importSelectionState: text('import_selection_state').default('[]').notNull(), // JSON
 });
 
 export const tradeRoutesRelations = relations(tradeRoutes, ({ one }) => ({

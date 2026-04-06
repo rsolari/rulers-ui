@@ -1,58 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { troops } from '@/db/schema';
-
-const dbMocks = vi.hoisted(() => {
-  const dbGet = vi.fn();
-  const where = vi.fn(() => ({ get: dbGet }));
-  const from = vi.fn(() => ({ where }));
-  const select = vi.fn(() => ({ from }));
-  const insertValues = vi.fn();
-  const insert = vi.fn(() => ({ values: insertValues }));
-
-  return {
-    db: {
-      select,
-      insert,
-    },
-    dbGet,
-    insertValues,
-    insert,
-  };
-});
-
-vi.mock('@/db', () => ({
-  db: dbMocks.db,
-}));
-
-const uuidMock = vi.hoisted(() => vi.fn());
-vi.mock('uuid', () => ({ v4: uuidMock }));
 
 const authMocks = vi.hoisted(() => ({
   requireOwnedRealmAccess: vi.fn(),
-  isAuthError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'status' in error),
+  isAuthError: vi.fn((error: unknown) => (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    !('code' in error)
+  )),
 }));
 
+const actionMocks = vi.hoisted(() => ({
+  createTroopRecruitment: vi.fn(),
+  isRuleValidationError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'code' in error && 'status' in error),
+}));
+
+const recomputeGameInitStateMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/lib/auth', () => authMocks);
+vi.mock('@/lib/rules-action-service', () => actionMocks);
+vi.mock('@/lib/game-init-state', () => ({
+  recomputeGameInitState: recomputeGameInitStateMock,
+}));
 
 import { POST } from './route';
 
 describe('POST /api/game/[gameId]/troops', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.dbGet.mockReset();
-    dbMocks.insertValues.mockReset();
-    uuidMock.mockReset();
-    authMocks.requireOwnedRealmAccess.mockReset();
   });
 
-  it('allows a player to recruit troops for their own realm', async () => {
-    uuidMock.mockReturnValue('troop-1');
+  it('delegates troop creation to the shared action service', async () => {
     authMocks.requireOwnedRealmAccess.mockResolvedValue({
       realm: { id: 'realm-player' },
       realmId: 'realm-player',
       session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
     });
-    dbMocks.dbGet.mockResolvedValue({ id: 'army-1' });
+    actionMocks.createTroopRecruitment.mockResolvedValue({
+      row: {
+        id: 'troop-1',
+        realmId: 'realm-player',
+        type: 'Spearmen',
+        class: 'Basic',
+      },
+      cost: {
+        base: 250,
+        surcharge: 0,
+        total: 250,
+        usesTradeAccess: false,
+      },
+    });
 
     const response = await POST(new Request('http://localhost/api/game/game-1/troops', {
       method: 'POST',
@@ -60,48 +57,62 @@ describe('POST /api/game/[gameId]/troops', () => {
       body: JSON.stringify({
         realmId: 'realm-player',
         type: 'Spearmen',
-        armyId: 'army-1',
       }),
     }), {
       params: Promise.resolve({ gameId: 'game-1' }),
     });
 
-    expect(response.status).toBe(200);
+    expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
+    expect(actionMocks.createTroopRecruitment).toHaveBeenCalledWith('game-1', {
+      realmId: 'realm-player',
+      type: 'Spearmen',
+    });
+    expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');
+    expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({
       id: 'troop-1',
       realmId: 'realm-player',
       type: 'Spearmen',
       class: 'Basic',
+      cost: {
+        base: 250,
+        surcharge: 0,
+        total: 250,
+        usesTradeAccess: false,
+      },
     });
-    expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
-    expect(dbMocks.insert).toHaveBeenCalledWith(troops);
-    expect(dbMocks.insertValues).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'troop-1',
-      realmId: 'realm-player',
-      type: 'Spearmen',
-      armyId: 'army-1',
-    }));
   });
 
-  it('rejects a player trying to recruit troops for another realm', async () => {
-    authMocks.requireOwnedRealmAccess.mockRejectedValue(
-      Object.assign(new Error('Realm ownership required'), { status: 403 })
-    );
+  it('maps shared rule validation errors to stable API error payloads', async () => {
+    authMocks.requireOwnedRealmAccess.mockResolvedValue({
+      realm: { id: 'realm-player' },
+      realmId: 'realm-player',
+      session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
+    });
+    actionMocks.createTroopRecruitment.mockRejectedValue({
+      message: 'Missing recruitment prerequisite for Shieldbearers',
+      status: 409,
+      code: 'recruitment_prerequisite_unmet',
+      details: { troopType: 'Shieldbearers' },
+    });
 
     const response = await POST(new Request('http://localhost/api/game/game-1/troops', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        realmId: 'realm-other',
-        type: 'Spearmen',
+        realmId: 'realm-player',
+        type: 'Shieldbearers',
       }),
     }), {
       params: Promise.resolve({ gameId: 'game-1' }),
     });
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ error: 'Realm ownership required' });
-    expect(dbMocks.dbGet).not.toHaveBeenCalled();
-    expect(dbMocks.insertValues).not.toHaveBeenCalled();
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Missing recruitment prerequisite for Shieldbearers',
+      code: 'recruitment_prerequisite_unmet',
+      details: { troopType: 'Shieldbearers' },
+    });
+    expect(recomputeGameInitStateMock).not.toHaveBeenCalled();
   });
 });

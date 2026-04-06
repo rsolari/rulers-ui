@@ -34,6 +34,11 @@ const authMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => authMocks);
 
+const recomputeGameInitStateMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/game-init-state', () => ({
+  recomputeGameInitState: recomputeGameInitStateMock,
+}));
+
 import { POST } from './route';
 
 describe('POST /api/game/[gameId]/nobles', () => {
@@ -43,6 +48,7 @@ describe('POST /api/game/[gameId]/nobles', () => {
     dbMocks.insertValues.mockReset();
     uuidMock.mockReset();
     authMocks.requireOwnedRealmAccess.mockReset();
+    recomputeGameInitStateMock.mockReset();
   });
 
   it('allows a player to add a noble to a family in their own realm', async () => {
@@ -87,6 +93,7 @@ describe('POST /api/game/[gameId]/nobles', () => {
       greatestDesire: null,
     });
     expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
+    expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');
     expect(dbMocks.insert).toHaveBeenCalledWith(nobles);
     expect(dbMocks.insertValues).toHaveBeenCalledWith(expect.objectContaining({
       id: 'noble-1',

@@ -1,6 +1,7 @@
 // Seasons and Turn Phases
 export type Season = 'Spring' | 'Summer' | 'Autumn' | 'Winter';
 export type TurnPhase = 'Submission' | 'Resolution' | 'Complete';
+export type GamePhase = 'Setup' | 'RealmCreation' | 'Active' | 'Completed';
 
 // Government Types
 export type GovernmentType = 'Monarch' | 'ElectedMonarch' | 'Council' | 'Ecclesiastical' | 'Consortium' | 'Magistrate' | 'Warlord';

@@ -7,7 +7,7 @@ afterEach(() => {
 });
 
 describe('generateTerritoryResources', () => {
-  it('can generate expanded luxury resources for realm territories with one town', () => {
+  it('can generate expanded luxury resources for realm territories with villages only', () => {
     const randomSpy = vi.spyOn(Math, 'random');
 
     randomSpy
@@ -26,7 +26,7 @@ describe('generateTerritoryResources', () => {
       'Spices',
     ]);
     expect(resources.map((resource) => resource.settlement.size)).toEqual([
-      'Town',
+      'Village',
       'Village',
       'Village',
       'Village',

@@ -4,6 +4,7 @@ import { nobles } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { generateNoblePersonality, generateNobleGender, generateNobleAge } from '@/lib/tables';
+import { isAuthError, requireGM } from '@/lib/auth';
 
 export async function GET(
   _request: Request
@@ -20,35 +21,46 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
-  const body = await request.json();
+  try {
+    const { gameId } = await params;
+    await requireGM(gameId);
+    const body = await request.json();
 
-  const personality = body.personality || generateNoblePersonality();
-  const gender = body.gender || generateNobleGender();
-  const age = body.age || generateNobleAge();
+    const personality = body.personality || generateNoblePersonality();
+    const gender = body.gender || generateNobleGender();
+    const age = body.age || generateNobleAge();
 
-  const id = uuid();
-  await db.insert(nobles).values({
-    id,
-    familyId: body.familyId,
-    realmId: body.realmId,
-    name: body.name,
-    gender,
-    age,
-    isRuler: body.isRuler || false,
-    isHeir: body.isHeir || false,
-    personality: personality.personality,
-    relationshipWithRuler: personality.relationship,
-    belief: personality.belief,
-    valuedObject: personality.valuedObject,
-    valuedPerson: personality.valuedPerson,
-    greatestDesire: personality.greatestDesire,
-    title: body.title || null,
-    estateLevel: body.estateLevel || 'Meagre',
-    reasonSkill: body.reasonSkill || 0,
-    cunningSkill: body.cunningSkill || 0,
-  });
+    const id = uuid();
+    await db.insert(nobles).values({
+      id,
+      familyId: body.familyId,
+      realmId: body.realmId,
+      name: body.name,
+      gender,
+      age,
+      isRuler: body.isRuler || false,
+      isHeir: body.isHeir || false,
+      personality: personality.personality,
+      relationshipWithRuler: personality.relationship,
+      belief: personality.belief,
+      valuedObject: personality.valuedObject,
+      valuedPerson: personality.valuedPerson,
+      greatestDesire: personality.greatestDesire,
+      title: body.title || null,
+      estateLevel: body.estateLevel || 'Meagre',
+      reasonSkill: body.reasonSkill || 0,
+      cunningSkill: body.cunningSkill || 0,
+    });
 
-  return NextResponse.json({ id, name: body.name, gender, age, ...personality });
+    return NextResponse.json({ id, name: body.name, gender, age, ...personality });
+  } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
+  }
 }

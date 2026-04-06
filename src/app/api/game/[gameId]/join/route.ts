@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { games, realms } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { cookies } from 'next/headers';
+import { games, playerSlots } from '@/db/schema';
+import { and, eq } from 'drizzle-orm';
+import { sessionCookieOptions } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -10,34 +10,55 @@ export async function POST(
 ) {
   const { gameId } = await params;
   const body = await request.json();
-  const { code, realmId } = body;
+  const rawCode = body.claimCode ?? body.gmCode ?? body.code;
+  const code = typeof rawCode === 'string' ? rawCode.trim().toUpperCase() : '';
 
   const game = await db.select().from(games).where(eq(games.id, gameId)).get();
   if (!game) {
     return NextResponse.json({ error: 'Game not found' }, { status: 404 });
   }
 
-  const cookieStore = await cookies();
-  let role: 'gm' | 'player';
+  if (!code) {
+    return NextResponse.json({ error: 'Code is required' }, { status: 400 });
+  }
 
   if (code === game.gmCode) {
-    role = 'gm';
-  } else if (code === game.playerCode) {
-    role = 'player';
-    if (!realmId) {
-      // Return list of realms to choose from
-      const realmList = await db.select().from(realms).where(eq(realms.gameId, gameId));
-      return NextResponse.json({ needsRealmSelection: true, realms: realmList });
-    }
-  } else {
+    const response = NextResponse.json({
+      role: 'gm',
+      gameId,
+      realmId: null,
+      gamePhase: game.gamePhase,
+    });
+    response.cookies.set('rulers-gm-code', game.gmCode, sessionCookieOptions);
+    response.cookies.set('rulers-game-id', gameId, sessionCookieOptions);
+    response.cookies.delete('rulers-claim-code');
+    return response;
+  }
+
+  const slot = await db.select().from(playerSlots)
+    .where(and(
+      eq(playerSlots.gameId, gameId),
+      eq(playerSlots.claimCode, code),
+    ))
+    .get();
+
+  if (!slot) {
     return NextResponse.json({ error: 'Invalid game code' }, { status: 401 });
   }
 
-  cookieStore.set('rulers-role', role, { path: '/', maxAge: 60 * 60 * 24 * 30 });
-  cookieStore.set('rulers-game-id', gameId, { path: '/', maxAge: 60 * 60 * 24 * 30 });
-  if (realmId) {
-    cookieStore.set('rulers-realm-id', realmId, { path: '/', maxAge: 60 * 60 * 24 * 30 });
+  if (game.gamePhase !== 'RealmCreation') {
+    return NextResponse.json({ error: 'Players can only join during realm creation' }, { status: 403 });
   }
 
-  return NextResponse.json({ role, gameId, realmId: realmId || null });
+  const response = NextResponse.json({
+    role: 'player',
+    gameId,
+    realmId: slot.realmId ?? null,
+    gamePhase: game.gamePhase,
+    displayName: slot.displayName ?? null,
+  });
+  response.cookies.set('rulers-claim-code', slot.claimCode, sessionCookieOptions);
+  response.cookies.set('rulers-game-id', gameId, sessionCookieOptions);
+  response.cookies.delete('rulers-gm-code');
+  return response;
 }

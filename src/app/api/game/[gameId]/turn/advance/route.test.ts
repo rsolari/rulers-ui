@@ -1,28 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  const selectGet = vi.fn();
-  const selectWhere = vi.fn(() => ({ get: selectGet }));
-  const selectFrom = vi.fn(() => ({ where: selectWhere }));
-  const select = vi.fn(() => ({ from: selectFrom }));
-
   const updateWhere = vi.fn();
   const updateSet = vi.fn(() => ({ where: updateWhere }));
   const update = vi.fn(() => ({ set: updateSet }));
 
   return {
-    db: { select, update },
-    select,
-    selectFrom,
-    selectWhere,
-    selectGet,
+    db: { update },
     update,
     updateSet,
     updateWhere,
   };
 });
 
+const authMocks = vi.hoisted(() => ({
+  requireGM: vi.fn(),
+  isAuthError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'status' in error),
+}));
+
 vi.mock('@/db', () => ({ db: mocks.db }));
+vi.mock('@/lib/auth', () => authMocks);
 
 import { POST } from './route';
 
@@ -32,7 +29,7 @@ describe('POST /api/game/[gameId]/turn/advance', () => {
   });
 
   it('returns 404 when the game does not exist', async () => {
-    mocks.selectGet.mockResolvedValue(undefined);
+    authMocks.requireGM.mockRejectedValue(Object.assign(new Error('Game not found'), { status: 404 }));
 
     const response = await POST(new Request('http://localhost/api/game/game-1/turn/advance'), {
       params: Promise.resolve({ gameId: 'game-1' }),
@@ -44,7 +41,7 @@ describe('POST /api/game/[gameId]/turn/advance', () => {
   });
 
   it('advances to the next season and resets the turn phase', async () => {
-    mocks.selectGet.mockResolvedValue({
+    authMocks.requireGM.mockResolvedValue({
       id: 'game-1',
       currentSeason: 'Spring',
       currentYear: 3,
@@ -67,7 +64,7 @@ describe('POST /api/game/[gameId]/turn/advance', () => {
   });
 
   it('rolls Winter into Spring and increments the year', async () => {
-    mocks.selectGet.mockResolvedValue({
+    authMocks.requireGM.mockResolvedValue({
       id: 'game-1',
       currentSeason: 'Winter',
       currentYear: 3,

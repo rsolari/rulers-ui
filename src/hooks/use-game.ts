@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { Season, TurnPhase } from '@/types/game';
+import type { GamePhase, Season, TurnPhase } from '@/types/game';
 
 interface GameData {
   id: string;
   name: string;
-  gmCode: string;
-  playerCode: string;
+  gmCode?: string;
+  playerCode?: string;
+  gamePhase: GamePhase;
   currentYear: number;
   currentSeason: Season;
   turnPhase: TurnPhase;

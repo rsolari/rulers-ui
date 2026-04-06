@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
-import type { ResourceRarity, ResourceType } from '@/types/game';
+import type { GamePhase, ResourceRarity, ResourceType } from '@/types/game';
 
 // ============================================================
 // GAMES
@@ -11,6 +11,7 @@ export const games = sqliteTable('games', {
   name: text('name').notNull(),
   gmCode: text('gm_code').unique().notNull(),
   playerCode: text('player_code').unique().notNull(),
+  gamePhase: text('game_phase').$type<GamePhase>().default('Setup').notNull(),
   currentYear: integer('current_year').default(1).notNull(),
   currentSeason: text('current_season').default('Spring').notNull(),
   turnPhase: text('turn_phase').default('Submission').notNull(),
@@ -20,6 +21,7 @@ export const games = sqliteTable('games', {
 export const gamesRelations = relations(games, ({ many }) => ({
   realms: many(realms),
   territories: many(territories),
+  playerSlots: many(playerSlots),
   tradeRoutes: many(tradeRoutes),
   turnReports: many(turnReports),
   turnEvents: many(turnEvents),
@@ -35,6 +37,7 @@ export const realms = sqliteTable('realms', {
   name: text('name').notNull(),
   governmentType: text('government_type').notNull(),
   traditions: text('traditions').default('[]').notNull(), // JSON array of 3 traditions
+  isNPC: integer('is_npc', { mode: 'boolean' }).default(false).notNull(),
   treasury: integer('treasury').default(0).notNull(),
   taxType: text('tax_type').default('Tribute').notNull(),
   turmoil: integer('turmoil').default(0).notNull(),
@@ -45,6 +48,7 @@ export const realmsRelations = relations(realms, ({ one, many }) => ({
   game: one(games, { fields: [realms.gameId], references: [games.id] }),
   territories: many(territories),
   settlements: many(settlements),
+  playerSlots: many(playerSlots),
   nobleFamilies: many(nobleFamilies),
   nobles: many(nobles),
   armies: many(armies),
@@ -71,7 +75,28 @@ export const territoriesRelations = relations(territories, ({ one, many }) => ({
   game: one(games, { fields: [territories.gameId], references: [games.id] }),
   realm: one(realms, { fields: [territories.realmId], references: [realms.id] }),
   settlements: many(settlements),
+  playerSlots: many(playerSlots),
   resourceSites: many(resourceSites),
+}));
+
+// ============================================================
+// PLAYER SLOTS
+// ============================================================
+
+export const playerSlots = sqliteTable('player_slots', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  claimCode: text('claim_code').unique().notNull(),
+  territoryId: text('territory_id').notNull().references(() => territories.id),
+  realmId: text('realm_id').references(() => realms.id),
+  displayName: text('display_name'),
+  claimedAt: integer('claimed_at', { mode: 'timestamp' }),
+});
+
+export const playerSlotsRelations = relations(playerSlots, ({ one }) => ({
+  game: one(games, { fields: [playerSlots.gameId], references: [games.id] }),
+  territory: one(territories, { fields: [playerSlots.territoryId], references: [territories.id] }),
+  realm: one(realms, { fields: [playerSlots.realmId], references: [realms.id] }),
 }));
 
 // ============================================================

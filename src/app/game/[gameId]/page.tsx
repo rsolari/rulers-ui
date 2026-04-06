@@ -7,16 +7,39 @@ import { useRole } from '@/hooks/use-role';
 export default function GameRedirect() {
   const router = useRouter();
   const params = useParams();
-  const { role, realmId } = useRole();
+  const { role, realmId, gamePhase, loading } = useRole();
 
   useEffect(() => {
-    const gameId = params.gameId as string;
-    if (role === 'gm') {
-      router.replace(`/game/${gameId}/gm`);
-    } else if (role === 'player' && realmId) {
-      router.replace(`/game/${gameId}/realm`);
+    if (loading) {
+      return;
     }
-  }, [role, realmId, params.gameId, router]);
+
+    const gameId = params.gameId as string;
+
+    if (role === 'gm') {
+      if (gamePhase === 'Setup') {
+        router.replace(`/game/${gameId}/setup`);
+        return;
+      }
+
+      router.replace(`/game/${gameId}/gm`);
+      return;
+    }
+
+    if (role === 'player') {
+      if (!realmId && gamePhase === 'RealmCreation') {
+        router.replace(`/game/${gameId}/create-realm`);
+        return;
+      }
+
+      if (realmId) {
+        router.replace(`/game/${gameId}/realm`);
+        return;
+      }
+    }
+
+    router.replace('/');
+  }, [role, realmId, gamePhase, loading, params.gameId, router]);
 
   return (
     <main className="min-h-screen flex items-center justify-center">

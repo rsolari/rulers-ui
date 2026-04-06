@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { turnEvents } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 
 export async function GET(

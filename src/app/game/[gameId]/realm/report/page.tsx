@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
 import { ACTION_WORDS } from '@/types/game';
@@ -114,7 +114,7 @@ export default function ReportPage() {
         <Card className="mb-6" variant="gold">
           <CardContent>
             <p className="font-heading font-bold pt-4">Report {report?.status}</p>
-            <p className="text-sm text-ink-300">Your report has been submitted. Await the GM's resolution.</p>
+            <p className="text-sm text-ink-300">Your report has been submitted. Await the GM&apos;s resolution.</p>
           </CardContent>
         </Card>
       )}

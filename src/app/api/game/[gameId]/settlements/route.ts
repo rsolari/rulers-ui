@@ -38,10 +38,8 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ gameId: string }> }
+  request: Request
 ) {
-  const { gameId } = await params;
   const body = await request.json();
 
   const id = uuid();

@@ -5,10 +5,8 @@ import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 
 export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ gameId: string }> }
+  _request: Request
 ) {
-  const { gameId } = await params;
   const url = new URL(_request.url);
   const realmId = url.searchParams.get('realmId');
 
@@ -24,10 +22,8 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ gameId: string }> }
+  request: Request
 ) {
-  const { gameId } = await params;
   const body = await request.json();
 
   const id = uuid();

@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { useRole } from '@/hooks/use-role';
-import { TROOP_DEFS, SIEGE_UNIT_DEFS } from '@/lib/game-logic/constants';
+import { TROOP_DEFS } from '@/lib/game-logic/constants';
 import type { TroopType } from '@/types/game';
 
 interface Army {
@@ -38,6 +38,17 @@ interface SiegeUnit {
   constructionTurnsRemaining: number;
 }
 
+async function fetchArmyData(gameId: string, realmId: string) {
+  const response = await fetch(`/api/game/${gameId}/armies?realmId=${realmId}`);
+  const data = await response.json();
+
+  return {
+    armies: data.armies || [],
+    troops: data.troops || [],
+    siegeUnits: data.siegeUnits || [],
+  };
+}
+
 export default function ArmyPage() {
   const params = useParams();
   const gameId = params.gameId as string;
@@ -50,16 +61,15 @@ export default function ArmyPage() {
   const [newArmyName, setNewArmyName] = useState('');
   const [selectedTroopType, setSelectedTroopType] = useState<TroopType>('Spearmen');
 
-  function refresh() {
+  useEffect(() => {
     if (!realmId) return;
-    fetch(`/api/game/${gameId}/armies?realmId=${realmId}`).then(r => r.json()).then(data => {
-      setArmies(data.armies || []);
-      setTroops(data.troops || []);
-      setSiege(data.siegeUnits || []);
-    });
-  }
 
-  useEffect(() => { refresh(); }, [gameId, realmId]);
+    fetchArmyData(gameId, realmId).then((data) => {
+      setArmies(data.armies);
+      setTroops(data.troops);
+      setSiege(data.siegeUnits);
+    });
+  }, [gameId, realmId]);
 
   async function createArmy() {
     if (!newArmyName.trim() || !realmId) return;
@@ -73,9 +83,12 @@ export default function ArmyPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ realmId, name: newArmyName, locationTerritoryId: myTerr.id }),
     });
+    const data = await fetchArmyData(gameId, realmId);
     setNewArmyName('');
     setCreateArmyOpen(false);
-    refresh();
+    setArmies(data.armies);
+    setTroops(data.troops);
+    setSiege(data.siegeUnits);
   }
 
   async function recruitTroop() {
@@ -89,8 +102,11 @@ export default function ArmyPage() {
         armyId: recruitOpen === 'garrison' ? null : recruitOpen,
       }),
     });
+    const data = await fetchArmyData(gameId, realmId);
     setRecruitOpen(null);
-    refresh();
+    setArmies(data.armies);
+    setTroops(data.troops);
+    setSiege(data.siegeUnits);
   }
 
   const troopOptions = Object.entries(TROOP_DEFS).map(([key, def]) => ({

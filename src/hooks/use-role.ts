@@ -1,26 +1,31 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-
 export type GameRole = 'gm' | 'player' | null;
 
-export function useRole(): { role: GameRole; gameId: string | null; realmId: string | null } {
-  const [role, setRole] = useState<GameRole>(null);
-  const [gameId, setGameId] = useState<string | null>(null);
-  const [realmId, setRealmId] = useState<string | null>(null);
+interface RoleState {
+  role: GameRole;
+  gameId: string | null;
+  realmId: string | null;
+}
 
-  useEffect(() => {
-    // Read from cookies on client side
-    const cookies = document.cookie.split(';').reduce((acc, c) => {
-      const [key, val] = c.trim().split('=');
-      acc[key] = val;
-      return acc;
-    }, {} as Record<string, string>);
+function readRoleState(): RoleState {
+  if (typeof document === 'undefined') {
+    return { role: null, gameId: null, realmId: null };
+  }
 
-    setRole((cookies['rulers-role'] as GameRole) || null);
-    setGameId(cookies['rulers-game-id'] || null);
-    setRealmId(cookies['rulers-realm-id'] || null);
-  }, []);
+  const cookies = document.cookie.split(';').reduce((acc, cookie) => {
+    const [key, val] = cookie.trim().split('=');
+    acc[key] = val;
+    return acc;
+  }, {} as Record<string, string>);
 
-  return { role, gameId, realmId };
+  return {
+    role: (cookies['rulers-role'] as GameRole) || null,
+    gameId: cookies['rulers-game-id'] || null,
+    realmId: cookies['rulers-realm-id'] || null,
+  };
+}
+
+export function useRole(): RoleState {
+  return readRoleState();
 }

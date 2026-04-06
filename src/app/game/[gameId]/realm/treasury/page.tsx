@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useRole } from '@/hooks/use-role';
 import { TAX_RATES, ESTATE_COSTS, BUILDING_SIZE_DATA, BUILDING_DEFS, TROOP_DEFS, SIEGE_UNIT_DEFS, RESOURCE_BASE_WEALTH, RESOURCE_RARITY } from '@/lib/game-logic/constants';

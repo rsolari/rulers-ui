@@ -4,7 +4,7 @@ import type { ProductSource } from '@/lib/game-logic/trade';
 import type { DicePoolTroop } from '@/lib/game-logic/combat';
 import type {
   TurnResolutionInput, RealmTurnData, SettlementTurnData,
-  BuildingProgress, TroopProgress, ReportData,
+  ReportData,
 } from '@/lib/game-logic/turn-resolution';
 
 export function createTurmoilSource(overrides?: Partial<TurmoilSource>): TurmoilSource {

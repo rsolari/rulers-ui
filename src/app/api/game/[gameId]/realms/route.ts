@@ -37,10 +37,8 @@ export async function POST(
 }
 
 export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ gameId: string }> }
+  request: Request
 ) {
-  const { gameId } = await params;
   const body = await request.json();
 
   if (!body.realmId) {

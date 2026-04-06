@@ -124,3 +124,27 @@ h1, h2, h3, h4, h5, h6 {
 ::-webkit-scrollbar-track { background: var(--parchment-100); }
 ::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ink-300); }
+
+/* Rules markdown prose styles */
+.rules-content h1 { font-size: 2.25rem; font-weight: 700; margin-bottom: 1rem; margin-top: 0; }
+.rules-content h2 { font-size: 1.5rem; font-weight: 700; margin-top: 2.5rem; margin-bottom: 0.75rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--ink-200); }
+.rules-content h3 { font-size: 1.25rem; font-weight: 600; margin-top: 2rem; margin-bottom: 0.5rem; }
+.rules-content h4 { font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.rules-content p { margin-bottom: 1rem; line-height: 1.75; }
+.rules-content ul, .rules-content ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+.rules-content ul { list-style-type: disc; }
+.rules-content ol { list-style-type: decimal; }
+.rules-content li { margin-bottom: 0.25rem; line-height: 1.65; }
+.rules-content li > ul, .rules-content li > ol { margin-top: 0.25rem; margin-bottom: 0; }
+.rules-content strong { font-weight: 700; color: var(--ink-600); }
+.rules-content em { font-style: italic; }
+.rules-content blockquote { border-left: 3px solid var(--gold-400); padding: 0.5rem 1rem; margin: 1rem 0; background: var(--parchment-100); color: var(--ink-400); }
+.rules-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95rem; }
+.rules-content th { font-family: var(--font-heading); font-weight: 600; text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--ink-200); color: var(--ink-600); }
+.rules-content td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--parchment-200); }
+.rules-content tr:hover td { background: var(--parchment-100); }
+.rules-content a { color: var(--gold-500); text-decoration: underline; text-underline-offset: 2px; }
+.rules-content a:hover { color: var(--gold-600); }
+.rules-content hr { border: none; border-top: 2px solid var(--ink-200); margin: 2rem 0; }
+.rules-content sup { font-size: 0.75em; }
+.rules-content section.footnotes { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--ink-200); font-size: 0.9rem; color: var(--ink-400); }

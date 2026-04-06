@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -65,6 +66,11 @@ export default function LandingPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
+      <nav className="fixed top-0 right-0 p-4">
+        <Link href="/rules" className="font-heading text-sm tracking-wide text-ink-400 hover:text-ink-600 transition-colors">
+          Rulebook
+        </Link>
+      </nav>
       <div className="w-full max-w-lg">
         <div className="text-center mb-10">
           <h1 className="text-5xl font-bold mb-3 tracking-wider">RULERS</h1>

@@ -1,5 +1,31 @@
-"use client";
+'use client';
+
+import { useEffect, useState, type ComponentType } from 'react';
 
 export function DevTools() {
-  return null;
+  const [Agentation, setAgentation] = useState<ComponentType | null>(null);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') {
+      return;
+    }
+
+    const importer = new Function('specifier', 'return import(specifier);') as (
+      specifier: string
+    ) => Promise<{ Agentation?: ComponentType }>;
+
+    importer('agentation')
+      .then((module) => {
+        setAgentation(() => module.Agentation ?? null);
+      })
+      .catch(() => {
+        setAgentation(null);
+      });
+  }, []);
+
+  if (process.env.NODE_ENV !== 'development' || !Agentation) {
+    return null;
+  }
+
+  return <Agentation />;
 }

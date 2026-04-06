@@ -117,13 +117,13 @@ export function generateTerritoryResources(type: TerritoryType): GeneratedResour
   const resources: GeneratedResource[] = [];
 
   if (type === 'Realm') {
-    // Player-assigned territories start with 4 villages; players place their Town later.
+    // 3 common + 1 luxury, with exactly one player-selected town.
     for (let i = 0; i < 3; i++) {
       const resourceType = rollCommonResource();
       resources.push({
         resourceType,
         rarity: RESOURCE_RARITY[resourceType],
-        settlement: createRealmSettlement(i, 'Village'),
+        settlement: createRealmSettlement(i, i === 0 ? 'Town' : 'Village'),
       });
     }
     const luxuryType = rollLuxuryResource();

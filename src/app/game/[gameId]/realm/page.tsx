@@ -53,6 +53,13 @@ interface Settlement {
   buildings: Array<{ id: string; type: string }>;
 }
 
+interface Ruler {
+  id: string;
+  name: string;
+  race: string | null;
+  familyName: string;
+}
+
 export default function RealmDashboard() {
   const params = useParams();
   const router = useRouter();
@@ -61,6 +68,7 @@ export default function RealmDashboard() {
   const [game, setGame] = useState<Game | null>(null);
   const [realm, setRealm] = useState<Realm | null>(null);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [ruler, setRuler] = useState<Ruler | null>(null);
   const [form, setForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
   const [saving, setSaving] = useState(false);
 
@@ -85,19 +93,23 @@ export default function RealmDashboard() {
     }
 
     async function loadRealm() {
-      const [gameResponse, realmsResponse, settlementsResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, settlementsResponse, rulerResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`),
         fetch(`/api/game/${gameId}/realms`),
         fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
+        fetch(`/api/game/${gameId}/ruler?realmId=${realmId}`),
       ]);
 
       const gameData = await gameResponse.json();
       const realmList = await realmsResponse.json();
       const realmData = realmList.find((entry: Realm) => entry.id === realmId) || null;
+      const settlementsList = await settlementsResponse.json();
+      const rulerData = await rulerResponse.json();
 
       setGame(gameData);
       setRealm(realmData);
-      setSettlements(await settlementsResponse.json());
+      setSettlements(settlementsList);
+      setRuler(rulerData);
 
       if (realmData) {
         setForm({
@@ -174,6 +186,41 @@ export default function RealmDashboard() {
           <Badge>{game.turnPhase}</Badge>
         </div>
       </div>
+
+      {ruler ? (
+        <Card variant="gold" className="mb-6">
+          <CardHeader>
+            <CardTitle>Ruler</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-2xl font-heading font-bold">{ruler.name}</p>
+              <p className="text-ink-300">
+                of House {ruler.familyName}
+                {ruler.race ? ` • ${ruler.race}` : ''}
+              </p>
+            </div>
+            <Link href={`/game/${gameId}/realm/nobles`}>
+              <Button variant="outline">View Nobles</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card variant="gold" className="mb-6">
+          <CardHeader>
+            <CardTitle>Your realm has no ruler</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <p className="max-w-2xl text-ink-300">
+              Create the noble who leads this realm before you continue building its politics,
+              alliances, and succession.
+            </p>
+            <Link href={`/game/${gameId}/realm/ruler/create`}>
+              <Button variant="accent">Create Ruler</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card>
@@ -266,7 +313,42 @@ export default function RealmDashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 mt-6">
+      {/* Navigation */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-6">
+        <Link href={ruler ? `/game/${gameId}/realm/nobles` : `/game/${gameId}/realm/ruler/create`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent>
+              <p className="font-heading font-bold pt-4">
+                {ruler ? 'Ruler & Nobles' : 'Create Ruler'}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/settlements`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Settlements & Buildings</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/nobles`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Noble Families</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/army`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Armies & Troops</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/treasury`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Treasury & Trade</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/trade`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Trade Routes</p></CardContent>
+          </Card>
+        </Link>
         <Link href={`/game/${gameId}/realm/report`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent><p className="font-heading font-bold pt-4">Turn Report</p></CardContent>

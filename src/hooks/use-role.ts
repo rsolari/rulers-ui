@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { GamePhase } from '@/types/game';
 
 export type GameRole = 'gm' | 'player' | null;
@@ -13,9 +13,12 @@ export interface RoleState {
   displayName: string | null;
   territoryId: string | null;
   loading: boolean;
+  refresh: () => void;
 }
 
-const initialState: RoleState = {
+type SessionState = Omit<RoleState, 'refresh'>;
+
+const initialState: SessionState = {
   role: null,
   gameId: null,
   realmId: null,
@@ -26,7 +29,12 @@ const initialState: RoleState = {
 };
 
 export function useRole(): RoleState {
-  const [state, setState] = useState<RoleState>(initialState);
+  const [state, setState] = useState<SessionState>(initialState);
+  const [refreshCounter, setRefreshCounter] = useState(0);
+
+  const refresh = useCallback(() => {
+    setRefreshCounter((count) => count + 1);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -62,7 +70,7 @@ export function useRole(): RoleState {
     loadSession();
 
     return () => controller.abort();
-  }, []);
+  }, [refreshCounter]);
 
-  return state;
+  return { ...state, refresh };
 }

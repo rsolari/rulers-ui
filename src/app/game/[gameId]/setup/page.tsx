@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { GovernmentType, Tradition, ResourceType, SettlementSize } from '@/types/game';
 import { TRADITION_DEFS, RESOURCE_RARITY } from '@/lib/game-logic/constants';
+import { generateMap, generateTerritoryResources, type TerritoryType, type GeneratedResource } from '@/lib/game-logic/map-generation';
 
 const GOVERNMENT_OPTIONS = [
   { value: 'Monarch', label: 'Monarch' },
@@ -19,6 +20,16 @@ const GOVERNMENT_OPTIONS = [
   { value: 'Magistrate', label: 'Magistrate' },
   { value: 'Warlord', label: 'Warlord' },
 ];
+
+const GOVERNMENT_DESCRIPTIONS: Record<string, string> = {
+  Monarch: 'You were born to rule, and you will rule for your whole life, at which point your heir will take over. This position is for life, and is automatically passed onto your heir.',
+  ElectedMonarch: 'You still rule for life like a monarch does, but you were elected by the Nobility of your Realm. After your death, they will elect a new monarch from one of the noble families. You cannot be voted out of office.',
+  Council: 'You are the chairman of a council who governs the Realm. While others on the council will have a say in state politics, you ultimately have the final say. The council can call a vote to elect a new chairman.',
+  Ecclesiastical: 'You are both the head of the church, and the head of the Realm. Create an appropriate Society or Order for your Ruler to also be the head of.',
+  Consortium: 'The Realm is governed by a trading company, and you sit at the head of its council. This position operates as Council, but with more bribery. Create a Guild for your Ruler to also be the Chairperson of.',
+  Magistrate: 'You were appointed by a higher authority to be in charge of your Realm. You can be replaced at any time by the higher authority. This authority must be defined at creation, and must be an NPC which the N.O. controls.',
+  Warlord: 'You are the commander of the military, and the head of state. This position can operate as Elected Monarch or Council, depending on the strength of your Armies.',
+};
 
 const TRADITION_OPTIONS = Object.entries(TRADITION_DEFS).map(([key, def]) => ({
   value: key,
@@ -76,7 +87,6 @@ const SETTLEMENT_SIZE_OPTIONS = [
 ];
 
 type Step = 'territories' | 'map' | 'assignments' | 'review';
-type TerritoryType = 'Realm' | 'Neutral';
 type OwnerKind = 'player' | 'npc' | 'neutral';
 
 interface TerritoryDraft {
@@ -84,16 +94,6 @@ interface TerritoryDraft {
   climate: string;
   description: string;
   type: TerritoryType;
-}
-
-interface GeneratedResource {
-  resourceType: ResourceType;
-  rarity: 'Common' | 'Luxury';
-  settlement: {
-    name: string;
-    size: SettlementSize;
-    type: string;
-  };
 }
 
 interface AssignmentDraft {
@@ -104,21 +104,28 @@ interface AssignmentDraft {
   traditions: Tradition[];
 }
 
-async function generateMapForTerritories(
-  gameId: string,
-  territories: TerritoryDraft[],
-) {
-  const response = await fetch(`/api/game/${gameId}/setup/generate-map`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ territories }),
-  });
+function getRealmTownIndex(resources: GeneratedResource[]): number {
+  const townIndex = resources.findIndex((resource) => resource.settlement.size === 'Town');
+  return townIndex >= 0 ? townIndex : 0;
+}
 
-  if (!response.ok) {
-    throw new Error('Failed to generate map');
+function normalizeRealmSettlementSizes(
+  resources: GeneratedResource[],
+  townIndex: number
+): GeneratedResource[] {
+  if (resources.length === 0) {
+    return resources;
   }
 
-  return response.json() as Promise<Array<{ territoryIndex: number; resources: GeneratedResource[] }>>;
+  const normalizedTownIndex = Math.min(Math.max(townIndex, 0), resources.length - 1);
+
+  return resources.map((resource, index) => ({
+    ...resource,
+    settlement: {
+      ...resource.settlement,
+      size: index === normalizedTownIndex ? 'Town' : 'Village',
+    },
+  }));
 }
 
 export default function SetupWizard() {
@@ -134,7 +141,6 @@ export default function SetupWizard() {
   const [assignments, setAssignments] = useState<AssignmentDraft[]>([
     { kind: 'player', displayName: '', realmName: '', governmentType: 'Monarch', traditions: [] },
   ]);
-  const [loadingMap, setLoadingMap] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -215,39 +221,39 @@ export default function SetupWizard() {
     updateAssignment(index, { traditions: [...assignment.traditions, tradition] });
   }
 
-  async function goToMap() {
-    setLoadingMap(true);
-    setError('');
+  const doGenerateMap = useCallback(() => {
+    setGeneratedMap(generateMap(territories));
+  }, [territories]);
 
-    try {
-      const nextMap = await generateMapForTerritories(gameId, territories);
-      setGeneratedMap(nextMap);
-      setStep('map');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate map');
-    } finally {
-      setLoadingMap(false);
+  function goToMap() {
+    doGenerateMap();
+    setStep('map');
+  }
+
+  function rerollTerritory(territoryIdx: number) {
+    const territory = territories[territoryIdx];
+    const updated = [...generatedMap];
+    const entry = updated.find((e) => e.territoryIndex === territoryIdx);
+    if (entry) {
+      const nextResources = generateTerritoryResources(territory.type);
+      entry.resources = territory.type === 'Realm'
+        ? normalizeRealmSettlementSizes(nextResources, getRealmTownIndex(entry.resources))
+        : nextResources;
+      setGeneratedMap(updated);
     }
   }
 
-  async function rerollTerritory(index: number) {
-    setLoadingMap(true);
-    setError('');
-
-    try {
-      const [nextEntry] = await generateMapForTerritories(gameId, [territories[index]]);
-      if (!nextEntry) {
-        return;
+  function setRealmTownSettlement(territoryIdx: number, resourceIdx: number) {
+    setGeneratedMap((currentMap) => currentMap.map((entry) => {
+      if (entry.territoryIndex !== territoryIdx) {
+        return entry;
       }
 
-      setGeneratedMap((current) => current.map((entry) => entry.territoryIndex === index
-        ? { territoryIndex: index, resources: nextEntry.resources }
-        : entry));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to re-roll territory');
-    } finally {
-      setLoadingMap(false);
-    }
+      return {
+        ...entry,
+        resources: normalizeRealmSettlementSizes(entry.resources, resourceIdx),
+      };
+    }));
   }
 
   function updateMapResource(
@@ -256,57 +262,85 @@ export default function SetupWizard() {
     field: 'resourceType' | 'settlementName' | 'settlementSize',
     value: string,
   ) {
-    setGeneratedMap((current) => current.map((entry) => {
+    const territory = territories[territoryIndex];
+    const updated = generatedMap.map((entry) => {
       if (entry.territoryIndex !== territoryIndex) {
         return entry;
       }
 
-      return {
-        ...entry,
-        resources: entry.resources.map((resource, currentResourceIndex) => {
-          if (currentResourceIndex !== resourceIndex) {
-            return resource;
-          }
+      if (territory?.type === 'Realm' && field === 'settlementSize') {
+        return {
+          ...entry,
+          resources: normalizeRealmSettlementSizes(entry.resources, resourceIndex),
+        };
+      }
 
-          if (field === 'resourceType') {
-            const resourceType = value as ResourceType;
-            return { ...resource, resourceType, rarity: RESOURCE_RARITY[resourceType] };
-          }
+      const resources = entry.resources.map((resource, currentResourceIndex) => {
+        if (currentResourceIndex !== resourceIndex) {
+          return resource;
+        }
 
-          if (field === 'settlementName') {
-            return { ...resource, settlement: { ...resource.settlement, name: value } };
-          }
+        if (field === 'resourceType') {
+          const resourceType = value as ResourceType;
+          return { ...resource, resourceType, rarity: RESOURCE_RARITY[resourceType] };
+        }
 
-          return { ...resource, settlement: { ...resource.settlement, size: value as SettlementSize } };
-        }),
-      };
-    }));
+        if (field === 'settlementName') {
+          return { ...resource, settlement: { ...resource.settlement, name: value } };
+        }
+
+        return { ...resource, settlement: { ...resource.settlement, size: value as SettlementSize } };
+      });
+
+      return { ...entry, resources };
+    });
+    setGeneratedMap(updated);
   }
 
   function addResourceToTerritory(territoryIndex: number) {
-    setGeneratedMap((current) => current.map((entry) => entry.territoryIndex === territoryIndex
-      ? {
+    const territory = territories[territoryIndex];
+    const updated = generatedMap.map((entry) => {
+      if (entry.territoryIndex !== territoryIndex) return entry;
+      const resources = [
+        ...entry.resources,
+        {
+          resourceType: 'Timber' as ResourceType,
+          rarity: 'Common' as const,
+          settlement: { name: `Settlement ${entry.resources.length + 1}`, size: 'Village' as SettlementSize, type: 'Realm Settlement' },
+        },
+      ];
+
+      return {
         ...entry,
-        resources: [
-          ...entry.resources,
-          {
-            resourceType: 'Timber',
-            rarity: 'Common',
-            settlement: {
-              name: `Settlement ${entry.resources.length + 1}`,
-              size: 'Village',
-              type: 'Realm Settlement',
-            },
-          },
-        ],
-      }
-      : entry));
+        resources: territory?.type === 'Realm'
+          ? normalizeRealmSettlementSizes(resources, getRealmTownIndex(entry.resources))
+          : resources,
+      };
+    });
+    setGeneratedMap(updated);
   }
 
   function removeResourceFromTerritory(territoryIndex: number, resourceIndex: number) {
-    setGeneratedMap((current) => current.map((entry) => entry.territoryIndex === territoryIndex
-      ? { ...entry, resources: entry.resources.filter((_, currentResourceIndex) => currentResourceIndex !== resourceIndex) }
-      : entry));
+    const territory = territories[territoryIndex];
+    const updated = generatedMap.map((entry) => {
+      if (entry.territoryIndex !== territoryIndex) return entry;
+      const townIndex = getRealmTownIndex(entry.resources);
+      const resources = entry.resources.filter((_, i) => i !== resourceIndex);
+      const nextTownIndex =
+        townIndex === resourceIndex
+          ? 0
+          : townIndex > resourceIndex
+            ? townIndex - 1
+            : townIndex;
+
+      return {
+        ...entry,
+        resources: territory?.type === 'Realm'
+          ? normalizeRealmSettlementSizes(resources, nextTownIndex)
+          : resources,
+      };
+    });
+    setGeneratedMap(updated);
   }
 
   async function handleFinish() {
@@ -355,7 +389,7 @@ export default function SetupWizard() {
   return (
     <main className="min-h-screen p-6 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Game Setup</h1>
-      <p className="text-ink-300 mb-6">Define territories, generate the map on the server, assign player slots and NPC realms, then open realm creation for players.</p>
+      <p className="text-ink-300 mb-6">Define territories, generate the map, assign player slots and NPC realms, then open realm creation for players.</p>
 
       <div className="flex gap-2 mb-8 flex-wrap">
         {(['territories', 'map', 'assignments', 'review'] as Step[]).map((currentStep) => (
@@ -365,7 +399,7 @@ export default function SetupWizard() {
             className="cursor-pointer"
             onClick={() => {
               if (currentStep === 'map' && generatedMap.length === 0) {
-                void goToMap();
+                goToMap();
                 return;
               }
 
@@ -381,6 +415,11 @@ export default function SetupWizard() {
 
       {step === 'territories' && (
         <div className="space-y-4">
+          <h2 className="text-2xl mb-4">Define Territories</h2>
+          <p className="text-ink-300 text-sm mb-4">
+            Define your world&apos;s territories. Realm territories are for player or NPC civilizations (3 common + 1 luxury resource).
+            Neutral territories are uninhabited or loosely governed (2 common + 2 luxury resources).
+          </p>
           {territories.map((territory, index) => (
             <Card key={index}>
               <CardContent>
@@ -420,15 +459,18 @@ export default function SetupWizard() {
           ))}
           <div className="flex justify-between">
             <Button variant="outline" onClick={addTerritory}>+ Add Territory</Button>
-            <Button variant="accent" onClick={() => void goToMap()} disabled={loadingMap}>
-              {loadingMap ? 'Generating...' : 'Next: Generate Map'}
-            </Button>
+            <Button variant="accent" onClick={goToMap}>Next: Generate Map</Button>
           </div>
         </div>
       )}
 
       {step === 'map' && (
         <div className="space-y-4">
+          <h2 className="text-2xl mb-4">Generated Map</h2>
+          <p className="text-ink-300 text-sm mb-4">
+            Resources and settlements have been generated for each territory based on the rules.
+            Realm territories have one selectable town and villages for the rest. Neutral territories keep the fully random settlement logic.
+          </p>
           {generatedMap.map((entry) => {
             const territory = territories[entry.territoryIndex];
             return (
@@ -442,12 +484,17 @@ export default function SetupWizard() {
                         {territory.type}
                       </Badge>
                     </CardTitle>
-                    <Button variant="outline" size="sm" onClick={() => void rerollTerritory(entry.territoryIndex)} disabled={loadingMap}>
+                    <Button variant="outline" size="sm" onClick={() => rerollTerritory(entry.territoryIndex)}>
                       Re-roll
                     </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {territory.type === 'Realm' && (
+                    <p className="mb-3 text-sm text-ink-400">
+                      Choose which settlement is the town for this realm territory. All others stay villages.
+                    </p>
+                  )}
                   <div className="space-y-3">
                     {entry.resources.map((resource, resourceIndex) => (
                       <div key={resourceIndex} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-end py-1 border-b border-ink-800 last:border-0">
@@ -462,18 +509,28 @@ export default function SetupWizard() {
                           value={resource.settlement.name}
                           onChange={(event) => updateMapResource(entry.territoryIndex, resourceIndex, 'settlementName', event.target.value)}
                         />
-                        {territory.type === 'Neutral' ? (
+                        {territory.type === 'Realm' ? (
+                          <div className="flex flex-col gap-1.5">
+                            {resourceIndex === 0 && (
+                              <span className="font-heading text-sm font-medium text-ink-500">
+                                Town
+                              </span>
+                            )}
+                            <Button
+                              variant={resource.settlement.size === 'Town' ? 'accent' : 'outline'}
+                              size="sm"
+                              onClick={() => setRealmTownSettlement(entry.territoryIndex, resourceIndex)}
+                            >
+                              {resource.settlement.size === 'Town' ? 'Town' : 'Make Town'}
+                            </Button>
+                          </div>
+                        ) : (
                           <Select
                             label={resourceIndex === 0 ? 'Size' : undefined}
                             options={SETTLEMENT_SIZE_OPTIONS}
                             value={resource.settlement.size}
                             onChange={(event) => updateMapResource(entry.territoryIndex, resourceIndex, 'settlementSize', event.target.value)}
                           />
-                        ) : (
-                          <div className="flex flex-col gap-1.5">
-                            {resourceIndex === 0 && <span className="font-heading text-sm font-medium text-ink-500">Size</span>}
-                            <Badge variant="default">{resource.settlement.size}</Badge>
-                          </div>
                         )}
                         <Button variant="ghost" size="sm" onClick={() => removeResourceFromTerritory(entry.territoryIndex, resourceIndex)}>
                           Remove
@@ -490,13 +547,20 @@ export default function SetupWizard() {
           })}
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep('territories')}>Back</Button>
-            <Button variant="accent" onClick={() => setStep('assignments')}>Next: Assign Owners</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={doGenerateMap}>Re-roll All</Button>
+              <Button variant="accent" onClick={() => setStep('assignments')}>Next: Assign Owners</Button>
+            </div>
           </div>
         </div>
       )}
 
       {step === 'assignments' && (
         <div className="space-y-6">
+          <h2 className="text-2xl mb-4">Assign Ownership</h2>
+          <p className="text-ink-300 text-sm mb-4">
+            Assign each Realm territory to a player slot or NPC realm. Neutral territories have no owner.
+          </p>
           {territories.map((territory, index) => {
             const assignment = assignments[index];
             const ownerKind = territory.type === 'Neutral' ? 'neutral' : assignment?.kind || 'player';
@@ -540,6 +604,11 @@ export default function SetupWizard() {
                           value={assignment?.governmentType || 'Monarch'}
                           onChange={(event) => updateAssignment(index, { governmentType: event.target.value as GovernmentType })}
                         />
+                        {GOVERNMENT_DESCRIPTIONS[assignment?.governmentType || 'Monarch'] && (
+                          <p className="text-ink-400 text-sm italic">
+                            {GOVERNMENT_DESCRIPTIONS[assignment?.governmentType || 'Monarch']}
+                          </p>
+                        )}
                         <div>
                           <p className="font-heading text-sm font-medium text-ink-500 mb-2">
                             Traditions ({assignment?.traditions.length || 0}/3)
@@ -611,6 +680,7 @@ export default function SetupWizard() {
               </div>
             </CardContent>
           </Card>
+
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep('assignments')}>Back</Button>
             <Button variant="accent" size="lg" onClick={() => void handleFinish()} disabled={saving}>

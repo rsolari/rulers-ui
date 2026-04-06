@@ -29,6 +29,11 @@ export async function POST(
     traditions: JSON.stringify(body.traditions || []),
     treasury: body.treasury || 0,
     taxType: body.taxType || 'Tribute',
+    levyExpiresYear: body.levyExpiresYear ?? null,
+    levyExpiresSeason: body.levyExpiresSeason ?? null,
+    foodBalance: body.foodBalance ?? 0,
+    consecutiveFoodShortageSeasons: body.consecutiveFoodShortageSeasons ?? 0,
+    consecutiveFoodRecoverySeasons: body.consecutiveFoodRecoverySeasons ?? 0,
     turmoil: 0,
     turmoilSources: '[]',
   });
@@ -51,6 +56,15 @@ export async function PATCH(
   if (body.traditions !== undefined) updates.traditions = JSON.stringify(body.traditions);
   if (body.treasury !== undefined) updates.treasury = body.treasury;
   if (body.taxType !== undefined) updates.taxType = body.taxType;
+  if (body.levyExpiresYear !== undefined) updates.levyExpiresYear = body.levyExpiresYear;
+  if (body.levyExpiresSeason !== undefined) updates.levyExpiresSeason = body.levyExpiresSeason;
+  if (body.foodBalance !== undefined) updates.foodBalance = body.foodBalance;
+  if (body.consecutiveFoodShortageSeasons !== undefined) {
+    updates.consecutiveFoodShortageSeasons = body.consecutiveFoodShortageSeasons;
+  }
+  if (body.consecutiveFoodRecoverySeasons !== undefined) {
+    updates.consecutiveFoodRecoverySeasons = body.consecutiveFoodRecoverySeasons;
+  }
   if (body.turmoil !== undefined) updates.turmoil = body.turmoil;
   if (body.turmoilSources !== undefined) updates.turmoilSources = JSON.stringify(body.turmoilSources);
 

@@ -57,6 +57,11 @@ export async function POST(
         traditions: JSON.stringify(realm.traditions || []),
         treasury: 0,
         taxType: 'Tribute',
+        levyExpiresYear: null,
+        levyExpiresSeason: null,
+        foodBalance: 0,
+        consecutiveFoodShortageSeasons: 0,
+        consecutiveFoodRecoverySeasons: 0,
         turmoil: 0,
         turmoilSources: '[]',
       }).run();

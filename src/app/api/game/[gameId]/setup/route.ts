@@ -10,81 +10,103 @@ export async function POST(
 ) {
   const { gameId } = await params;
   const body = await request.json();
+  const game = db.select().from(games).where(eq(games.id, gameId)).get();
 
-  // body.territories: Array<{ name, climate, description }>
-  // body.resources: Array<{ territoryIndex, resourceType, rarity }>
-  // body.realms: Array<{ name, governmentType, traditions, territoryIndex, settlements: Array<{ name, size }> }>
+  if (!game) {
+    return NextResponse.json({ error: 'Game not found' }, { status: 404 });
+  }
+
+  // body.territories: Array<{
+  //   name, climate, description, type: 'Realm' | 'Neutral',
+  //   resources: Array<{
+  //     resourceType, rarity,
+  //     settlement: { name, size, type }
+  //   }>
+  // }>
+  // body.realms: Array<{ name, governmentType, traditions, territoryIndex }>
 
   const territoryIds: string[] = [];
-
-  // Create territories
-  for (const t of body.territories || []) {
-    const id = uuid();
-    territoryIds.push(id);
-    await db.insert(territories).values({
-      id,
-      gameId,
-      name: t.name,
-      climate: t.climate || null,
-      description: t.description || null,
-    });
-  }
-
-  // Create resource sites
-  for (const r of body.resources || []) {
-    const territoryId = territoryIds[r.territoryIndex];
-    if (!territoryId) continue;
-    await db.insert(resourceSites).values({
-      id: uuid(),
-      territoryId,
-      resourceType: r.resourceType,
-      rarity: r.rarity || 'Common',
-    });
-  }
-
-  // Create realms with settlements
   const realmIds: string[] = [];
-  for (const r of body.realms || []) {
-    const realmId = uuid();
-    realmIds.push(realmId);
-    const territoryId = territoryIds[r.territoryIndex] || territoryIds[0];
 
-    // Assign territory to realm
-    if (territoryId) {
-      await db.update(territories)
-        .set({ realmId: realmId })
-        .where(eq(territories.id, territoryId));
+  db.transaction((tx) => {
+    const territoryRealmIds: Array<string | null> = [];
+
+    for (const [territoryIndex, territory] of (body.territories || []).entries()) {
+      const territoryId = uuid();
+      territoryIds.push(territoryId);
+      territoryRealmIds[territoryIndex] = null;
+
+      tx.insert(territories).values({
+        id: territoryId,
+        gameId,
+        name: territory.name,
+        climate: territory.climate || null,
+        description: territory.description || null,
+      }).run();
     }
 
-    await db.insert(realms).values({
-      id: realmId,
-      gameId,
-      name: r.name,
-      governmentType: r.governmentType,
-      traditions: JSON.stringify(r.traditions || []),
-      treasury: 0,
-      taxType: 'Tribute',
-      turmoil: 0,
-      turmoilSources: '[]',
-    });
+    for (const realm of body.realms || []) {
+      const realmId = uuid();
+      realmIds.push(realmId);
 
-    // Create settlements for this realm
-    for (const s of r.settlements || []) {
-      if (!s.name) continue;
-      await db.insert(settlements).values({
-        id: uuid(),
-        territoryId: territoryId,
-        realmId: realmId,
-        name: s.name,
-        size: s.size || 'Village',
-      });
+      tx.insert(realms).values({
+        id: realmId,
+        gameId,
+        name: realm.name,
+        governmentType: realm.governmentType,
+        traditions: JSON.stringify(realm.traditions || []),
+        treasury: 0,
+        taxType: 'Tribute',
+        turmoil: 0,
+        turmoilSources: '[]',
+      }).run();
+
+      const requestedTerritoryIndex = Number.isInteger(realm.territoryIndex) ? realm.territoryIndex : 0;
+      const territoryIndex = territoryIds[requestedTerritoryIndex] ? requestedTerritoryIndex : 0;
+      const territoryId = territoryIds[territoryIndex];
+
+      if (!territoryId) {
+        continue;
+      }
+
+      territoryRealmIds[territoryIndex] = realmId;
+      tx.update(territories)
+        .set({ realmId })
+        .where(eq(territories.id, territoryId))
+        .run();
     }
-  }
 
-  // Mark game as ready
-  await db.update(games)
-    .set({ turnPhase: 'Submission' })
-    .where(eq(games.id, gameId));
+    for (const [territoryIndex, territory] of (body.territories || []).entries()) {
+      const territoryId = territoryIds[territoryIndex];
+      const realmId = territoryRealmIds[territoryIndex] ?? null;
+
+      for (const resource of territory.resources || []) {
+        const settlementId = uuid();
+        const resourceSiteId = uuid();
+
+        tx.insert(settlements).values({
+          id: settlementId,
+          territoryId,
+          realmId,
+          name: resource.settlement.name,
+          size: resource.settlement.size || 'Village',
+        }).run();
+
+        tx.insert(resourceSites).values({
+          id: resourceSiteId,
+          territoryId,
+          settlementId,
+          resourceType: resource.resourceType,
+          rarity: resource.rarity || 'Common',
+        }).run();
+      }
+    }
+
+    tx.update(games)
+      .set({ turnPhase: 'Submission' })
+      .where(eq(games.id, gameId))
+      .run();
+  });
 
   return NextResponse.json({
     territories: territoryIds.length,

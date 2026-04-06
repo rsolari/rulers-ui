@@ -166,12 +166,21 @@ export const LUXURY_DEPENDENCIES: Record<string, ResourceType[] | null> = {
   Jewels:    ['Gold', 'Lacquer', 'Porcelain'], // needs one of these
   Marble:    null,       // base material
   Silk:      null,       // base material
+  Spices:    null,
+  Tea:       null,
+  Coffee:    null,
+  Tobacco:   null,
+  Opium:     null,
+  Salt:      null,
+  Sugar:     null,
 };
 
 export const RESOURCE_RARITY: Record<ResourceType, ResourceRarity> = {
   Timber: 'Common', Clay: 'Common', Ore: 'Common', Stone: 'Common',
   Gold: 'Luxury', Lacquer: 'Luxury', Porcelain: 'Luxury',
   Jewels: 'Luxury', Marble: 'Luxury', Silk: 'Luxury',
+  Spices: 'Luxury', Tea: 'Luxury', Coffee: 'Luxury', Tobacco: 'Luxury',
+  Opium: 'Luxury', Salt: 'Luxury', Sugar: 'Luxury',
 };
 
 // ============================================================

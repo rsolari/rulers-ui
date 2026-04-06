@@ -1,5 +1,6 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
+import type { ResourceRarity, ResourceType } from '@/types/game';
 
 // ============================================================
 // GAMES
@@ -80,7 +81,7 @@ export const territoriesRelations = relations(territories, ({ one, many }) => ({
 export const settlements = sqliteTable('settlements', {
   id: text('id').primaryKey(),
   territoryId: text('territory_id').notNull().references(() => territories.id),
-  realmId: text('realm_id').notNull().references(() => realms.id),
+  realmId: text('realm_id').references(() => realms.id),
   name: text('name').notNull(),
   size: text('size').notNull(), // Village | Town | City
   governingNobleId: text('governing_noble_id'),
@@ -124,8 +125,8 @@ export const resourceSites = sqliteTable('resource_sites', {
   id: text('id').primaryKey(),
   territoryId: text('territory_id').notNull().references(() => territories.id),
   settlementId: text('settlement_id').references(() => settlements.id),
-  resourceType: text('resource_type').notNull(),
-  rarity: text('rarity').notNull(), // Common | Luxury
+  resourceType: text('resource_type').$type<ResourceType>().notNull(),
+  rarity: text('rarity').$type<ResourceRarity>().notNull(),
 });
 
 export const resourceSitesRelations = relations(resourceSites, ({ one, many }) => ({

@@ -507,12 +507,6 @@ export default function GMDashboard() {
         </Card>
         <Card>
           <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Player Code</p>
-            <p className="font-mono text-2xl">{game.playerCode || '—'}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
             <p className="text-sm text-ink-300 pt-4">Player Slots</p>
             <p className="text-3xl font-heading font-bold">{playerSlots.length}</p>
             <p className="text-sm text-ink-300">{playerSlots.filter((slot) => slot.status === 'claimed').length} claimed</p>
@@ -712,7 +706,7 @@ export default function GMDashboard() {
       {/* World Management */}
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>World Management</CardTitle>
+          <CardTitle>Territories</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">

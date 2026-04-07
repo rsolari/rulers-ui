@@ -665,6 +665,11 @@ export default function GMDashboard() {
                       <span className="text-ink-300 ml-2">{realm.governmentType}</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      {realm.isNPC && (
+                        <Link href={`/game/${gameId}/realm?realmId=${realm.id}`}>
+                          <Button variant="outline">Manage Realm</Button>
+                        </Link>
+                      )}
                       <Button variant="outline" onClick={() => openRealmForm(realm)}>
                         Edit
                       </Button>
@@ -935,115 +940,119 @@ export default function GMDashboard() {
         </CardContent>
       </Card>
 
-      {/* Troop Transfer */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Troop Management</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-3 items-end">
-            <Select
-              label="Load troops for realm"
-              options={[{ value: '', label: 'Select realm...' }, ...realms.map((r) => ({ value: r.id, label: r.name }))]}
-              value=""
-              onChange={(e) => { if (e.target.value) void loadTroopsForRealm(e.target.value); }}
-            />
-          </div>
+      {game.initState === 'active' && (
+        <>
+          {/* Troop Transfer */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Troop Management</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-3 items-end">
+                <Select
+                  label="Load troops for realm"
+                  options={[{ value: '', label: 'Select realm...' }, ...realms.map((r) => ({ value: r.id, label: r.name }))]}
+                  value=""
+                  onChange={(e) => { if (e.target.value) void loadTroopsForRealm(e.target.value); }}
+                />
+              </div>
 
-          {worldTroops.length > 0 && (
-            <div className="space-y-3">
-              {(() => {
-                const grouped = new Map<string, Troop[]>();
-                for (const troop of worldTroops) {
-                  const key = troop.garrisonSettlementId || troop.armyId || 'unassigned';
-                  if (!grouped.has(key)) grouped.set(key, []);
-                  grouped.get(key)!.push(troop);
-                }
+              {worldTroops.length > 0 && (
+                <div className="space-y-3">
+                  {(() => {
+                    const grouped = new Map<string, Troop[]>();
+                    for (const troop of worldTroops) {
+                      const key = troop.garrisonSettlementId || troop.armyId || 'unassigned';
+                      if (!grouped.has(key)) grouped.set(key, []);
+                      grouped.get(key)!.push(troop);
+                    }
 
-                const allSettlements = worldSettlements;
-                const settlementMap = Object.fromEntries(allSettlements.map((s) => [s.id, s.name]));
+                    const allSettlements = worldSettlements;
+                    const settlementMap = Object.fromEntries(allSettlements.map((s) => [s.id, s.name]));
 
-                return Array.from(grouped.entries()).map(([key, groupTroops]) => {
-                  const locationName = settlementMap[key] || (key === 'unassigned' ? 'Unassigned' : `Army ${key.slice(0, 8)}`);
-                  const allSelected = groupTroops.every((t) => troopTransfer.troopIds.includes(t.id));
+                    return Array.from(grouped.entries()).map(([key, groupTroops]) => {
+                      const locationName = settlementMap[key] || (key === 'unassigned' ? 'Unassigned' : `Army ${key.slice(0, 8)}`);
+                      const allSelected = groupTroops.every((t) => troopTransfer.troopIds.includes(t.id));
 
-                  return (
-                    <div key={key} className="p-3 medieval-border rounded space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-heading font-semibold">{locationName}</span>
-                          <Badge>{groupTroops.length} troops</Badge>
+                      return (
+                        <div key={key} className="p-3 medieval-border rounded space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-heading font-semibold">{locationName}</span>
+                              <Badge>{groupTroops.length} troops</Badge>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => {
+                              if (allSelected) {
+                                setTroopTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => !groupTroops.some((t) => t.id === id)) }));
+                              } else {
+                                setTroopTransfer((prev) => ({ ...prev, troopIds: [...new Set([...prev.troopIds, ...groupTroops.map((t) => t.id)])] }));
+                              }
+                            }}>
+                              {allSelected ? 'Deselect All' : 'Select All'}
+                            </Button>
+                          </div>
+                          <div className="space-y-1 ml-4">
+                            {groupTroops.map((troop) => (
+                              <label key={troop.id} className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={troopTransfer.troopIds.includes(troop.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setTroopTransfer((prev) => ({ ...prev, troopIds: [...prev.troopIds, troop.id] }));
+                                    } else {
+                                      setTroopTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => id !== troop.id) }));
+                                    }
+                                  }}
+                                />
+                                <span>{troop.type}</span>
+                                <Badge variant="default">{troop.class}</Badge>
+                                <Badge variant="default">{troop.armourType}</Badge>
+                              </label>
+                            ))}
+                          </div>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          if (allSelected) {
-                            setTroopTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => !groupTroops.some((t) => t.id === id)) }));
-                          } else {
-                            setTroopTransfer((prev) => ({ ...prev, troopIds: [...new Set([...prev.troopIds, ...groupTroops.map((t) => t.id)])] }));
-                          }
-                        }}>
-                          {allSelected ? 'Deselect All' : 'Select All'}
-                        </Button>
-                      </div>
-                      <div className="space-y-1 ml-4">
-                        {groupTroops.map((troop) => (
-                          <label key={troop.id} className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={troopTransfer.troopIds.includes(troop.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setTroopTransfer((prev) => ({ ...prev, troopIds: [...prev.troopIds, troop.id] }));
-                                } else {
-                                  setTroopTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => id !== troop.id) }));
-                                }
-                              }}
-                            />
-                            <span>{troop.type}</span>
-                            <Badge variant="default">{troop.class}</Badge>
-                            <Badge variant="default">{troop.armourType}</Badge>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
+                      );
+                    });
+                  })()}
 
-              {troopTransfer.troopIds.length > 0 && (
-                <div className="flex gap-3 items-end p-3 bg-parchment-100/50 rounded">
-                  <Select
-                    label={`Transfer ${troopTransfer.troopIds.length} troop(s) to`}
-                    options={[{ value: '', label: 'Select garrison...' }, ...worldSettlements.map((s) => ({ value: s.id, label: `${s.name} (${s.size})` }))]}
-                    value={troopTransfer.targetSettlementId}
-                    onChange={(e) => setTroopTransfer((prev) => ({ ...prev, targetSettlementId: e.target.value }))}
-                  />
-                  <Button variant="accent" onClick={() => void transferTroops()} disabled={!troopTransfer.targetSettlementId}>
-                    Transfer
-                  </Button>
+                  {troopTransfer.troopIds.length > 0 && (
+                    <div className="flex gap-3 items-end p-3 bg-parchment-100/50 rounded">
+                      <Select
+                        label={`Transfer ${troopTransfer.troopIds.length} troop(s) to`}
+                        options={[{ value: '', label: 'Select garrison...' }, ...worldSettlements.map((s) => ({ value: s.id, label: `${s.name} (${s.size})` }))]}
+                        value={troopTransfer.targetSettlementId}
+                        onChange={(e) => setTroopTransfer((prev) => ({ ...prev, targetSettlementId: e.target.value }))}
+                      />
+                      <Button variant="accent" onClick={() => void transferTroops()} disabled={!troopTransfer.targetSettlementId}>
+                        Transfer
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {worldTroops.length === 0 && <p className="text-ink-300 text-sm">Select a realm to view and manage troops.</p>}
-        </CardContent>
-      </Card>
+              {worldTroops.length === 0 && <p className="text-ink-300 text-sm">Select a realm to view and manage troops.</p>}
+            </CardContent>
+          </Card>
 
-      {/* Governance Panel */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Governance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-ink-300 text-sm mb-4">Edit noble assignments, heir designations, and GM status text per realm.</p>
-          {realms.map((realm) => (
-            <GovernanceRealmPanel key={realm.id} gameId={gameId} realmId={realm.id} realmName={realm.name} />
-          ))}
-          {realms.length === 0 && <p className="text-ink-300 text-sm">No realms yet.</p>}
-        </CardContent>
-      </Card>
+          {/* Governance Panel */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Governance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-ink-300 text-sm mb-4">Edit noble assignments, heir designations, and GM status text per realm.</p>
+              {realms.map((realm) => (
+                <GovernanceRealmPanel key={realm.id} gameId={gameId} realmId={realm.id} realmName={realm.name} />
+              ))}
+              {realms.length === 0 && <p className="text-ink-300 text-sm">No realms yet.</p>}
+            </CardContent>
+          </Card>
 
-      <GmTurnReviewPanel gameId={gameId} />
+          <GmTurnReviewPanel gameId={gameId} />
+        </>
+      )}
     </main>
   );
 }

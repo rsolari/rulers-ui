@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -77,8 +77,12 @@ interface Ruler {
 export default function RealmDashboard() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const gameId = params.gameId as string;
-  const { role, realmId, initState, claimCode, loading } = useRole();
+  const { role, realmId: sessionRealmId, initState, claimCode, loading } = useRole();
+  const gmRealmIdParam = searchParams.get('realmId');
+  const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
+  const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [game, setGame] = useState<Game | null>(null);
   const [realm, setRealm] = useState<Realm | null>(null);
   const [territories, setTerritories] = useState<Territory[]>([]);
@@ -98,6 +102,10 @@ export default function RealmDashboard() {
       return;
     }
 
+    if (isGmManaging) {
+      return;
+    }
+
     if (role !== 'player') {
       router.replace(`/game/${gameId}`);
       return;
@@ -106,7 +114,7 @@ export default function RealmDashboard() {
     if (!realmId && initState && initState !== 'gm_world_setup' && initState !== 'active' && initState !== 'completed') {
       router.replace(`/game/${gameId}/create-realm`);
     }
-  }, [role, realmId, initState, loading, gameId, router]);
+  }, [role, realmId, initState, loading, gameId, router, isGmManaging]);
 
   useEffect(() => {
     if (!realmId) {
@@ -204,10 +212,16 @@ export default function RealmDashboard() {
     );
   }
 
-  const canEditIdentity = game.initState === 'parallel_final_setup' || game.initState === 'ready_to_start';
+  const canEditIdentity = game.initState === 'parallel_final_setup' || game.initState === 'ready_to_start' || isGmManaging;
+  const realmLinkSuffix = isGmManaging ? `?realmId=${realmId}` : '';
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
+      {isGmManaging && (
+        <Link href={`/game/${gameId}/gm`} className="inline-flex items-center gap-1 text-sm text-ink-300 hover:text-ink-500 mb-4">
+          &larr; Back to GM Dashboard
+        </Link>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">{realm.name}</h1>
@@ -242,7 +256,7 @@ export default function RealmDashboard() {
                 {ruler.race ? ` • ${ruler.race}` : ''}
               </p>
             </div>
-            <Link href={`/game/${gameId}/realm/nobles`}>
+            <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`}>
               <Button variant="outline">View Nobles</Button>
             </Link>
           </CardContent>
@@ -257,7 +271,7 @@ export default function RealmDashboard() {
               Create the noble who leads this realm before you continue building its politics,
               alliances, and succession.
             </p>
-            <Link href={`/game/${gameId}/realm/ruler/create`}>
+            <Link href={`/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
               <Button variant="accent">Create Ruler</Button>
             </Link>
           </CardContent>
@@ -368,15 +382,15 @@ export default function RealmDashboard() {
                 <Badge variant="gold">{economyProjection.warnings.length}</Badge>
               </div>
             )}
-            <Link href={`/game/${gameId}/realm/nobles`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
+            <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
               <span>Nobles</span>
               <strong>{nobles.length}</strong>
             </Link>
-            <Link href={`/game/${gameId}/realm/army`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
+            <Link href={`/game/${gameId}/realm/army${realmLinkSuffix}`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
               <span>Troops</span>
               <strong>{(militaryData.troops || []).length}</strong>
             </Link>
-            <Link href={`/game/${gameId}/realm/trade`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
+            <Link href={`/game/${gameId}/realm/trade${realmLinkSuffix}`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
               <span>Resources</span>
               <strong>{resources.length}</strong>
             </Link>
@@ -465,7 +479,7 @@ export default function RealmDashboard() {
 
       {/* Navigation */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-6">
-        <Link href={ruler ? `/game/${gameId}/realm/nobles` : `/game/${gameId}/realm/ruler/create`}>
+        <Link href={ruler ? `/game/${gameId}/realm/nobles${realmLinkSuffix}` : `/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent>
               <p className="font-heading font-bold pt-4">
@@ -474,22 +488,22 @@ export default function RealmDashboard() {
             </CardContent>
           </Card>
         </Link>
-        <Link href={`/game/${gameId}/realm/settlements`}>
+        <Link href={`/game/${gameId}/realm/settlements${realmLinkSuffix}`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent><p className="font-heading font-bold pt-4">Settlements & Buildings</p></CardContent>
           </Card>
         </Link>
-        <Link href={`/game/${gameId}/realm/army`}>
+        <Link href={`/game/${gameId}/realm/army${realmLinkSuffix}`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent><p className="font-heading font-bold pt-4">Armies & Troops</p></CardContent>
           </Card>
         </Link>
-        <Link href={`/game/${gameId}/realm/treasury`}>
+        <Link href={`/game/${gameId}/realm/treasury${realmLinkSuffix}`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent><p className="font-heading font-bold pt-4">Treasury</p></CardContent>
           </Card>
         </Link>
-        <Link href={`/game/${gameId}/realm/trade`}>
+        <Link href={`/game/${gameId}/realm/trade${realmLinkSuffix}`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent><p className="font-heading font-bold pt-4">Trade & Resources</p></CardContent>
           </Card>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -39,12 +39,16 @@ interface Noble {
 
 export default function SettlementsPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const gameId = params.gameId as string;
-  const { realmId, initState } = useRole();
+  const { role, realmId: sessionRealmId, initState } = useRole();
+  const gmRealmIdParam = searchParams.get('realmId');
+  const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
+  const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [nobles, setNobles] = useState<Noble[]>([]);
 
-  const isSetup = initState === 'parallel_final_setup' || initState === 'ready_to_start';
+  const isSetup = initState === 'parallel_final_setup' || initState === 'ready_to_start' || isGmManaging;
 
   useEffect(() => {
     if (!realmId) return;
@@ -79,7 +83,7 @@ export default function SettlementsPage() {
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
       <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+        <Link href={`/game/${gameId}/realm${isGmManaging ? `?realmId=${realmId}` : ''}`} className="hover:text-ink-100">← Realm</Link>
       </nav>
       <h1 className="text-3xl font-bold mb-2">Settlements</h1>
       <p className="text-ink-300 mb-6">

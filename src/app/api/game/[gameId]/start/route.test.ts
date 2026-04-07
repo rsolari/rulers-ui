@@ -25,12 +25,12 @@ const mocks = vi.hoisted(() => {
 
 const authMocks = vi.hoisted(() => ({
   requireGM: vi.fn(),
-  requireInitState: vi.fn(),
   isAuthError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'status' in error),
 }));
 
 const readinessMocks = vi.hoisted(() => ({
   getGameSetupReadiness: vi.fn(),
+  recomputeGameInitState: vi.fn(),
 }));
 
 vi.mock('@/db', () => ({ db: mocks.db }));
@@ -44,10 +44,11 @@ describe('POST /api/game/[gameId]/start', () => {
     vi.clearAllMocks();
     mocks.operations.length = 0;
     authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
-    authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'ready_to_start' });
+    readinessMocks.recomputeGameInitState.mockResolvedValue({ id: 'game-1', initState: 'ready_to_start' });
   });
 
   it('rejects starting early when a player is still missing required setup artifacts', async () => {
+    readinessMocks.recomputeGameInitState.mockResolvedValue({ id: 'game-1', initState: 'parallel_final_setup' });
     readinessMocks.getGameSetupReadiness.mockResolvedValue({
       game: { gmSetupState: 'ready' },
       canStart: false,
@@ -76,6 +77,21 @@ describe('POST /api/game/[gameId]/start', () => {
         missingRequirements: ['noble setup completed', 'starting army present'],
       }],
     });
+    expect(mocks.operations).toEqual([]);
+  });
+
+  it('rejects starting an already active game', async () => {
+    readinessMocks.recomputeGameInitState.mockResolvedValue({ id: 'game-1', initState: 'active' });
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/start', {
+      method: 'POST',
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'Game has already started' });
+    expect(readinessMocks.getGameSetupReadiness).not.toHaveBeenCalled();
     expect(mocks.operations).toEqual([]);
   });
 

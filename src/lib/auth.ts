@@ -25,6 +25,7 @@ export interface PublicSession {
   playerSetupState: PlayerSetupState | null;
   displayName: string | null;
   territoryId: string | null;
+  claimCode: string | null;
 }
 
 export class AuthError extends Error {
@@ -95,6 +96,7 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       playerSetupState: null,
       displayName: null,
       territoryId: null,
+      claimCode: null,
     };
   }
 
@@ -110,6 +112,7 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       playerSetupState: null,
       displayName: null,
       territoryId: null,
+      claimCode: null,
     };
   }
 
@@ -125,6 +128,7 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       playerSetupState: null,
       displayName: null,
       territoryId: null,
+      claimCode: null,
     };
   }
 
@@ -140,6 +144,7 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       playerSetupState: null,
       displayName: null,
       territoryId: null,
+      claimCode: null,
     };
   }
 
@@ -161,6 +166,7 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
       playerSetupState: null,
       displayName: null,
       territoryId: null,
+      claimCode: null,
     };
   }
 
@@ -174,6 +180,7 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
     playerSetupState: slot.setupState,
     displayName: slot.displayName ?? null,
     territoryId: slot.territoryId,
+    claimCode,
   };
 }
 

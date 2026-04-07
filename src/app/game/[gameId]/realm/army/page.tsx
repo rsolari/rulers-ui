@@ -51,6 +51,13 @@ interface SettlementSummary {
   size: string;
 }
 
+interface TroopRecruitmentOption {
+  type: TroopType;
+  canRecruit: boolean;
+  usesTradeAccess: boolean;
+  requiredBuildings: string[];
+}
+
 async function fetchArmyData(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/armies?realmId=${realmId}`);
   const data = await response.json();
@@ -59,6 +66,7 @@ async function fetchArmyData(gameId: string, realmId: string) {
     armies: data.armies || [],
     troops: data.troops || [],
     siegeUnits: data.siegeUnits || [],
+    troopRecruitmentOptions: data.troopRecruitmentOptions || [],
   };
 }
 
@@ -79,6 +87,7 @@ export default function ArmyPage() {
   const [allTroops, setTroops] = useState<Troop[]>([]);
   const [allSiege, setSiege] = useState<SiegeUnit[]>([]);
   const [settlements, setSettlements] = useState<SettlementSummary[]>([]);
+  const [troopRecruitmentOptions, setTroopRecruitmentOptions] = useState<TroopRecruitmentOption[]>([]);
   const [createArmyOpen, setCreateArmyOpen] = useState(false);
   const [recruitOpen, setRecruitOpen] = useState<string | null>(null); // armyId or 'garrison'
   const [newArmyName, setNewArmyName] = useState('');
@@ -99,6 +108,7 @@ export default function ArmyPage() {
       setArmies(armyData.armies);
       setTroops(armyData.troops);
       setSiege(armyData.siegeUnits);
+      setTroopRecruitmentOptions(armyData.troopRecruitmentOptions);
       setSettlements(settlementData);
     });
 
@@ -127,6 +137,7 @@ export default function ArmyPage() {
     setArmies(data.armies);
     setTroops(data.troops);
     setSiege(data.siegeUnits);
+    setTroopRecruitmentOptions(data.troopRecruitmentOptions);
   }
 
   async function recruitTroop() {
@@ -147,16 +158,45 @@ export default function ArmyPage() {
     setArmies(data.armies);
     setTroops(data.troops);
     setSiege(data.siegeUnits);
+    setTroopRecruitmentOptions(data.troopRecruitmentOptions);
   }
 
-  const troopOptions = Object.entries(TROOP_DEFS).map(([key, def]) => ({
-    value: key,
-    label: `${key} (${def.class}, ${def.upkeep}/season)`,
-  }));
+  useEffect(() => {
+    const selectedOption = troopRecruitmentOptions.find((option) => option.type === selectedTroopType);
+    if (!selectedOption || selectedOption.canRecruit) {
+      return;
+    }
+
+    const firstRecruitableOption = troopRecruitmentOptions.find((option) => option.canRecruit);
+    if (firstRecruitableOption) {
+      setSelectedTroopType(firstRecruitableOption.type);
+    }
+  }, [selectedTroopType, troopRecruitmentOptions]);
+
+  const troopOptions = Object.entries(TROOP_DEFS).map(([key, def]) => {
+    const recruitmentOption = troopRecruitmentOptions.find((option) => option.type === key);
+    const requirementLabel = recruitmentOption?.canRecruit
+      ? recruitmentOption.usesTradeAccess
+        ? ' via trade'
+        : ''
+      : def.requires.length > 0
+        ? ` unavailable: requires ${def.requires.join(', ')}`
+        : ' unavailable';
+
+    return {
+      value: key,
+      label: `${key} (${def.class}, ${def.upkeep}/season)${requirementLabel}`,
+      disabled: recruitmentOption ? !recruitmentOption.canRecruit : false,
+    };
+  });
   const settlementOptions = settlements.map((settlement) => ({
     value: settlement.id,
     label: `${settlement.name} (${settlement.size})`,
   }));
+  const selectedTroopRecruitmentOption = troopRecruitmentOptions.find(
+    (option) => option.type === selectedTroopType,
+  );
+  const hasRecruitableTroops = troopRecruitmentOptions.some((option) => option.canRecruit);
 
   const garrisonTroops = allTroops.filter(t => !t.armyId);
 
@@ -263,6 +303,11 @@ export default function ArmyPage() {
             {settlementOptions.length === 0 && (
               <p className="mt-3 text-sm text-ink-300">A settlement is required to recruit troops.</p>
             )}
+            {settlementOptions.length > 0 && !hasRecruitableTroops && (
+              <p className="mt-3 text-sm text-ink-300">
+                No troops are currently recruitable with this realm&apos;s available buildings.
+              </p>
+            )}
             {TROOP_DEFS[selectedTroopType] && (
               <div className="mt-3 p-3 medieval-border rounded text-sm space-y-1">
                 <p><strong>Class:</strong> {TROOP_DEFS[selectedTroopType].class}</p>
@@ -272,12 +317,24 @@ export default function ArmyPage() {
                 {TROOP_DEFS[selectedTroopType].requires.length > 0 && (
                   <p><strong>Requires:</strong> {TROOP_DEFS[selectedTroopType].requires.join(', ')}</p>
                 )}
+                {selectedTroopRecruitmentOption && !selectedTroopRecruitmentOption.canRecruit && (
+                  <p className="text-red-700"><strong>Status:</strong> Unavailable for this realm.</p>
+                )}
+                {selectedTroopRecruitmentOption?.usesTradeAccess && (
+                  <p><strong>Source:</strong> Available via traded building access.</p>
+                )}
               </div>
             )}
           </DialogContent>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setRecruitOpen(null)}>Cancel</Button>
-            <Button variant="accent" onClick={recruitTroop} disabled={!selectedRecruitmentSettlementId}>Recruit</Button>
+            <Button
+              variant="accent"
+              onClick={recruitTroop}
+              disabled={!selectedRecruitmentSettlementId || !selectedTroopRecruitmentOption?.canRecruit}
+            >
+              Recruit
+            </Button>
           </DialogFooter>
         </Dialog>
       )}

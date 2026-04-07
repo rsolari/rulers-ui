@@ -1054,6 +1054,83 @@ describe('createEconomyService.advanceGameTurn', () => {
 
     sqlite.close();
   });
+
+  it('decrements army movement and completes arrival on season advance', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-move',
+      name: 'Army Movement Test',
+      gmCode: 'gm-move',
+      playerCode: 'player-move',
+      currentYear: 1,
+      currentSeason: 'Spring',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-move',
+      gameId: 'game-move',
+      name: 'Roadwatch',
+      governmentType: 'Monarch',
+      treasury: 1000,
+      taxType: 'Tribute',
+    }).run();
+
+    db.insert(schema.territories).values([
+      {
+        id: 'territory-start',
+        gameId: 'game-move',
+        name: 'Start',
+        realmId: 'realm-move',
+      },
+      {
+        id: 'territory-destination',
+        gameId: 'game-move',
+        name: 'Destination',
+        realmId: 'realm-move',
+      },
+    ]).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-move',
+      territoryId: 'territory-start',
+      realmId: 'realm-move',
+      name: 'Roadwatch',
+      size: 'Village',
+    }).run();
+
+    db.insert(schema.armies).values({
+      id: 'army-move',
+      realmId: 'realm-move',
+      name: 'Marchers',
+      locationTerritoryId: 'territory-start',
+      destinationTerritoryId: 'territory-destination',
+      movementTurnsRemaining: 1,
+    }).run();
+
+    service.advanceGameTurn('game-move', {
+      expectedYear: 1,
+      expectedSeason: 'Spring',
+      idempotencyKey: 'game-move:1:Spring',
+    });
+
+    const army = db.select().from(schema.armies)
+      .where(eq(schema.armies.id, 'army-move'))
+      .get();
+
+    expect(army).toMatchObject({
+      id: 'army-move',
+      locationTerritoryId: 'territory-destination',
+      locationHexId: null,
+      destinationTerritoryId: null,
+      destinationHexId: null,
+      movementTurnsRemaining: 0,
+    });
+
+    sqlite.close();
+  });
 });
 
 function parseJson<T>(value: string, fallback: T): T {

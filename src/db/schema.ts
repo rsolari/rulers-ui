@@ -68,6 +68,7 @@ export const realms = sqliteTable('realms', {
   name: text('name').notNull(),
   governmentType: text('government_type').notNull(),
   traditions: text('traditions').default('[]').notNull(), // JSON array of 3 traditions
+  immortalsTroopId: text('immortals_troop_id'),
   isNPC: integer('is_npc', { mode: 'boolean' }).default(false).notNull(),
   treasury: integer('treasury').default(0).notNull(),
   taxType: text('tax_type').default('Tribute').notNull(),

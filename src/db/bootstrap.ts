@@ -98,6 +98,7 @@ function createBaseSchema(database: Database.Database) {
       name text NOT NULL,
       government_type text NOT NULL,
       traditions text NOT NULL DEFAULT '[]',
+      immortals_troop_id text,
       is_npc integer NOT NULL DEFAULT false,
       treasury integer NOT NULL DEFAULT 0,
       tax_type text NOT NULL DEFAULT 'Tribute',
@@ -601,6 +602,9 @@ export function initializeDatabaseSchema(database: Database.Database) {
     }
 
     createBaseSchema(database);
+    if (!columnExists(database, 'realms', 'immortals_troop_id')) {
+      database.exec('ALTER TABLE realms ADD COLUMN immortals_troop_id text;');
+    }
     createIndexes(database);
   } finally {
     database.pragma('foreign_keys = ON');

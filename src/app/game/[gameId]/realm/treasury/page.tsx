@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -11,7 +11,11 @@ import type { EconomyProjectionDto } from '@/lib/economy-dto';
 export default function TreasuryPage() {
   const params = useParams();
   const gameId = params.gameId as string;
-  const { realmId } = useRole();
+  const { role, realmId: sessionRealmId } = useRole();
+  const searchParams = useSearchParams();
+  const gmRealmIdParam = searchParams.get('realmId');
+  const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
+  const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [projection, setProjection] = useState<EconomyProjectionDto | null>(null);
 
   useEffect(() => {
@@ -36,7 +40,7 @@ export default function TreasuryPage() {
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
       <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+        <Link href={`/game/${gameId}/realm${isGmManaging ? '?realmId=' + realmId : ''}`} className="hover:text-ink-100">← Realm</Link>
       </nav>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>

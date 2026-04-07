@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,7 +70,11 @@ async function fetchRealmSettlements(gameId: string, realmId: string) {
 export default function ArmyPage() {
   const params = useParams();
   const gameId = params.gameId as string;
-  const { realmId, territoryId } = useRole();
+  const { role, realmId: sessionRealmId, territoryId } = useRole();
+  const searchParams = useSearchParams();
+  const gmRealmIdParam = searchParams.get('realmId');
+  const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
+  const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [armies, setArmies] = useState<Army[]>([]);
   const [allTroops, setTroops] = useState<Troop[]>([]);
   const [allSiege, setSiege] = useState<SiegeUnit[]>([]);
@@ -159,7 +163,7 @@ export default function ArmyPage() {
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
       <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+        <Link href={`/game/${gameId}/realm${isGmManaging ? '?realmId=' + realmId : ''}`} className="hover:text-ink-100">← Realm</Link>
       </nav>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Armies & Troops</h1>

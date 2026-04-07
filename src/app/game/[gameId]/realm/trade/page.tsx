@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +42,11 @@ interface ResourceSite {
 export default function TradePage() {
   const params = useParams();
   const gameId = params.gameId as string;
-  const { realmId } = useRole();
+  const { role, realmId: sessionRealmId } = useRole();
+  const searchParams = useSearchParams();
+  const gmRealmIdParam = searchParams.get('realmId');
+  const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
+  const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
   const [allRealms, setAllRealms] = useState<Realm[]>([]);
   const [territories, setTerritories] = useState<Territory[]>([]);
@@ -84,7 +88,7 @@ export default function TradePage() {
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
       <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+        <Link href={`/game/${gameId}/realm${isGmManaging ? '?realmId=' + realmId : ''}`} className="hover:text-ink-100">← Realm</Link>
       </nav>
       <h1 className="text-3xl font-bold mb-2">Trade & Resources</h1>
 

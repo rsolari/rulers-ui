@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -74,8 +74,12 @@ const INITIAL_FORM: RulerPayload = {
 export default function CreateRulerPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const gameId = params.gameId as string;
-  const { realmId } = useRole();
+  const { role, realmId: sessionRealmId } = useRole();
+  const gmRealmIdParam = searchParams.get('realmId');
+  const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
+  const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [families, setFamilies] = useState<NobleFamily[]>([]);
   const [form, setForm] = useState<RulerPayload>(INITIAL_FORM);
   const [loading, setLoading] = useState(true);
@@ -115,7 +119,7 @@ export default function CreateRulerPage() {
 
         if (rulerData) {
           startTransition(() => {
-            router.replace(`/game/${gameId}/realm`);
+            router.replace(`/game/${gameId}/realm${isGmManaging ? `?realmId=${realmId}` : ''}`);
           });
           return;
         }
@@ -223,7 +227,7 @@ export default function CreateRulerPage() {
       }
 
       startTransition(() => {
-        router.push(`/game/${gameId}/realm`);
+        router.push(`/game/${gameId}/realm${isGmManaging ? `?realmId=${realmId}` : ''}`);
       });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Failed to create ruler');
@@ -448,7 +452,7 @@ export default function CreateRulerPage() {
             />
           </CardContent>
           <CardFooter className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <Link href={`/game/${gameId}/realm`} className="w-full md:w-auto">
+            <Link href={`/game/${gameId}/realm${isGmManaging ? `?realmId=${realmId}` : ''}`} className="w-full md:w-auto">
               <Button type="button" variant="ghost" className="w-full md:w-auto">
                 Cancel
               </Button>

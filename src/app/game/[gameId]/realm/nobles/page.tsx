@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,8 +47,12 @@ interface Noble {
 
 export default function NoblesPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const gameId = params.gameId as string;
-  const { realmId } = useRole();
+  const { role, realmId: sessionRealmId } = useRole();
+  const gmRealmIdParam = searchParams.get('realmId');
+  const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
+  const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [families, setFamilies] = useState<NobleFamily[]>([]);
   const [nobles, setNobles] = useState<Noble[]>([]);
   const [addFamilyOpen, setAddFamilyOpen] = useState(false);
@@ -92,16 +96,16 @@ export default function NoblesPage() {
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
       <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+        <Link href={`/game/${gameId}/realm${isGmManaging ? `?realmId=${realmId}` : ''}`} className="hover:text-ink-100">← Realm</Link>
       </nav>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Noble Families</h1>
         <div className="flex items-center gap-3">
-          <Link href={`/game/${gameId}/realm`}>
+          <Link href={`/game/${gameId}/realm${isGmManaging ? `?realmId=${realmId}` : ''}`}>
             <Button variant="ghost">Back to Realm</Button>
           </Link>
           {!nobles.some((noble) => noble.isRuler) ? (
-            <Link href={`/game/${gameId}/realm/ruler/create`}>
+            <Link href={`/game/${gameId}/realm/ruler/create${isGmManaging ? `?realmId=${realmId}` : ''}`}>
               <Button variant="outline">Create Ruler</Button>
             </Link>
           ) : null}

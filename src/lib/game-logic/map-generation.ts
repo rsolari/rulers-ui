@@ -169,7 +169,7 @@ export function generateTerritoryResources(type: TerritoryType): GeneratedResour
  * Generate the full map: resources and settlements for all territories.
  */
 export function generateMap(
-  territories: Array<{ name: string; climate: string; description: string; type: TerritoryType }>
+  territories: Array<{ name: string; description: string; type: TerritoryType }>
 ): Array<{ territoryIndex: number; resources: GeneratedResource[] }> {
   return territories.map((t, idx) => ({
     territoryIndex: idx,

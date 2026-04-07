@@ -8,6 +8,7 @@ import {
 import type { EconomyRealmInput } from './economy';
 import { createProductSource } from '@/__tests__/helpers/test-factories';
 import { createEconomyRealmFixture, createProtectedImportFixture } from '@/__tests__/fixtures/economy-regression-fixtures';
+import type { ResourceType } from '@/types/game';
 
 function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput {
   return createEconomyRealmFixture({
@@ -19,7 +20,11 @@ function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput 
 }
 
 describe('detectExportedProducts', () => {
-  it.each([
+  it.each<{
+    producerProducts: ResourceType[];
+    partnerProducts: ResourceType[];
+    expected: ResourceType[];
+  }>([
     { producerProducts: ['Ore', 'Timber'], partnerProducts: ['Timber'], expected: ['Ore'] },
     { producerProducts: ['Ore', 'Timber'], partnerProducts: ['Ore', 'Timber'], expected: [] },
     { producerProducts: ['Ore', 'Gold'], partnerProducts: [], expected: ['Ore', 'Gold'] },

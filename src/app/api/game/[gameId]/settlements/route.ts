@@ -4,6 +4,7 @@ import { buildings, games, settlements, territories } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { getGmCode, isAuthError, requireInitState, requireRealmOwner } from '@/lib/auth';
+import { getAvailableSettlementHexId, getLandHexById } from '@/lib/game-logic/maps';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 
 export async function GET(
@@ -99,10 +100,25 @@ export async function POST(
       }
     }
 
+    const requestedHex = body.hexId
+      ? await getLandHexById(db, body.hexId)
+      : null;
+
+    if (body.hexId && !requestedHex) {
+      return NextResponse.json({ error: 'Settlement must be placed on a land hex' }, { status: 400 });
+    }
+
+    if (requestedHex && requestedHex.territoryId !== territory.id) {
+      return NextResponse.json({ error: 'Settlement hex must belong to the selected territory' }, { status: 400 });
+    }
+
+    const hexId = requestedHex?.id ?? await getAvailableSettlementHexId(db, territory.id);
+
     const id = uuid();
     await db.insert(settlements).values({
       id,
       territoryId: body.territoryId,
+      hexId,
       realmId: body.realmId ?? territory.realmId,
       name: body.name,
       size: body.size || 'Village',

@@ -34,6 +34,7 @@ describe('POST /api/game/[gameId]/buildings', () => {
         locationType: 'settlement',
         settlementId: 'settlement-1',
         territoryId: 'territory-1',
+        hexId: 'hex-1',
       },
       effectiveSize: 'Medium',
       constructionTurns: 3,
@@ -70,6 +71,7 @@ describe('POST /api/game/[gameId]/buildings', () => {
       locationType: 'settlement',
       settlementId: 'settlement-1',
       territoryId: 'territory-1',
+      hexId: 'hex-1',
       constructionTurns: 3,
       cost: {
         base: 1500,

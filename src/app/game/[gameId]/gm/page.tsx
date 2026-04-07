@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,7 +54,6 @@ interface Territory {
   id: string;
   name: string;
   realmId: string | null;
-  climate: string | null;
   description: string | null;
 }
 
@@ -268,6 +268,16 @@ export default function GMDashboard() {
             {starting ? 'Starting...' : 'Start Game'}
           </Button>
         )}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mb-6">
+        <Link href={`/game/${gameId}/map`}>
+          <Card className="cursor-pointer transition-colors hover:border-gold-500">
+            <CardContent>
+              <p className="font-heading font-bold pt-4">Map</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <Card>

@@ -1,49 +1,110 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { armies, nobles, siegeUnits, territories, troops } from '@/db/schema';
+import { armies, nobles, settlements, siegeUnits, territories, troops } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 import { getDefaultArmyHexId, getLandHexById } from '@/lib/game-logic/maps';
+import { TROOP_DEFS } from '@/lib/game-logic/constants';
 import { recomputeGameInitState } from '@/lib/game-init-state';
+import { isRuleValidationError, prepareRealmTroopRecruitment } from '@/lib/rules-action-service';
+import type { TroopType } from '@/types/game';
+
+const TROOP_TYPES = Object.keys(TROOP_DEFS) as TroopType[];
+
+function getTroopRecruitmentOptions(gameId: string, realmId: string, recruitmentSettlementId: string | null) {
+  return TROOP_TYPES.map((type) => {
+    if (!recruitmentSettlementId) {
+      return {
+        type,
+        canRecruit: false,
+        usesTradeAccess: false,
+        requiredBuildings: TROOP_DEFS[type].requires,
+      };
+    }
+
+    try {
+      const prepared = prepareRealmTroopRecruitment(gameId, realmId, {
+        realmId,
+        type,
+        recruitmentSettlementId,
+      });
+
+      return {
+        type,
+        canRecruit: true,
+        usesTradeAccess: prepared.cost.usesTradeAccess,
+        requiredBuildings: TROOP_DEFS[type].requires,
+      };
+    } catch (error) {
+      if (isRuleValidationError(error) && error.code === 'recruitment_prerequisite_unmet') {
+        return {
+          type,
+          canRecruit: false,
+          usesTradeAccess: false,
+          requiredBuildings: TROOP_DEFS[type].requires,
+        };
+      }
+
+      throw error;
+    }
+  });
+}
 
 export async function GET(
-  _request: Request
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> },
 ) {
-  const url = new URL(_request.url);
-  const realmId = url.searchParams.get('realmId');
+  try {
+    const { gameId } = await params;
+    const url = new URL(request.url);
+    const requestedRealmId = url.searchParams.get('realmId');
+    const { realmId } = await requireOwnedRealmAccess(gameId, requestedRealmId);
 
-  if (!realmId) {
-    return NextResponse.json({ error: 'realmId required' }, { status: 400 });
+    const armyList = await db.select().from(armies).where(eq(armies.realmId, realmId)).all();
+    const generalIds = [...new Set(
+      armyList
+        .map((army) => army.generalId)
+        .filter((generalId): generalId is string => Boolean(generalId)),
+    )];
+    const generals = generalIds.length > 0
+      ? await db.select({
+        id: nobles.id,
+        name: nobles.name,
+        gmStatusText: nobles.gmStatusText,
+      })
+        .from(nobles)
+        .where(inArray(nobles.id, generalIds))
+        .all()
+      : [];
+    const generalById = new Map(generals.map((general) => [general.id, general]));
+    const troopList = await db.select().from(troops).where(eq(troops.realmId, realmId)).all();
+    const siegeList = await db.select().from(siegeUnits).where(eq(siegeUnits.realmId, realmId)).all();
+    const recruitmentSettlement = await db.select({ id: settlements.id })
+      .from(settlements)
+      .where(eq(settlements.realmId, realmId))
+      .get();
+
+    return NextResponse.json({
+      armies: armyList.map((army) => ({
+        ...army,
+        general: army.generalId ? generalById.get(army.generalId) ?? null : null,
+      })),
+      troops: troopList,
+      siegeUnits: siegeList,
+      troopRecruitmentOptions: getTroopRecruitmentOptions(
+        gameId,
+        realmId,
+        recruitmentSettlement?.id ?? null,
+      ),
+    });
+  } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
   }
-
-  const armyList = await db.select().from(armies).where(eq(armies.realmId, realmId));
-  const generalIds = [...new Set(
-    armyList
-      .map((army) => army.generalId)
-      .filter((generalId): generalId is string => Boolean(generalId)),
-  )];
-  const generals = generalIds.length > 0
-    ? await db.select({
-      id: nobles.id,
-      name: nobles.name,
-      gmStatusText: nobles.gmStatusText,
-    })
-      .from(nobles)
-      .where(inArray(nobles.id, generalIds))
-    : [];
-  const generalById = new Map(generals.map((general) => [general.id, general]));
-  const troopList = await db.select().from(troops).where(eq(troops.realmId, realmId));
-  const siegeList = await db.select().from(siegeUnits).where(eq(siegeUnits.realmId, realmId));
-
-  return NextResponse.json({
-    armies: armyList.map((army) => ({
-      ...army,
-      general: army.generalId ? generalById.get(army.generalId) ?? null : null,
-    })),
-    troops: troopList,
-    siegeUnits: siegeList,
-  });
 }
 
 export async function POST(

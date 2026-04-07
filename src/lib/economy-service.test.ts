@@ -250,30 +250,71 @@ describe('createEconomyService.advanceGameTurn', () => {
       realmId: 'realm-a',
       year: 2,
       season: 'Spring',
-      financialActions: JSON.stringify([
-        {
-          type: 'taxChange',
-          taxType: 'Levy',
-          cost: 0,
-        },
-        {
-          type: 'build',
-          buildingType: 'Fort',
-          territoryId: 'territory-a',
-          locationType: 'territory',
-          description: 'Raise border fortifications',
-          cost: 1500,
-        },
-        {
-          type: 'recruit',
-          troopType: 'Archers',
-          settlementId: 'settlement-a',
-          description: 'Muster archers',
-          cost: 250,
-        },
-      ]),
-      status: 'Submitted',
+      status: 'submitted',
     }).run();
+
+    db.insert(schema.turnActions).values([
+      {
+        id: 'action-tax',
+        turnReportId: 'report-a',
+        gameId: 'game-1',
+        realmId: 'realm-a',
+        year: 2,
+        season: 'Spring',
+        kind: 'financial',
+        status: 'submitted',
+        outcome: 'pending',
+        sortOrder: 0,
+        description: '',
+        actionWords: '[]',
+        financialType: 'taxChange',
+        taxType: 'Levy',
+        cost: 0,
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        updatedAt: new Date('2025-01-01T00:00:00Z'),
+      },
+      {
+        id: 'action-build',
+        turnReportId: 'report-a',
+        gameId: 'game-1',
+        realmId: 'realm-a',
+        year: 2,
+        season: 'Spring',
+        kind: 'financial',
+        status: 'submitted',
+        outcome: 'pending',
+        sortOrder: 1,
+        description: 'Raise border fortifications',
+        actionWords: '[]',
+        financialType: 'build',
+        buildingType: 'Fort',
+        territoryId: 'territory-a',
+        locationType: 'territory',
+        cost: 1500,
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        updatedAt: new Date('2025-01-01T00:00:00Z'),
+      },
+      {
+        id: 'action-recruit',
+        turnReportId: 'report-a',
+        gameId: 'game-1',
+        realmId: 'realm-a',
+        year: 2,
+        season: 'Spring',
+        kind: 'financial',
+        status: 'submitted',
+        outcome: 'pending',
+        sortOrder: 2,
+        description: 'Muster archers',
+        actionWords: '[]',
+        financialType: 'recruit',
+        troopType: 'Archers',
+        settlementId: 'settlement-a',
+        cost: 250,
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        updatedAt: new Date('2025-01-01T00:00:00Z'),
+      },
+    ]).run();
 
     db.insert(schema.turnEvents).values({
       id: 'event-1',
@@ -371,7 +412,7 @@ describe('createEconomyService.advanceGameTurn', () => {
     });
 
     const report = db.select().from(schema.turnReports).where(eq(schema.turnReports.id, 'report-a')).get();
-    expect(report).toMatchObject({ status: 'Resolved' });
+    expect(report).toMatchObject({ status: 'resolved' });
 
     const snapshots = db.select().from(schema.economicSnapshots).all();
     expect(snapshots).toHaveLength(2);
@@ -625,12 +666,49 @@ describe('createEconomyService.advanceGameTurn', () => {
       realmId: 'realm-tax',
       year: 1,
       season: 'Spring',
-      financialActions: JSON.stringify([
-        { type: 'taxChange', taxType: 'Tribute', cost: 0 },
-        { type: 'taxChange', taxType: 'Levy', cost: 0 },
-      ]),
-      status: 'Submitted',
+      status: 'submitted',
     }).run();
+
+    db.insert(schema.turnActions).values([
+      {
+        id: 'tax-action-1',
+        turnReportId: 'report-tax',
+        gameId: 'game-tax',
+        realmId: 'realm-tax',
+        year: 1,
+        season: 'Spring',
+        kind: 'financial',
+        status: 'submitted',
+        outcome: 'pending',
+        sortOrder: 0,
+        description: '',
+        actionWords: '[]',
+        financialType: 'taxChange',
+        taxType: 'Tribute',
+        cost: 0,
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        updatedAt: new Date('2025-01-01T00:00:00Z'),
+      },
+      {
+        id: 'tax-action-2',
+        turnReportId: 'report-tax',
+        gameId: 'game-tax',
+        realmId: 'realm-tax',
+        year: 1,
+        season: 'Spring',
+        kind: 'financial',
+        status: 'submitted',
+        outcome: 'pending',
+        sortOrder: 1,
+        description: '',
+        actionWords: '[]',
+        financialType: 'taxChange',
+        taxType: 'Levy',
+        cost: 0,
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        updatedAt: new Date('2025-01-01T00:00:00Z'),
+      },
+    ]).run();
 
     try {
       service.advanceGameTurn('game-tax', {
@@ -798,18 +876,30 @@ describe('createEconomyService.advanceGameTurn', () => {
       realmId: 'realm-growth',
       year: 1,
       season: 'Spring',
-      financialActions: JSON.stringify([
-        {
-          type: 'build',
-          buildingType: 'Bank',
-          settlementId: 'settlement-growth',
-          isGuildOwned: true,
-          guildId: 'guild-growth',
-          description: 'Open a bank',
-          cost: 1500,
-        },
-      ]),
-      status: 'Submitted',
+      status: 'submitted',
+    }).run();
+
+    db.insert(schema.turnActions).values({
+      id: 'growth-action-build',
+      turnReportId: 'report-growth',
+      gameId: 'game-growth',
+      realmId: 'realm-growth',
+      year: 1,
+      season: 'Spring',
+      kind: 'financial',
+      status: 'submitted',
+      outcome: 'pending',
+      sortOrder: 0,
+      description: 'Open a bank',
+      actionWords: '[]',
+      financialType: 'build',
+      buildingType: 'Bank',
+      settlementId: 'settlement-growth',
+      isGuildOwned: true,
+      guildId: 'guild-growth',
+      cost: 1500,
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      updatedAt: new Date('2025-01-01T00:00:00Z'),
     }).run();
 
     service.advanceGameTurn('game-growth', {
@@ -906,17 +996,29 @@ describe('createEconomyService.advanceGameTurn', () => {
       realmId: 'realm-slotless-growth',
       year: 1,
       season: 'Spring',
-      financialActions: JSON.stringify([
-        {
-          type: 'build',
-          buildingType: 'Watchtower',
-          settlementId: 'settlement-slotless-growth',
-          material: 'Timber',
-          description: 'Raise a watchtower',
-          cost: 750,
-        },
-      ]),
-      status: 'Submitted',
+      status: 'submitted',
+    }).run();
+
+    db.insert(schema.turnActions).values({
+      id: 'slotless-growth-action-build',
+      turnReportId: 'report-slotless-growth',
+      gameId: 'game-slotless-growth',
+      realmId: 'realm-slotless-growth',
+      year: 1,
+      season: 'Spring',
+      kind: 'financial',
+      status: 'submitted',
+      outcome: 'pending',
+      sortOrder: 0,
+      description: 'Raise a watchtower',
+      actionWords: '[]',
+      financialType: 'build',
+      buildingType: 'Watchtower',
+      settlementId: 'settlement-slotless-growth',
+      material: 'Timber',
+      cost: 750,
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      updatedAt: new Date('2025-01-01T00:00:00Z'),
     }).run();
 
     service.advanceGameTurn('game-slotless-growth', {

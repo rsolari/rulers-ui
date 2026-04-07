@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { GmTurnReviewPanel } from '@/components/turn-actions/gm-turn-review-panel';
 import { useRole } from '@/hooks/use-role';
 import type { EconomyOverviewRealmDto } from '@/lib/economy-dto';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
@@ -1009,6 +1010,8 @@ export default function GMDashboard() {
           {worldTroops.length === 0 && <p className="text-ink-300 text-sm">Select a realm to view and manage troops.</p>}
         </CardContent>
       </Card>
+
+      <GmTurnReviewPanel gameId={gameId} />
     </main>
   );
 }

@@ -1,29 +1,75 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/db';
-import { nobleFamilies, nobles } from '@/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
+import { db } from '@/db';
+import { armies, guildsOrdersSocieties, nobleFamilies, nobles, realms, settlements } from '@/db/schema';
 import { recomputeGameInitState } from '@/lib/game-init-state';
-import { generateNoblePersonality, generateNobleGender, generateNobleAge } from '@/lib/tables';
+import { generateNobleAge, generateNobleGender, generateNoblePersonality } from '@/lib/tables';
 import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 
 export async function GET(
-  _request: Request
+  request: Request,
 ) {
-  const url = new URL(_request.url);
+  const url = new URL(request.url);
   const realmId = url.searchParams.get('realmId');
 
   if (!realmId) {
     return NextResponse.json({ error: 'realmId required' }, { status: 400 });
   }
 
-  const nobleList = await db.select().from(nobles).where(eq(nobles.realmId, realmId));
-  return NextResponse.json(nobleList);
+  const [realm, nobleList, settlementList, armyList, gosList] = await Promise.all([
+    db.select({
+      rulerNobleId: realms.rulerNobleId,
+      heirNobleId: realms.heirNobleId,
+      actingRulerNobleId: realms.actingRulerNobleId,
+    }).from(realms).where(eq(realms.id, realmId)).get(),
+    db.select().from(nobles).where(eq(nobles.realmId, realmId)),
+    db.select({
+      id: settlements.id,
+      name: settlements.name,
+      governingNobleId: settlements.governingNobleId,
+    }).from(settlements).where(eq(settlements.realmId, realmId)),
+    db.select({
+      id: armies.id,
+      name: armies.name,
+      generalId: armies.generalId,
+    }).from(armies).where(eq(armies.realmId, realmId)),
+    db.select({
+      id: guildsOrdersSocieties.id,
+      name: guildsOrdersSocieties.name,
+      leaderId: guildsOrdersSocieties.leaderId,
+    }).from(guildsOrdersSocieties).where(eq(guildsOrdersSocieties.realmId, realmId)),
+  ]);
+
+  const officeLabelByNobleId = new Map<string, string>();
+  for (const settlement of settlementList) {
+    if (settlement.governingNobleId) {
+      officeLabelByNobleId.set(settlement.governingNobleId, `${settlement.name} Governor`);
+    }
+  }
+  for (const army of armyList) {
+    if (army.generalId) {
+      officeLabelByNobleId.set(army.generalId, `${army.name} General`);
+    }
+  }
+  for (const gos of gosList) {
+    if (gos.leaderId) {
+      officeLabelByNobleId.set(gos.leaderId, `${gos.name} Leader`);
+    }
+  }
+
+  return NextResponse.json(nobleList.map((noble) => ({
+    ...noble,
+    isRuler: noble.id === realm?.rulerNobleId,
+    isHeir: noble.id === realm?.heirNobleId,
+    isActingRuler: noble.id === realm?.actingRulerNobleId,
+    title: officeLabelByNobleId.get(noble.id) ?? null,
+  })));
 }
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ gameId: string }> }
+  { params }: { params: Promise<{ gameId: string }> },
 ) {
   try {
     const { gameId } = await params;
@@ -32,10 +78,7 @@ export async function POST(
 
     const family = await db.select({ id: nobleFamilies.id })
       .from(nobleFamilies)
-      .where(and(
-        eq(nobleFamilies.id, body.familyId),
-        eq(nobleFamilies.realmId, realmId),
-      ))
+      .where(eq(nobleFamilies.id, body.familyId))
       .get();
 
     if (!family) {
@@ -48,25 +91,24 @@ export async function POST(
     const age = body.age || generateNobleAge();
     const personality = hasManualPersonality
       ? {
-          personality: body.personality,
-          relationshipWithRuler: body.relationshipWithRuler ?? null,
-          belief: body.belief ?? null,
-          valuedObject: body.valuedObject ?? null,
-          valuedPerson: body.valuedPerson ?? null,
-          greatestDesire: body.greatestDesire ?? null,
-        }
+        personality: body.personality,
+        relationshipWithRuler: body.relationshipWithRuler ?? null,
+        belief: body.belief ?? null,
+        valuedObject: body.valuedObject ?? null,
+        valuedPerson: body.valuedPerson ?? null,
+        greatestDesire: body.greatestDesire ?? null,
+      }
       : generatedPersonality;
 
-    const id = uuid();
-    await db.insert(nobles).values({
-      id,
+    const noble = {
+      id: uuid(),
       familyId: body.familyId,
       realmId,
+      originRealmId: realmId,
+      displacedFromRealmId: null,
       name: body.name,
       gender,
       age,
-      isRuler: body.isRuler || false,
-      isHeir: body.isHeir || false,
       backstory: body.backstory ?? null,
       race: body.race ?? null,
       personality: personality?.personality ?? null,
@@ -75,25 +117,29 @@ export async function POST(
       valuedObject: personality?.valuedObject ?? null,
       valuedPerson: personality?.valuedPerson ?? null,
       greatestDesire: personality?.greatestDesire ?? null,
-      title: body.title || null,
       estateLevel: body.estateLevel || 'Meagre',
       reasonSkill: body.reasonSkill || 0,
       cunningSkill: body.cunningSkill || 0,
-    });
+      isAlive: true,
+      deathYear: null,
+      deathSeason: null,
+      deathCause: null,
+      isPrisoner: false,
+      captorRealmId: null,
+      capturedYear: null,
+      capturedSeason: null,
+      releasedYear: null,
+      releasedSeason: null,
+      gmStatusText: null,
+      locationTerritoryId: null,
+      locationHexId: null,
+    };
+
+    await db.insert(nobles).values(noble);
 
     await recomputeGameInitState(gameId);
 
-    return NextResponse.json({
-      id,
-      familyId: body.familyId,
-      realmId,
-      name: body.name,
-      gender,
-      age,
-      backstory: body.backstory ?? null,
-      race: body.race ?? null,
-      ...personality,
-    });
+    return NextResponse.json({ noble });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

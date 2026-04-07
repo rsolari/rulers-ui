@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { armies, nobles, siegeUnits, territories, troops } from '@/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 import { getDefaultArmyHexId, getLandHexById } from '@/lib/game-logic/maps';
@@ -18,10 +18,32 @@ export async function GET(
   }
 
   const armyList = await db.select().from(armies).where(eq(armies.realmId, realmId));
+  const generalIds = [...new Set(
+    armyList
+      .map((army) => army.generalId)
+      .filter((generalId): generalId is string => Boolean(generalId)),
+  )];
+  const generals = generalIds.length > 0
+    ? await db.select({
+      id: nobles.id,
+      name: nobles.name,
+      gmStatusText: nobles.gmStatusText,
+    })
+      .from(nobles)
+      .where(inArray(nobles.id, generalIds))
+    : [];
+  const generalById = new Map(generals.map((general) => [general.id, general]));
   const troopList = await db.select().from(troops).where(eq(troops.realmId, realmId));
   const siegeList = await db.select().from(siegeUnits).where(eq(siegeUnits.realmId, realmId));
 
-  return NextResponse.json({ armies: armyList, troops: troopList, siegeUnits: siegeList });
+  return NextResponse.json({
+    armies: armyList.map((army) => ({
+      ...army,
+      general: army.generalId ? generalById.get(army.generalId) ?? null : null,
+    })),
+    troops: troopList,
+    siegeUnits: siegeList,
+  });
 }
 
 export async function POST(

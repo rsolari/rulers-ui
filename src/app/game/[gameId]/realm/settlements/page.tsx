@@ -5,15 +5,23 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { useRole } from '@/hooks/use-role';
 import { SETTLEMENT_DATA } from '@/lib/game-logic/constants';
 import type { SettlementSize } from '@/types/game';
+
+interface GoverningNoble {
+  id: string;
+  name: string;
+}
 
 interface Settlement {
   id: string;
   name: string;
   size: SettlementSize;
   territoryId: string;
+  governingNobleId: string | null;
+  governingNoble: GoverningNoble | null;
   buildings: Array<{
     id: string;
     type: string;
@@ -23,21 +31,49 @@ interface Settlement {
   }>;
 }
 
+interface Noble {
+  id: string;
+  name: string;
+}
+
 export default function SettlementsPage() {
   const params = useParams();
   const gameId = params.gameId as string;
-  const { realmId } = useRole();
+  const { realmId, initState } = useRole();
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [nobles, setNobles] = useState<Noble[]>([]);
+
+  const isSetup = initState === 'parallel_final_setup' || initState === 'ready_to_start';
 
   useEffect(() => {
-    if (!realmId) {
-      return;
-    }
+    if (!realmId) return;
 
     fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`)
-      .then((response) => response.json())
+      .then((r) => r.json())
       .then(setSettlements);
+
+    fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`)
+      .then((r) => r.json())
+      .then(setNobles);
   }, [gameId, realmId]);
+
+  async function assignGovernor(settlementId: string, nobleId: string | null): Promise<string | null> {
+    const response = await fetch(`/api/game/${gameId}/settlements/${settlementId}/governor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nobleId }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return data.error ?? 'Failed to assign governor';
+    }
+
+    // Refresh settlements
+    const res = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
+    setSettlements(await res.json());
+    return null;
+  }
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
@@ -45,7 +81,11 @@ export default function SettlementsPage() {
         <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
       </nav>
       <h1 className="text-3xl font-bold mb-2">Settlements</h1>
-      <p className="text-ink-300 mb-6">Settlement management is GM-controlled. This page is read-only for players.</p>
+      <p className="text-ink-300 mb-6">
+        {isSetup
+          ? 'You may assign governors to your settlements during setup.'
+          : 'Settlement management is GM-controlled. This page is read-only for players.'}
+      </p>
 
       <div className="space-y-6">
         {settlements.map((settlement) => {
@@ -68,7 +108,24 @@ export default function SettlementsPage() {
                   <p className="text-sm"><strong>Food Need:</strong> {data.foodNeed}</p>
                   <p className="text-sm"><strong>Max Troops:</strong> {data.maxTroops}</p>
                   <p className="text-sm"><strong>Recruit/Season:</strong> {data.recruitPerSeason}</p>
+                  <p className="text-sm">
+                    <strong>Governor:</strong>{' '}
+                    {settlement.governingNoble
+                      ? settlement.governingNoble.name
+                      : <span className="text-ink-300">None</span>}
+                  </p>
                 </div>
+
+                {isSetup && (
+                  <div className="mb-4">
+                    <NobleAssignmentSelect
+                      label="Assign Governor"
+                      nobles={nobles}
+                      currentNobleId={settlement.governingNobleId}
+                      onAssign={(nobleId) => assignGovernor(settlement.id, nobleId)}
+                    />
+                  </div>
+                )}
 
                 <p className="font-heading font-semibold mb-2">Buildings</p>
                 <div className="space-y-1">

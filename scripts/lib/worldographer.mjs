@@ -225,7 +225,12 @@ function parseShapes(document) {
         y: Number(pointNode.getAttribute('y')),
       }));
 
-      return points.length >= 2 ? points : null;
+      return points.length >= 2
+        ? {
+            tags: shapeNode.getAttribute('tags') ?? '',
+            points,
+          }
+        : null;
     })
     .filter(Boolean);
 }
@@ -322,7 +327,9 @@ function getNearestLabel(labels, target) {
 }
 
 function buildBlockedEdges(parsedMap, landTilesById) {
-  const shapeSegments = parsedMap.shapes.flatMap((points) => points.slice(1).map((point, index) => [points[index], point]));
+  const shapeSegments = parsedMap.shapes
+    .filter((shape) => !shape.tags.toLowerCase().includes('river'))
+    .flatMap((shape) => shape.points.slice(1).map((point, index) => [shape.points[index], point]));
   const blockedEdges = new Set();
 
   for (const tile of landTilesById.values()) {
@@ -481,6 +488,34 @@ function mapFeatureType(rawType) {
   return null;
 }
 
+function buildRiverFeatures(parsedMap, landTiles) {
+  const riverShapes = parsedMap.shapes.filter((shape) => shape.tags.toLowerCase().includes('river'));
+  const riverFeaturesByTile = new Map();
+
+  riverShapes.forEach((shape, riverIndex) => {
+    const visitedTileIds = new Set();
+
+    for (const point of shape.points) {
+      const tile = getNearestTile(landTiles, point);
+      const tileId = getTileId(tile.column, tile.row);
+
+      if (visitedTileIds.has(tileId)) {
+        continue;
+      }
+
+      visitedTileIds.add(tileId);
+      const features = riverFeaturesByTile.get(tileId) ?? [];
+      features.push({
+        type: 'river',
+        metadata: { riverIndex: riverIndex + 1 },
+      });
+      riverFeaturesByTile.set(tileId, features);
+    }
+  });
+
+  return riverFeaturesByTile;
+}
+
 export function buildCuratedMapDefinition(parsedMap, options = {}) {
   assert(parsedMap.orientation === 'COLUMNS', `Unsupported hex orientation "${parsedMap.orientation}".`);
   assert(parsedMap.projection === 'FLAT', `Unsupported map projection "${parsedMap.projection}".`);
@@ -490,6 +525,7 @@ export function buildCuratedMapDefinition(parsedMap, options = {}) {
   const landTiles = getLandTiles(parsedMap);
   const { assignments, labels } = assignTerritories(parsedMap, landTiles);
   const waterKinds = classifyWaterKinds(parsedMap);
+  const riverFeatureMap = buildRiverFeatures(parsedMap, landTiles);
 
   const territories = labels.map((label, index) => ({
     key: formatKey('kingdom', index + 1),
@@ -526,7 +562,10 @@ export function buildCuratedMapDefinition(parsedMap, options = {}) {
       sourceColumn: tile.column,
       sourceRow: tile.row,
       tileId,
-      features: featureMap.get(tileId) ?? [],
+      features: [
+        ...(riverFeatureMap.get(tileId) ?? []),
+        ...(featureMap.get(tileId) ?? []),
+      ],
     };
   });
 

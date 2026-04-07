@@ -2640,7 +2640,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 20,
@@ -2912,7 +2919,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 19,
@@ -3224,7 +3238,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 18,
@@ -3259,6 +3280,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
         }
       ]
     },
@@ -3286,7 +3313,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 17
+          }
+        }
+      ]
     },
     {
       "q": 25,
@@ -3550,7 +3584,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 18,
@@ -3575,6 +3616,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
       "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        },
         {
           "type": "volcano"
         }
@@ -3607,6 +3654,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 17
+          }
         }
       ]
     },
@@ -3898,7 +3951,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 17,
@@ -3933,6 +3993,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
         }
       ]
     },
@@ -3960,7 +4026,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 17
+          }
+        }
+      ]
     },
     {
       "q": 24,
@@ -4268,7 +4341,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 16,
@@ -4276,7 +4356,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 17,
@@ -4300,7 +4387,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        }
+      ]
     },
     {
       "q": 20,
@@ -4340,7 +4434,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 17
+          }
+        }
+      ]
     },
     {
       "q": 24,
@@ -4656,7 +4757,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 16,
@@ -4664,7 +4772,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 17,
@@ -4680,7 +4795,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        }
+      ]
     },
     {
       "q": 19,
@@ -4720,7 +4842,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 17
+          }
+        }
+      ]
     },
     {
       "q": 24,
@@ -4731,6 +4860,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 17
+          }
         }
       ]
     },
@@ -5074,7 +5209,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 16,
@@ -5082,7 +5224,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 17,
@@ -5090,7 +5239,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        }
+      ]
     },
     {
       "q": 18,
@@ -5502,7 +5658,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 16,
@@ -5510,7 +5673,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        }
+      ]
     },
     {
       "q": 17,
@@ -5948,7 +6118,20 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 16
+          }
+        }
+      ]
     },
     {
       "q": 16,
@@ -5956,7 +6139,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        }
+      ]
     },
     {
       "q": 17,
@@ -6408,7 +6598,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        }
+      ]
     },
     {
       "q": 15,
@@ -6898,7 +7095,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        }
+      ]
     },
     {
       "q": 15,
@@ -7372,7 +7576,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-4",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
+        }
+      ]
     },
     {
       "q": 14,
@@ -7841,6 +8052,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
         }
       ]
     },
@@ -8345,6 +8562,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 15
+          }
         }
       ]
     },
@@ -9283,6 +9506,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
         }
       ]
     },
@@ -9823,6 +10052,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
         }
       ]
     },
@@ -10404,7 +10639,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-3",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
+        }
+      ]
     },
     {
       "q": -2,
@@ -10964,7 +11206,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-3",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
+        }
+      ]
     },
     {
       "q": -3,
@@ -11556,7 +11805,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-3",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
+        }
+      ]
     },
     {
       "q": -4,
@@ -11567,6 +11823,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
         }
       ]
     },
@@ -12185,6 +12447,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
         }
       ]
     },
@@ -12583,6 +12851,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
         }
       ]
     },
@@ -12788,7 +13062,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-3",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
+        }
+      ]
     },
     {
       "q": -5,
@@ -13231,6 +13512,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
         }
       ]
     },
@@ -13240,7 +13527,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -13436,7 +13730,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-3",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
+        }
+      ]
     },
     {
       "q": -5,
@@ -13880,7 +14181,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -14082,7 +14390,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-3",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
+        }
+      ]
     },
     {
       "q": -5,
@@ -14538,7 +14853,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -14751,6 +15073,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
         }
       ]
     },
@@ -15220,7 +15548,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -15425,6 +15760,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
         }
       ]
     },
@@ -15900,7 +16241,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -15908,7 +16256,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -16119,6 +16474,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
         }
       ]
     },
@@ -16632,7 +16993,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 22
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -16860,7 +17228,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-3",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
+        }
+      ]
     },
     {
       "q": -7,
@@ -16868,7 +17243,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-3",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 18
+          }
+        }
+      ]
     },
     {
       "q": -6,
@@ -19584,7 +19966,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 21
+          }
+        }
+      ]
     },
     {
       "q": -36,
@@ -19698,7 +20087,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -23,
@@ -19709,6 +20105,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
         }
       ]
     },
@@ -20338,7 +20740,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 21
+          }
+        }
+      ]
     },
     {
       "q": -37,
@@ -20450,7 +20859,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -24,
@@ -20461,6 +20877,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
         }
       ]
     },
@@ -21114,7 +21536,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 21
+          }
+        }
+      ]
     },
     {
       "q": -38,
@@ -21234,7 +21663,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -25,
@@ -21242,7 +21678,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -24,
@@ -21904,7 +22347,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-1",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 21
+          }
+        }
+      ]
     },
     {
       "q": -39,
@@ -21915,6 +22365,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 21
+          }
         }
       ]
     },
@@ -22016,7 +22472,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -26,
@@ -22024,7 +22487,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -25,
@@ -22760,7 +23230,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -23488,7 +23965,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -28,
@@ -24194,7 +24678,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -30,
@@ -24202,7 +24693,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -29,
@@ -24924,7 +25422,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "desert",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -33,
@@ -24932,7 +25437,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -24940,7 +25452,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -25685,6 +26204,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
         }
       ]
     },
@@ -25694,7 +26219,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -25702,7 +26234,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 20
+          }
+        }
+      ]
     },
     {
       "q": -33,
@@ -26468,7 +27007,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -29,
@@ -26476,7 +27022,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -28,
@@ -27162,7 +27715,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -33,
@@ -27170,7 +27730,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -27178,7 +27745,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -27186,7 +27760,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -30,
@@ -27218,7 +27799,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -26,
@@ -27427,6 +28015,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 12
+          }
         }
       ]
     },
@@ -27866,7 +28460,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -35,
@@ -27874,7 +28475,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -27882,7 +28490,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -33,
@@ -27929,8 +28544,15 @@ export const WORLD_V1_MAP_DEFINITION = {
       "r": -23,
       "kind": "land",
       "terrainType": "hills",
-      "territoryKey": "kingdom-2",
-      "features": []
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -27938,7 +28560,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -26,
@@ -28042,7 +28671,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
+        }
+      ]
     },
     {
       "q": -13,
@@ -28149,6 +28785,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 12
+          }
         }
       ]
     },
@@ -28612,7 +29254,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -36,
@@ -28684,7 +29333,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -28796,7 +29452,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
+        }
+      ]
     },
     {
       "q": -13,
@@ -28895,6 +29558,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 12
+          }
         }
       ]
     },
@@ -29319,6 +29988,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
         }
       ]
     },
@@ -29328,7 +30003,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -38,
@@ -29336,7 +30018,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-2",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 19
+          }
+        }
+      ]
     },
     {
       "q": -37,
@@ -29424,7 +30113,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -29536,7 +30232,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
+        }
+      ]
     },
     {
       "q": -13,
@@ -29631,6 +30334,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 12
+          }
         }
       ]
     },
@@ -29643,6 +30352,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 12
+          }
         }
       ]
     },
@@ -30192,7 +30907,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -28,
@@ -30304,7 +31026,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
+        }
+      ]
     },
     {
       "q": -14,
@@ -30312,7 +31041,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
+        }
+      ]
     },
     {
       "q": -13,
@@ -30392,7 +31128,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 12
+          }
+        }
+      ]
     },
     {
       "q": -3,
@@ -30946,7 +31689,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -28,
@@ -31058,7 +31808,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
+        }
+      ]
     },
     {
       "q": -14,
@@ -31146,7 +31903,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 12
+          }
+        }
+      ]
     },
     {
       "q": -3,
@@ -31178,7 +31942,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 14
+          }
+        }
+      ]
     },
     {
       "q": 1,
@@ -31742,7 +32513,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -28,
@@ -31866,7 +32644,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
+        }
+      ]
     },
     {
       "q": -14,
@@ -31874,7 +32659,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "jungle",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
+        }
+      ]
     },
     {
       "q": -13,
@@ -31986,7 +32778,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 14
+          }
+        }
+      ]
     },
     {
       "q": 0,
@@ -31994,7 +32793,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 14
+          }
+        }
+      ]
     },
     {
       "q": 1,
@@ -32002,7 +32808,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 14
+          }
+        }
+      ]
     },
     {
       "q": 2,
@@ -32552,7 +33365,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -30,
@@ -32560,7 +33380,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -29,
@@ -32695,6 +33522,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 10
+          }
         }
       ]
     },
@@ -32758,7 +33591,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 11
+          }
+        }
+      ]
     },
     {
       "q": -6,
@@ -32814,7 +33654,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 14
+          }
+        }
+      ]
     },
     {
       "q": 1,
@@ -32822,7 +33669,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 14
+          }
+        }
+      ]
     },
     {
       "q": 2,
@@ -32830,7 +33684,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 14
+          }
+        }
+      ]
     },
     {
       "q": 3,
@@ -32841,6 +33702,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 14
+          }
         }
       ]
     },
@@ -33334,7 +34201,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -33342,7 +34216,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -30,
@@ -33542,7 +34423,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-6",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 11
+          }
+        }
+      ]
     },
     {
       "q": -7,
@@ -34132,7 +35020,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -34140,7 +35035,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -34345,6 +35247,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 11
+          }
         }
       ]
     },
@@ -34699,6 +35607,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 23
+          }
         }
       ]
     },
@@ -34948,7 +35862,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -33,
@@ -34956,7 +35877,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -35517,6 +36445,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 23
+          }
         }
       ]
     },
@@ -35526,7 +36460,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-12",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 23
+          }
+        }
+      ]
     },
     {
       "q": 33,
@@ -35766,7 +36707,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -33,
@@ -36315,6 +37263,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 23
+          }
         }
       ]
     },
@@ -36324,7 +37278,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-12",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 23
+          }
+        }
+      ]
     },
     {
       "q": 33,
@@ -36332,7 +37293,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-12",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 23
+          }
+        }
+      ]
     },
     {
       "q": 34,
@@ -36566,7 +37534,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -36815,7 +37790,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
+        }
+      ]
     },
     {
       "q": -4,
@@ -36823,7 +37805,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
+        }
+      ]
     },
     {
       "q": -3,
@@ -37101,7 +38090,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-12",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 23
+          }
+        }
+      ]
     },
     {
       "q": 34,
@@ -37301,7 +38297,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
+        }
+      ]
     },
     {
       "q": -35,
@@ -37309,7 +38312,20 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 9
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -37317,7 +38333,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
+        }
+      ]
     },
     {
       "q": -33,
@@ -37325,7 +38348,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -37546,6 +38576,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
         }
       ]
     },
@@ -37558,6 +38594,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
         }
       ]
     },
@@ -37567,7 +38609,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
+        }
+      ]
     },
     {
       "q": -1,
@@ -38006,6 +39055,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
         }
       ]
     },
@@ -38039,7 +39094,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -38047,7 +39109,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-5",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -38055,7 +39124,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
+        }
+      ]
     },
     {
       "q": -30,
@@ -38063,7 +39139,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 8
+          }
+        }
+      ]
     },
     {
       "q": -29,
@@ -38135,7 +39218,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -20,
@@ -38146,6 +39236,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
         }
       ]
     },
@@ -38158,6 +39254,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
         }
       ]
     },
@@ -38286,6 +39388,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
         }
       ]
     },
@@ -38295,7 +39403,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
+        }
+      ]
     },
     {
       "q": -1,
@@ -38771,7 +39886,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -28,
@@ -38779,7 +39901,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -38787,7 +39916,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -26,
@@ -38795,7 +39931,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -25,
@@ -38819,7 +39962,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -22,
@@ -38827,7 +39977,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -21,
@@ -39011,7 +40168,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
+        }
+      ]
     },
     {
       "q": -2,
@@ -39019,7 +40183,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-8",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
+        }
+      ]
     },
     {
       "q": -1,
@@ -39487,7 +40658,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -39503,7 +40681,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -25,
@@ -39511,7 +40696,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -24,
@@ -39519,7 +40711,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 7
+          }
+        }
+      ]
     },
     {
       "q": -23,
@@ -39728,6 +40927,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
         }
       ]
     },
@@ -40412,6 +41617,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 13
+          }
         }
       ]
     },
@@ -40811,7 +42022,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -41450,7 +42668,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -31,
@@ -42052,7 +43277,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -42658,7 +43890,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -43251,7 +44490,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -33,
@@ -43259,7 +44505,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -32,
@@ -43839,7 +45092,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -44409,7 +45669,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -36,
@@ -44417,7 +45684,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -35,
@@ -44959,7 +46233,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -37,
@@ -44967,7 +46248,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -36,
@@ -45505,7 +46793,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -38,
@@ -45513,7 +46808,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
+        }
+      ]
     },
     {
       "q": -37,
@@ -45705,7 +47007,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -16,
@@ -45713,7 +47022,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -15,
@@ -46038,6 +47354,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 6
+          }
         }
       ]
     },
@@ -46079,7 +47401,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -46227,7 +47556,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -17,
@@ -46267,7 +47603,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 24
+          }
+        }
+      ]
     },
     {
       "q": -12,
@@ -46275,7 +47618,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 24
+          }
+        }
+      ]
     },
     {
       "q": -11,
@@ -46605,7 +47955,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -46747,7 +48104,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -18,
@@ -46803,7 +48167,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 24
+          }
+        }
+      ]
     },
     {
       "q": -11,
@@ -46811,7 +48182,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 24
+          }
+        }
+      ]
     },
     {
       "q": -10,
@@ -46819,7 +48197,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 24
+          }
+        }
+      ]
     },
     {
       "q": -9,
@@ -46830,6 +48215,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 24
+          }
         }
       ]
     },
@@ -47083,7 +48474,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -47215,7 +48613,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -20,
@@ -47223,7 +48628,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -19,
@@ -47287,7 +48699,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 24
+          }
+        }
+      ]
     },
     {
       "q": -11,
@@ -47295,7 +48714,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 24
+          }
+        }
+      ]
     },
     {
       "q": -10,
@@ -47575,7 +49001,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -47638,6 +49071,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
         }
       ]
     },
@@ -47697,7 +49136,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -20,
@@ -47753,7 +49199,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 25
+          }
+        }
+      ]
     },
     {
       "q": -13,
@@ -47761,7 +49214,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 25
+          }
+        }
+      ]
     },
     {
       "q": -12,
@@ -48076,7 +49536,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -48141,6 +49608,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
         }
       ]
     },
@@ -48194,7 +49667,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -21,
@@ -48266,7 +49746,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-11",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 25
+          }
+        }
+      ]
     },
     {
       "q": -12,
@@ -48562,7 +50049,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -48628,7 +50122,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -48668,7 +50169,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -22,
@@ -48684,7 +50192,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -20,
@@ -48692,7 +50207,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -19,
@@ -48700,7 +50222,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "hills",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -18,
@@ -48708,7 +50237,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "mountains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -17,
@@ -48755,6 +50291,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 25
+          }
         }
       ]
     },
@@ -49005,6 +50547,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
         }
       ]
     },
@@ -49014,7 +50562,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -35,
@@ -49022,7 +50577,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -34,
@@ -49082,7 +50644,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -49090,7 +50659,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -26,
@@ -49114,7 +50690,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -23,
@@ -49130,7 +50713,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -21,
@@ -49138,7 +50728,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -20,
@@ -49417,6 +51014,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 5
+          }
         }
       ]
     },
@@ -49438,7 +51041,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-9",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 4
+          }
+        }
+      ]
     },
     {
       "q": -36,
@@ -49512,7 +51122,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -49536,7 +51153,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -24,
@@ -49552,7 +51176,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -22,
@@ -49831,6 +51462,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 5
+          }
         }
       ]
     },
@@ -49938,7 +51575,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -49946,7 +51590,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -26,
@@ -49954,7 +51605,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -25,
@@ -49962,7 +51620,20 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 3
+          }
+        }
+      ]
     },
     {
       "q": -24,
@@ -49970,7 +51641,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "forest",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -23,
@@ -50330,7 +52008,20 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -28,
@@ -50338,7 +52029,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -27,
@@ -50704,7 +52402,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -29,
@@ -50712,7 +52417,20 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 2
+          }
+        }
+      ]
     },
     {
       "q": -28,
@@ -51066,7 +52784,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -29,
@@ -51410,7 +53135,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -30,
@@ -51746,7 +53478,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "plains",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -30,
@@ -52068,7 +53807,14 @@ export const WORLD_V1_MAP_DEFINITION = {
       "kind": "land",
       "terrainType": "swamp",
       "territoryKey": "kingdom-10",
-      "features": []
+      "features": [
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
+        }
+      ]
     },
     {
       "q": -30,
@@ -52079,6 +53825,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
         }
       ]
     },
@@ -52381,6 +54133,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
         }
       ]
     },
@@ -52669,6 +54427,12 @@ export const WORLD_V1_MAP_DEFINITION = {
       "features": [
         {
           "type": "coast"
+        },
+        {
+          "type": "river",
+          "metadata": {
+            "riverIndex": 1
+          }
         }
       ]
     },

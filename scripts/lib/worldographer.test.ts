@@ -72,6 +72,7 @@ describe('parseWorldographerWxxBuffer', () => {
     expect(parsed.labels.map((label) => label.name)).toEqual(['Kingdom 1', 'Kingdom 2']);
     expect(parsed.features).toHaveLength(1);
     expect(parsed.shapes).toHaveLength(1);
+    expect(parsed.shapes[0]).toMatchObject({ tags: '' });
     expect(parsed.informations[0]).toMatchObject({ type: 'Information', title: 'Intro', body: 'Intro' });
   });
 });
@@ -114,7 +115,16 @@ describe('buildCuratedMapDefinition', () => {
       features: [
         { rawType: 'Classic/Natural Volcano Dormant', ...getWorldographerHexCenter(2, 2) },
       ],
-      shapes: [],
+      shapes: [
+        {
+          tags: 'river',
+          points: [
+            getWorldographerHexCenter(0, 0),
+            getWorldographerHexCenter(0, 1),
+            getWorldographerHexCenter(1, 2),
+          ],
+        },
+      ],
       informations: [],
     };
 
@@ -127,6 +137,7 @@ describe('buildCuratedMapDefinition', () => {
     const lakeHex = definition.hexes.find((hex) => hex.kind === 'water');
     const volcanoHex = definition.hexes.find((hex) => hex.kind === 'land' && hex.features?.some((feature: { type: string }) => feature.type === 'volcano'));
     const coastHexes = definition.hexes.filter((hex) => hex.kind === 'land' && hex.features?.some((feature: { type: string }) => feature.type === 'coast'));
+    const riverHexes = definition.hexes.filter((hex) => hex.kind === 'land' && hex.features?.some((feature: { type: string }) => feature.type === 'river'));
 
     expect(definition.key).toBe('fixture-world');
     expect(definition.name).toBe('Fixture World');
@@ -136,6 +147,7 @@ describe('buildCuratedMapDefinition', () => {
     expect(lakeHex).toMatchObject({ kind: 'water', waterKind: 'lake' });
     expect(volcanoHex?.features).toContainEqual({ type: 'volcano', metadata: { state: 'dormant' } });
     expect(coastHexes.length).toBeGreaterThan(0);
+    expect(riverHexes.length).toBeGreaterThan(0);
     expect(definition.hexes.filter((hex) => hex.kind === 'land').every((hex) => hex.territoryKey === 'kingdom-1' || hex.territoryKey === 'kingdom-2')).toBe(true);
   });
 

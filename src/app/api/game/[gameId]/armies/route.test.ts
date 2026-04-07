@@ -39,6 +39,13 @@ vi.mock('@/lib/game-init-state', () => ({
   recomputeGameInitState: recomputeGameInitStateMock,
 }));
 
+const mapMocks = vi.hoisted(() => ({
+  getLandHexById: vi.fn(),
+  getDefaultArmyHexId: vi.fn(),
+}));
+
+vi.mock('@/lib/game-logic/maps', () => mapMocks);
+
 import { POST } from './route';
 
 describe('POST /api/game/[gameId]/armies', () => {
@@ -49,6 +56,8 @@ describe('POST /api/game/[gameId]/armies', () => {
     uuidMock.mockReset();
     authMocks.requireOwnedRealmAccess.mockReset();
     recomputeGameInitStateMock.mockReset();
+    mapMocks.getLandHexById.mockReset();
+    mapMocks.getDefaultArmyHexId.mockReset();
   });
 
   it('allows a player to create an army for their own realm', async () => {
@@ -58,6 +67,7 @@ describe('POST /api/game/[gameId]/armies', () => {
       realmId: 'realm-player',
       session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
     });
+    mapMocks.getDefaultArmyHexId.mockResolvedValue('hex-town');
     dbMocks.dbGet.mockResolvedValue({ id: 'territory-1', realmId: 'realm-player' });
 
     const response = await POST(new Request('http://localhost/api/game/game-1/armies', {
@@ -78,6 +88,9 @@ describe('POST /api/game/[gameId]/armies', () => {
       realmId: 'realm-player',
       name: 'First Army',
       locationTerritoryId: 'territory-1',
+      locationHexId: 'hex-town',
+      destinationTerritoryId: null,
+      destinationHexId: null,
     });
     expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
     expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');
@@ -88,7 +101,9 @@ describe('POST /api/game/[gameId]/armies', () => {
       name: 'First Army',
       generalId: null,
       locationTerritoryId: 'territory-1',
+      locationHexId: 'hex-town',
       destinationTerritoryId: null,
+      destinationHexId: null,
       movementTurnsRemaining: 0,
     });
   });

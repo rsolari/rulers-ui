@@ -52,11 +52,16 @@ const gameInitStateMocks = vi.hoisted(() => ({
   recomputeGameInitState: vi.fn(),
 }));
 
+const mapMocks = vi.hoisted(() => ({
+  getAvailableSettlementHexId: vi.fn(),
+}));
+
 const uuidMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/db', () => ({ db: mocks.db }));
 vi.mock('@/lib/auth', () => authMocks);
 vi.mock('@/lib/game-init-state', () => gameInitStateMocks);
+vi.mock('@/lib/game-logic/maps', () => mapMocks);
 vi.mock('uuid', () => ({ v4: uuidMock }));
 
 import { POST } from './route';
@@ -77,6 +82,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
       gameId: 'game-1',
       name: 'Westreach',
     });
+    mapMocks.getAvailableSettlementHexId.mockResolvedValue('hex-1');
     gameInitStateMocks.recomputeGameInitState.mockResolvedValue(undefined);
   });
 
@@ -120,6 +126,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
         values: {
           id: 'uuid-2',
           territoryId: 'territory-1',
+          hexId: 'hex-1',
           realmId: 'uuid-1',
           name: 'Highgate',
           size: 'Town',
@@ -133,6 +140,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
           id: 'uuid-3',
           settlementId: 'uuid-2',
           territoryId: 'territory-1',
+          hexId: 'hex-1',
           locationType: 'settlement',
           type: 'Walls',
           category: 'Fortification',
@@ -148,6 +156,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
           id: 'uuid-4',
           settlementId: 'uuid-2',
           territoryId: 'territory-1',
+          hexId: 'hex-1',
           locationType: 'settlement',
           type: 'Gatehouse',
           category: 'Fortification',

@@ -67,6 +67,7 @@ export async function POST(
       locationType: created.row.locationType,
       settlementId: created.row.settlementId,
       territoryId: created.row.territoryId,
+      hexId: created.row.hexId,
       constructionTurns: created.constructionTurns,
       cost: created.cost,
       notes: created.notes,

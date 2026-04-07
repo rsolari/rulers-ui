@@ -52,7 +52,18 @@ describe('calculateProductQualityTier', () => {
 });
 
 describe('resolveIndustryProduct', () => {
-  it.each([
+  it.each<{
+    name: string;
+    product: IndustryProductInput;
+    availableResources: ResourceType[];
+    expected: {
+      isLegal: boolean;
+      isDegraded: boolean;
+      ingredientCount: number;
+      wealth: number;
+      qualityTier: number;
+    };
+  }>([
     {
       name: 'base common product',
       product: createProduct({ baseResourceType: 'Ore' }),
@@ -136,7 +147,14 @@ describe('resolveIndustryProduct', () => {
     expect(resolveIndustryProduct(product, availableResources as ResourceType[])).toMatchObject(expected);
   });
 
-  it.each([
+  it.each<{
+    name: string;
+    product: IndustryProductInput;
+    availableResources: ResourceType[];
+    expectedIssue: string;
+    expectedWealth: number;
+    expectedTier: number;
+  }>([
     {
       name: 'common base rejects an unsupported luxury ingredient',
       product: createProduct({ baseResourceType: 'Stone', ingredients: ['Lacquer'] }),

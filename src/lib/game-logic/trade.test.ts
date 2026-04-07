@@ -20,7 +20,11 @@ function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput 
 }
 
 describe('detectExportedProducts', () => {
-  it.each([
+  it.each<{
+    producerProducts: ResourceType[];
+    partnerProducts: ResourceType[];
+    expected: ResourceType[];
+  }>([
     { producerProducts: ['Ore', 'Timber'], partnerProducts: ['Timber'], expected: ['Ore'] },
     { producerProducts: ['Ore', 'Timber'], partnerProducts: ['Ore', 'Timber'], expected: [] },
     { producerProducts: ['Ore', 'Gold'], partnerProducts: [], expected: ['Ore', 'Gold'] },

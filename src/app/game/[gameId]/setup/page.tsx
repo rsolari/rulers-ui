@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,19 +35,6 @@ const TRADITION_OPTIONS = Object.entries(TRADITION_DEFS).map(([key, def]) => ({
   value: key,
   label: `${def.displayName} (${def.category})`,
 }));
-
-const CLIMATE_OPTIONS = [
-  { value: 'Temperate', label: 'Temperate' },
-  { value: 'Tropical', label: 'Tropical' },
-  { value: 'Arid', label: 'Arid' },
-  { value: 'Arctic', label: 'Arctic' },
-  { value: 'Mountains', label: 'Mountains' },
-  { value: 'Coastal', label: 'Coastal' },
-  { value: 'Forest', label: 'Forest' },
-  { value: 'Plains', label: 'Plains' },
-  { value: 'Swamp', label: 'Swamp' },
-  { value: 'Desert', label: 'Desert' },
-];
 
 const TERRITORY_TYPE_OPTIONS = [
   { value: 'Realm', label: 'Realm Territory' },
@@ -91,7 +78,6 @@ type OwnerKind = 'player' | 'npc' | 'neutral';
 
 interface TerritoryDraft {
   name: string;
-  climate: string;
   description: string;
   type: TerritoryType;
 }
@@ -104,21 +90,101 @@ interface AssignmentDraft {
   traditions: Tradition[];
 }
 
+interface SetupMapDefinition {
+  key: string;
+  name: string;
+  territories: Array<{
+    key: string;
+    name: string;
+    description?: string;
+  }>;
+}
+
 export default function SetupWizard() {
   const params = useParams();
   const router = useRouter();
   const gameId = params.gameId as string;
 
   const [step, setStep] = useState<Step>('territories');
-  const [territories, setTerritories] = useState<TerritoryDraft[]>([
-    { name: '', climate: 'Temperate', description: '', type: 'Realm' },
-  ]);
+  const [availableMaps, setAvailableMaps] = useState<SetupMapDefinition[]>([]);
+  const [selectedMapKey, setSelectedMapKey] = useState('');
+  const [territories, setTerritories] = useState<TerritoryDraft[]>([]);
   const [generatedMap, setGeneratedMap] = useState<Array<{ territoryIndex: number; resources: GeneratedResource[] }>>([]);
-  const [assignments, setAssignments] = useState<AssignmentDraft[]>([
-    { kind: 'player', displayName: '', realmName: '', governmentType: 'Monarch', traditions: [] },
-  ]);
+  const [assignments, setAssignments] = useState<AssignmentDraft[]>([]);
+  const [loadingMaps, setLoadingMaps] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  function createAssignments(nextTerritories: TerritoryDraft[]) {
+    return nextTerritories.map((territory): AssignmentDraft => ({
+      kind: territory.type === 'Neutral' ? 'neutral' : 'player',
+      displayName: '',
+      realmName: '',
+      governmentType: 'Monarch',
+      traditions: [],
+    }));
+  }
+
+  function buildTerritoriesFromMap(mapDefinition: SetupMapDefinition) {
+    return mapDefinition.territories.map((territory) => ({
+      name: territory.name,
+      description: territory.description || '',
+      type: 'Realm' as TerritoryType,
+    }));
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMapDefinitions() {
+      setLoadingMaps(true);
+
+      try {
+        const response = await fetch(`/api/game/${gameId}/setup/maps`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Unable to load curated maps');
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        const nextMaps = Array.isArray(data) ? data as SetupMapDefinition[] : [];
+        setAvailableMaps(nextMaps);
+
+        const initialMap = nextMaps[0];
+        if (!initialMap) {
+          setTerritories([]);
+          setAssignments([]);
+          setGeneratedMap([]);
+          setSelectedMapKey('');
+          return;
+        }
+
+        setSelectedMapKey(initialMap.key);
+        const nextTerritories = buildTerritoriesFromMap(initialMap);
+        setTerritories(nextTerritories);
+        setAssignments(createAssignments(nextTerritories));
+        setGeneratedMap(generateMap(nextTerritories));
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Unable to load curated maps');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingMaps(false);
+        }
+      }
+    }
+
+    void loadMapDefinitions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId]);
 
   function syncAssignments(nextTerritories: TerritoryDraft[]) {
     setAssignments((current) => nextTerritories.map((territory, index) => {
@@ -132,36 +198,27 @@ export default function SetupWizard() {
             : existing;
       }
 
-      return {
-        kind: territory.type === 'Neutral' ? 'neutral' : 'player',
-        displayName: '',
-        realmName: '',
-        governmentType: 'Monarch',
-        traditions: [],
-      };
+        return {
+          kind: territory.type === 'Neutral' ? 'neutral' : 'player',
+          displayName: '',
+          realmName: '',
+          governmentType: 'Monarch' as GovernmentType,
+          traditions: [],
+        } satisfies AssignmentDraft;
     }));
   }
 
-  function addTerritory() {
-    const nextTerritories = [...territories, { name: '', climate: 'Temperate', description: '', type: 'Realm' as TerritoryType }];
-    setTerritories(nextTerritories);
-    syncAssignments(nextTerritories);
-  }
-
-  function removeTerritory(index: number) {
-    if (territories.length <= 1) {
+  function selectMap(mapKey: string) {
+    setSelectedMapKey(mapKey);
+    const selectedMap = availableMaps.find((entry) => entry.key === mapKey);
+    if (!selectedMap) {
       return;
     }
 
-    const nextTerritories = territories.filter((_, territoryIndex) => territoryIndex !== index);
+    const nextTerritories = buildTerritoriesFromMap(selectedMap);
     setTerritories(nextTerritories);
-    setGeneratedMap((current) => current
-      .filter((entry) => entry.territoryIndex !== index)
-      .map((entry) => ({
-        ...entry,
-        territoryIndex: entry.territoryIndex > index ? entry.territoryIndex - 1 : entry.territoryIndex,
-      })));
-    syncAssignments(nextTerritories);
+    setAssignments(createAssignments(nextTerritories));
+    setGeneratedMap(generateMap(nextTerritories));
   }
 
   function updateTerritory(index: number, field: keyof TerritoryDraft, value: string) {
@@ -197,9 +254,9 @@ export default function SetupWizard() {
     updateAssignment(index, { traditions: [...assignment.traditions, tradition] });
   }
 
-  const doGenerateMap = useCallback(() => {
+  function doGenerateMap() {
     setGeneratedMap(generateMap(territories));
-  }, [territories]);
+  }
 
   function goToMap() {
     doGenerateMap();
@@ -280,9 +337,9 @@ export default function SetupWizard() {
 
     try {
       const payload = {
+        mapKey: selectedMapKey,
         territories: territories.map((territory, index) => ({
           name: territory.name,
-          climate: territory.climate,
           description: territory.description,
           type: territory.type,
           resources: generatedMap.find((entry) => entry.territoryIndex === index)?.resources || [],
@@ -320,7 +377,7 @@ export default function SetupWizard() {
   return (
     <main className="min-h-screen p-6 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Game Setup</h1>
-      <p className="text-ink-300 mb-6">Define territories, generate the map, assign player slots and NPC realms, then open realm creation for players.</p>
+      <p className="text-ink-300 mb-6">Choose a curated world map, review its territories, assign owners, and then open realm creation for players.</p>
 
       <div className="flex gap-2 mb-8 flex-wrap">
         {(['territories', 'map', 'assignments', 'review'] as Step[]).map((currentStep) => (
@@ -348,9 +405,24 @@ export default function SetupWizard() {
         <div className="space-y-4">
           <h2 className="text-2xl mb-4">Define Territories</h2>
           <p className="text-ink-300 text-sm mb-4">
-            Define your world&apos;s territories. Realm territories are for player or NPC civilizations (3 common + 1 luxury resource).
-            Neutral territories are uninhabited or loosely governed (2 common + 2 luxury resources).
+            Curated maps define the territory layout. You can still rename territories, adjust their role, and decide whether each becomes a player realm, NPC realm, or neutral territory.
           </p>
+          <Card>
+            <CardContent>
+              <div className="pt-4">
+                <Select
+                  label="Curated Map"
+                  options={availableMaps.map((mapDefinition) => ({
+                    value: mapDefinition.key,
+                    label: `${mapDefinition.name} (${mapDefinition.territories.length} territories)`,
+                  }))}
+                  value={selectedMapKey}
+                  onChange={(event) => selectMap(event.target.value)}
+                  disabled={loadingMaps || saving}
+                />
+              </div>
+            </CardContent>
+          </Card>
           {territories.map((territory, index) => (
             <Card key={index}>
               <CardContent>
@@ -366,17 +438,6 @@ export default function SetupWizard() {
                     value={territory.type}
                     onChange={(event) => updateTerritory(index, 'type', event.target.value)}
                   />
-                  <Select
-                    label="Climate"
-                    options={CLIMATE_OPTIONS}
-                    value={territory.climate}
-                    onChange={(event) => updateTerritory(index, 'climate', event.target.value)}
-                  />
-                  <div className="flex items-end justify-end">
-                    {territories.length > 1 && (
-                      <Button variant="ghost" onClick={() => removeTerritory(index)}>Remove</Button>
-                    )}
-                  </div>
                   <div className="col-span-2">
                     <Input
                       label="Description"
@@ -388,9 +449,8 @@ export default function SetupWizard() {
               </CardContent>
             </Card>
           ))}
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={addTerritory}>+ Add Territory</Button>
-            <Button variant="accent" onClick={goToMap}>Next: Generate Map</Button>
+          <div className="flex justify-end">
+            <Button variant="accent" onClick={goToMap} disabled={!selectedMapKey || loadingMaps}>Next: Generate Map</Button>
           </div>
         </div>
       )}
@@ -410,7 +470,6 @@ export default function SetupWizard() {
                   <div className="flex justify-between items-center gap-4">
                     <CardTitle>
                       {territory.name || `Territory ${entry.territoryIndex + 1}`}
-                      <Badge className="ml-2">{territory.climate}</Badge>
                       <Badge className="ml-2" variant={territory.type === 'Realm' ? 'gold' : 'default'}>
                         {territory.type}
                       </Badge>
@@ -574,7 +633,6 @@ export default function SetupWizard() {
                     <div key={index} className="border-b border-ink-800 pb-4 last:border-0">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{territory.name || `Territory ${index + 1}`}</span>
-                        <Badge>{territory.climate}</Badge>
                         <Badge variant={territory.type === 'Realm' ? 'gold' : 'default'}>{territory.type}</Badge>
                         <Badge>{ownerLabel}</Badge>
                       </div>

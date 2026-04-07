@@ -4,6 +4,7 @@ import {
   resolveEconomyForRealm,
   type EconomyBuildingInput,
   type EconomyRealmInput,
+  type EconomyTradeRouteInput,
 } from './economy';
 import { resolveTradeNetwork } from './trade';
 import { createEconomyRealmFixture, createFoodRecoveryFixture } from '@/__tests__/fixtures/economy-regression-fixtures';
@@ -170,7 +171,7 @@ describe('projectEconomyForRealm', () => {
   });
 
   it('consumes derived trade results for imports and export bonuses instead of stored route exports', () => {
-    const routeA: EconomyRealmInput['tradeRoutes'][number] = {
+    const routeA: EconomyTradeRouteInput = {
       id: 'route-a',
       isActive: true,
       realm1Id: 'source-low',
@@ -182,7 +183,7 @@ describe('projectEconomyForRealm', () => {
       protectedProducts: [],
       importSelectionState: [],
     };
-    const routeB: EconomyRealmInput['tradeRoutes'][number] = {
+    const routeB: EconomyTradeRouteInput = {
       id: 'route-b',
       isActive: true,
       realm1Id: 'source-high',

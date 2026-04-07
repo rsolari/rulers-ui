@@ -6,6 +6,7 @@ import { buildings, playerSlots, realms, settlements, territories, troops } from
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
 import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
+import { getAvailableSettlementHexId } from '@/lib/game-logic/maps';
 import { REALM_STARTING_TROOPS } from '@/lib/game-logic/map-generation';
 
 export async function POST(
@@ -40,6 +41,7 @@ export async function POST(
     const realmId = uuid();
     const townId = uuid();
     const claimedAt = new Date();
+    const settlementHexId = await getAvailableSettlementHexId(db, territory.id);
 
     await db.transaction((tx) => {
       tx.insert(realms).values({
@@ -58,6 +60,7 @@ export async function POST(
       tx.insert(settlements).values({
         id: townId,
         territoryId: territory.id,
+        hexId: settlementHexId,
         realmId,
         name: body.townName,
         size: 'Town',
@@ -69,6 +72,7 @@ export async function POST(
           id: uuid(),
           settlementId: townId,
           territoryId: territory.id,
+          hexId: settlementHexId,
           locationType: 'settlement',
           type: fortification.type,
           category: fortification.category,

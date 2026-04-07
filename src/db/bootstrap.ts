@@ -28,6 +28,7 @@ function createBuildingsTable(database: Database.Database, tableName: string) {
       id text PRIMARY KEY NOT NULL,
       settlement_id text,
       territory_id text,
+      hex_id text,
       location_type text NOT NULL DEFAULT 'settlement',
       type text NOT NULL,
       category text NOT NULL,
@@ -43,6 +44,7 @@ function createBuildingsTable(database: Database.Database, tableName: string) {
       custom_definition_id text,
       FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (guild_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (allotted_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
@@ -93,7 +95,6 @@ function createBaseSchema(database: Database.Database) {
       game_id text NOT NULL,
       name text NOT NULL,
       realm_id text,
-      climate text,
       description text,
       food_cap_base integer NOT NULL DEFAULT 30,
       food_cap_bonus integer NOT NULL DEFAULT 0,
@@ -103,14 +104,59 @@ function createBaseSchema(database: Database.Database) {
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
     );
 
+    CREATE TABLE IF NOT EXISTS game_maps (
+      id text PRIMARY KEY NOT NULL,
+      game_id text NOT NULL,
+      map_key text NOT NULL,
+      name text NOT NULL,
+      version integer NOT NULL,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS map_hexes (
+      id text PRIMARY KEY NOT NULL,
+      game_map_id text NOT NULL,
+      q integer NOT NULL,
+      r integer NOT NULL,
+      hex_kind text NOT NULL,
+      water_kind text,
+      terrain_type text,
+      territory_id text,
+      FOREIGN KEY (game_map_id) REFERENCES game_maps(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS map_hex_features (
+      id text PRIMARY KEY NOT NULL,
+      hex_id text NOT NULL,
+      feature_type text NOT NULL,
+      name text,
+      metadata text,
+      FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS map_landmarks (
+      id text PRIMARY KEY NOT NULL,
+      game_id text NOT NULL,
+      hex_id text NOT NULL,
+      name text NOT NULL,
+      kind text NOT NULL,
+      description text,
+      created_at integer,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+    );
+
     CREATE TABLE IF NOT EXISTS settlements (
       id text PRIMARY KEY NOT NULL,
       territory_id text NOT NULL,
+      hex_id text,
       realm_id text,
       name text NOT NULL,
       size text NOT NULL,
       governing_noble_id text,
       FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
     );
 
@@ -160,6 +206,7 @@ function createBaseSchema(database: Database.Database) {
       is_prisoner integer NOT NULL DEFAULT false,
       prisoner_of_realm_id text,
       location_territory_id text,
+      location_hex_id text,
       FOREIGN KEY (family_id) REFERENCES noble_families(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
     );
@@ -171,6 +218,8 @@ function createBaseSchema(database: Database.Database) {
       general_id text,
       location_territory_id text NOT NULL,
       destination_territory_id text,
+      location_hex_id text,
+      destination_hex_id text,
       movement_turns_remaining integer NOT NULL DEFAULT 0,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (location_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action
@@ -373,17 +422,19 @@ function migrateSettlementsRealmIdToNullable(database: Database.Database) {
       CREATE TABLE settlements__new (
         id text PRIMARY KEY NOT NULL,
         territory_id text NOT NULL,
+        hex_id text,
         realm_id text,
         name text NOT NULL,
         size text NOT NULL,
         governing_noble_id text,
         FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
         FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
       );
     `);
     database.exec(`
-      INSERT INTO settlements__new (id, territory_id, realm_id, name, size, governing_noble_id)
-      SELECT id, territory_id, realm_id, name, size, governing_noble_id
+      INSERT INTO settlements__new (id, territory_id, hex_id, realm_id, name, size, governing_noble_id)
+      SELECT id, territory_id, NULL, realm_id, name, size, governing_noble_id
       FROM settlements;
     `);
     database.exec('DROP TABLE settlements;');
@@ -417,6 +468,7 @@ function migrateBuildingsToSupportStandaloneLocations(database: Database.Databas
         id,
         settlement_id,
         territory_id,
+        hex_id,
         location_type,
         type,
         category,
@@ -434,6 +486,7 @@ function migrateBuildingsToSupportStandaloneLocations(database: Database.Databas
       SELECT
         id,
         settlement_id,
+        NULL,
         NULL,
         'settlement',
         type,
@@ -473,6 +526,70 @@ function migrateBuildingsToSupportStandaloneLocations(database: Database.Databas
   const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
   if (foreignKeyViolations.length > 0) {
     throw new Error('SQLite schema migration left foreign key violations in buildings.');
+  }
+}
+
+function migrateTerritoriesDropClimate(database: Database.Database) {
+  const migrate = database.transaction(() => {
+    database.exec(`
+      CREATE TABLE territories__new (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        name text NOT NULL,
+        realm_id text,
+        description text,
+        food_cap_base integer NOT NULL DEFAULT 30,
+        food_cap_bonus integer NOT NULL DEFAULT 0,
+        has_river_access integer NOT NULL DEFAULT false,
+        has_sea_access integer NOT NULL DEFAULT false,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+    database.exec(`
+      INSERT INTO territories__new (
+        id,
+        game_id,
+        name,
+        realm_id,
+        description,
+        food_cap_base,
+        food_cap_bonus,
+        has_river_access,
+        has_sea_access
+      )
+      SELECT
+        id,
+        game_id,
+        name,
+        realm_id,
+        description,
+        COALESCE(food_cap_base, 30),
+        COALESCE(food_cap_bonus, 0),
+        COALESCE(has_river_access, 0),
+        COALESCE(has_sea_access, 0)
+      FROM territories;
+    `);
+    database.exec('DROP TABLE territories;');
+    database.exec('ALTER TABLE territories__new RENAME TO territories;');
+  });
+
+  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF');
+  }
+
+  try {
+    migrate();
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON');
+    }
+  }
+
+  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
+  if (foreignKeyViolations.length > 0) {
+    throw new Error('SQLite schema migration left foreign key violations in territories.');
   }
 }
 
@@ -636,6 +753,7 @@ function ensureEconomySchema(database: Database.Database) {
   `);
 
   addColumnIfMissing(database, 'buildings', 'territory_id text', 'territory_id');
+  addColumnIfMissing(database, 'buildings', 'hex_id text REFERENCES map_hexes(id)', 'hex_id');
   addColumnIfMissing(database, 'buildings', "location_type text DEFAULT 'settlement' NOT NULL", 'location_type');
   addColumnIfMissing(database, 'buildings', 'takes_building_slot integer DEFAULT 1 NOT NULL', 'takes_building_slot');
   addColumnIfMissing(database, 'buildings', 'is_operational integer DEFAULT 1 NOT NULL', 'is_operational');
@@ -664,6 +782,80 @@ function ensureEconomySchema(database: Database.Database) {
   backfillResourceIndustryState(database);
 }
 
+function ensureMapSchema(database: Database.Database) {
+  if (!tableExists(database, 'game_maps')) {
+    database.exec(`
+      CREATE TABLE game_maps (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        map_key text NOT NULL,
+        name text NOT NULL,
+        version integer NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'map_hexes')) {
+    database.exec(`
+      CREATE TABLE map_hexes (
+        id text PRIMARY KEY NOT NULL,
+        game_map_id text NOT NULL,
+        q integer NOT NULL,
+        r integer NOT NULL,
+        hex_kind text NOT NULL,
+        water_kind text,
+        terrain_type text,
+        territory_id text,
+        FOREIGN KEY (game_map_id) REFERENCES game_maps(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'map_hex_features')) {
+    database.exec(`
+      CREATE TABLE map_hex_features (
+        id text PRIMARY KEY NOT NULL,
+        hex_id text NOT NULL,
+        feature_type text NOT NULL,
+        name text,
+        metadata text,
+        FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'map_landmarks')) {
+    database.exec(`
+      CREATE TABLE map_landmarks (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        hex_id text NOT NULL,
+        name text NOT NULL,
+        kind text NOT NULL,
+        description text,
+        created_at integer,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS game_maps_game_id_unique
+      ON game_maps (game_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS map_hexes_game_map_coord_unique
+      ON map_hexes (game_map_id, q, r);
+  `);
+
+  addColumnIfMissing(database, 'settlements', 'hex_id text REFERENCES map_hexes(id)', 'hex_id');
+  addColumnIfMissing(database, 'buildings', 'hex_id text REFERENCES map_hexes(id)', 'hex_id');
+  addColumnIfMissing(database, 'nobles', 'location_hex_id text REFERENCES map_hexes(id)', 'location_hex_id');
+  addColumnIfMissing(database, 'armies', 'location_hex_id text REFERENCES map_hexes(id)', 'location_hex_id');
+  addColumnIfMissing(database, 'armies', 'destination_hex_id text REFERENCES map_hexes(id)', 'destination_hex_id');
+}
+
 export function initializeDatabaseSchema(database: Database.Database) {
   createBaseSchema(database);
 
@@ -676,6 +868,12 @@ export function initializeDatabaseSchema(database: Database.Database) {
   }
 
   ensureEconomySchema(database);
+
+  if (tableExists(database, 'territories') && columnExists(database, 'territories', 'climate')) {
+    migrateTerritoriesDropClimate(database);
+  }
+
+  ensureMapSchema(database);
 
   if (tableExists(database, 'games') && !columnExists(database, 'games', 'game_phase')) {
     database.exec("ALTER TABLE games ADD COLUMN game_phase text NOT NULL DEFAULT 'Setup';");

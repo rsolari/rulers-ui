@@ -566,6 +566,202 @@ describe('createEconomyService.advanceGameTurn', () => {
 
     sqlite.close();
   });
+
+  it('grows a settlement during turn resolution when it reaches one occupied slot short of full', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-growth',
+      name: 'Growth Test',
+      gmCode: 'gm-growth',
+      playerCode: 'player-growth',
+      currentYear: 1,
+      currentSeason: 'Spring',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-growth',
+      gameId: 'game-growth',
+      name: 'Stonefield',
+      governmentType: 'Monarch',
+      treasury: 8000,
+      taxType: 'Tribute',
+      turmoil: 0,
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-growth',
+      gameId: 'game-growth',
+      name: 'Stonefield Vale',
+      realmId: 'realm-growth',
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-growth',
+      territoryId: 'territory-growth',
+      realmId: 'realm-growth',
+      name: 'Stonefield',
+      size: 'Village',
+    }).run();
+
+    db.insert(schema.buildings).values([
+      {
+        id: 'growth-building-1',
+        settlementId: 'settlement-growth',
+        locationType: 'settlement',
+        type: 'Theatre',
+        category: 'Civic',
+        size: 'Medium',
+        takesBuildingSlot: true,
+        isOperational: true,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 0,
+      },
+      {
+        id: 'growth-building-2',
+        settlementId: 'settlement-growth',
+        locationType: 'settlement',
+        type: 'Port',
+        category: 'Civic',
+        size: 'Medium',
+        takesBuildingSlot: true,
+        isOperational: true,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 0,
+      },
+    ]).run();
+
+    db.insert(schema.turnReports).values({
+      id: 'report-growth',
+      gameId: 'game-growth',
+      realmId: 'realm-growth',
+      year: 1,
+      season: 'Spring',
+      financialActions: JSON.stringify([
+        {
+          type: 'build',
+          buildingType: 'Bank',
+          settlementId: 'settlement-growth',
+          description: 'Open a bank',
+          cost: 1500,
+        },
+      ]),
+      status: 'Submitted',
+    }).run();
+
+    service.advanceGameTurn('game-growth', {
+      expectedYear: 1,
+      expectedSeason: 'Spring',
+      idempotencyKey: 'game-growth:1:Spring',
+    });
+
+    const settlement = db.select().from(schema.settlements)
+      .where(eq(schema.settlements.id, 'settlement-growth'))
+      .get();
+    expect(settlement).toMatchObject({ size: 'Town' });
+
+    sqlite.close();
+  });
+
+  it('does not count slotless buildings toward settlement growth', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-slotless-growth',
+      name: 'Slotless Growth Test',
+      gmCode: 'gm-slotless-growth',
+      playerCode: 'player-slotless-growth',
+      currentYear: 1,
+      currentSeason: 'Spring',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-slotless-growth',
+      gameId: 'game-slotless-growth',
+      name: 'Beaconreach',
+      governmentType: 'Monarch',
+      treasury: 8000,
+      taxType: 'Tribute',
+      turmoil: 0,
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-slotless-growth',
+      gameId: 'game-slotless-growth',
+      name: 'Beaconreach Vale',
+      realmId: 'realm-slotless-growth',
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-slotless-growth',
+      territoryId: 'territory-slotless-growth',
+      realmId: 'realm-slotless-growth',
+      name: 'Beaconreach',
+      size: 'Village',
+    }).run();
+
+    db.insert(schema.buildings).values([
+      {
+        id: 'slotless-growth-building-1',
+        settlementId: 'settlement-slotless-growth',
+        locationType: 'settlement',
+        type: 'Theatre',
+        category: 'Civic',
+        size: 'Medium',
+        takesBuildingSlot: true,
+        isOperational: true,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 0,
+      },
+      {
+        id: 'slotless-growth-building-2',
+        settlementId: 'settlement-slotless-growth',
+        locationType: 'settlement',
+        type: 'Port',
+        category: 'Civic',
+        size: 'Medium',
+        takesBuildingSlot: true,
+        isOperational: true,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 0,
+      },
+    ]).run();
+
+    db.insert(schema.turnReports).values({
+      id: 'report-slotless-growth',
+      gameId: 'game-slotless-growth',
+      realmId: 'realm-slotless-growth',
+      year: 1,
+      season: 'Spring',
+      financialActions: JSON.stringify([
+        {
+          type: 'build',
+          buildingType: 'Watchtower',
+          settlementId: 'settlement-slotless-growth',
+          description: 'Raise a watchtower',
+          cost: 750,
+        },
+      ]),
+      status: 'Submitted',
+    }).run();
+
+    service.advanceGameTurn('game-slotless-growth', {
+      expectedYear: 1,
+      expectedSeason: 'Spring',
+      idempotencyKey: 'game-slotless-growth:1:Spring',
+    });
+
+    const settlement = db.select().from(schema.settlements)
+      .where(eq(schema.settlements.id, 'settlement-slotless-growth'))
+      .get();
+    expect(settlement).toMatchObject({ size: 'Village' });
+
+    sqlite.close();
+  });
 });
 
 function parseJson<T>(value: string, fallback: T): T {

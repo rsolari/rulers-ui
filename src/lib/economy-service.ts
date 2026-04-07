@@ -20,7 +20,7 @@ import {
   turnReports,
   turnResolutions,
 } from '@/db/schema';
-import { BUILDING_DEFS, getNextSeason, SEASONS, TROOP_DEFS } from '@/lib/game-logic/constants';
+import { BUILDING_DEFS, getNextSeason, SEASONS, SETTLEMENT_DATA, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { parseStoredEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 import {
   projectEconomyForRealm,
@@ -34,6 +34,7 @@ import type {
   ProtectedProduct,
   ResourceType,
   Season,
+  SettlementSize,
   TechnicalKnowledgeKey,
   TaxType,
   TradeImportSelection,
@@ -59,6 +60,8 @@ function compareResolvedTurns(a: { year: number; season: string }, b: { year: nu
   if (a.year !== b.year) return b.year - a.year;
   return SEASONS.indexOf(b.season as Season) - SEASONS.indexOf(a.season as Season);
 }
+
+const SETTLEMENT_GROWTH_ORDER: SettlementSize[] = ['Village', 'Town', 'City'];
 
 interface InvalidModifierEvent {
   id: string;
@@ -582,6 +585,48 @@ function withReplay(result: AdvanceGameTurnResult): AdvanceGameTurnResult {
   return { ...result, replayed: true };
 }
 
+function getNextSettlementSize(size: SettlementSize): SettlementSize | null {
+  const currentIndex = SETTLEMENT_GROWTH_ORDER.indexOf(size);
+  if (currentIndex < 0 || currentIndex === SETTLEMENT_GROWTH_ORDER.length - 1) return null;
+  return SETTLEMENT_GROWTH_ORDER[currentIndex + 1];
+}
+
+function resolveSettlementGrowth(
+  database: DatabaseExecutor,
+  settlementStates: Array<{ id: string; size: SettlementSize }>,
+) {
+  if (settlementStates.length === 0) return;
+
+  const settlementIds = settlementStates.map((settlement) => settlement.id);
+  const currentBuildings = database.select({
+    settlementId: buildings.settlementId,
+    takesBuildingSlot: buildings.takesBuildingSlot,
+  }).from(buildings).where(inArray(buildings.settlementId, settlementIds)).all();
+
+  const occupiedSlotsBySettlement = new Map<string, number>();
+  for (const building of currentBuildings) {
+    if (!building.settlementId || !building.takesBuildingSlot) continue;
+    occupiedSlotsBySettlement.set(
+      building.settlementId,
+      (occupiedSlotsBySettlement.get(building.settlementId) ?? 0) + 1,
+    );
+  }
+
+  for (const settlement of settlementStates) {
+    const nextSize = getNextSettlementSize(settlement.size);
+    if (!nextSize) continue;
+
+    const occupiedSlots = occupiedSlotsBySettlement.get(settlement.id) ?? 0;
+    const growthThreshold = SETTLEMENT_DATA[settlement.size].buildingSlots - 1;
+    if (occupiedSlots < growthThreshold) continue;
+
+    database.update(settlements)
+      .set({ size: nextSize })
+      .where(eq(settlements.id, settlement.id))
+      .run();
+  }
+}
+
 export function createEconomyService(database: DB = defaultDb) {
   function getEconomyProjection(gameId: string, realmId: string) {
     const state = loadGameEconomyState(database, gameId);
@@ -957,6 +1002,16 @@ export function createEconomyService(database: DB = defaultDb) {
           .where(eq(siegeUnits.id, unit.id))
           .run();
       }
+
+      resolveSettlementGrowth(
+        tx,
+        state.economyRealms.flatMap((realm) =>
+          realm.settlements.map((settlement) => ({
+            id: settlement.id,
+            size: settlement.size,
+          }))
+        ),
+      );
 
       for (const route of state.tradeRouteRows) {
         const resolvedRoute = tradeResolution.routes[route.id];

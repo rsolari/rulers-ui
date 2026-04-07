@@ -31,7 +31,7 @@ describe('detectExportedProducts', () => {
     { producerProducts: [], partnerProducts: ['Ore'], expected: [] },
     { producerProducts: [], partnerProducts: [], expected: [] },
   ])('returns the unmatched products for %#', ({ producerProducts, partnerProducts, expected }) => {
-    expect(detectExportedProducts(producerProducts, partnerProducts)).toEqual(expected);
+    expect(detectExportedProducts(producerProducts as ResourceType[], partnerProducts as ResourceType[])).toEqual(expected);
   });
 });
 

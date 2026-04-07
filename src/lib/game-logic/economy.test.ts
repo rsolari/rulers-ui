@@ -273,6 +273,39 @@ describe('projectEconomyForRealm', () => {
       totalWealth: 24150,
     });
   });
+
+  it('applies territory food caps across multiple settlements in the same territory', () => {
+    const result = projectEconomyForRealm(createRealm({
+      territories: [{
+        id: 'territory-1',
+        name: 'Tight Fields',
+        foodCapBase: 5,
+        foodCapBonus: 0,
+      }],
+      settlements: [
+        {
+          id: 'settlement-1',
+          territoryId: 'territory-1',
+          name: 'Northfield',
+          size: 'Village',
+          buildings: [],
+          resourceSites: [],
+        },
+        {
+          id: 'settlement-2',
+          territoryId: 'territory-1',
+          name: 'Southfield',
+          size: 'Village',
+          buildings: [],
+          resourceSites: [],
+        },
+      ],
+    }), 1, 'Spring');
+
+    expect(result.food.produced).toBe(5);
+    expect(result.settlementBreakdown.reduce((sum, settlement) => sum + settlement.foodProduced, 0)).toBe(5);
+    expect(result.settlementBreakdown.reduce((sum, settlement) => sum + settlement.foodWealth, 0)).toBe(10000);
+  });
 });
 
 describe('resolveEconomyForRealm', () => {
@@ -504,8 +537,8 @@ describe('resolveEconomyForRealm', () => {
     ]));
   });
 
-  it('warns when multiple tax changes are submitted and applies the last request', () => {
-    const result = resolveEconomyForRealm(createRealm({
+  it('rejects multiple tax changes in the same turn', () => {
+    expect(() => resolveEconomyForRealm(createRealm({
       report: {
         id: 'report-tax',
         financialActions: [
@@ -513,10 +546,7 @@ describe('resolveEconomyForRealm', () => {
           { type: 'taxChange', taxType: 'Levy', cost: 0 },
         ],
       },
-    }), 1, 'Spring');
-
-    expect(result.taxTypeApplied).toBe('Levy');
-    expect(result.warnings).toContain('Multiple tax changes were submitted; the last request was applied.');
+    }), 1, 'Spring')).toThrow('Multiple tax changes were submitted; only one tax change can be applied in a turn.');
   });
 
   it('infers a levy expiry when levy state is missing one', () => {

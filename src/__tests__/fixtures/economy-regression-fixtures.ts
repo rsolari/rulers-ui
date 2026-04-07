@@ -16,10 +16,17 @@ export function createEconomyRealmFixture(overrides?: Partial<EconomyRealmInput>
     turmoil: 0,
     turmoilSources: [],
     traditions: [],
+    territories: [{
+      id: 'territory-1',
+      name: 'Capital Territory',
+      foodCapBase: 30,
+      foodCapBonus: 0,
+    }],
     settlements: [{
       id: 'settlement-1',
       name: 'Capital',
       size: 'Village',
+      territoryId: 'territory-1',
       buildings: [],
       resourceSites: [],
     }],

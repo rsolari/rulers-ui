@@ -5,6 +5,8 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireRealmOwner, resolveSessionFromCookies } from '@/lib/auth';
 import { toPublicGame } from '@/lib/dto';
+import { prepareTurnReportFinancialActions } from '@/lib/turn-report-financial-actions';
+import { isRuleValidationError } from '@/lib/rules-action-service';
 
 export async function GET(
   request: Request,
@@ -79,6 +81,13 @@ export async function POST(
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
+    const preparedFinancialActions = await prepareTurnReportFinancialActions(
+      gameId,
+      realmId,
+      body.financialActions || [],
+      { database: db },
+    );
+
     const existing = await db.select().from(turnReports)
       .where(and(
         eq(turnReports.gameId, gameId),
@@ -91,14 +100,18 @@ export async function POST(
     if (existing) {
       await db.update(turnReports)
         .set({
-          financialActions: JSON.stringify(body.financialActions || []),
+          financialActions: JSON.stringify(preparedFinancialActions.actions),
           politicalActions: JSON.stringify(body.politicalActions || []),
           status: body.status || existing.status,
           gmNotes: body.gmNotes ?? existing.gmNotes,
         })
         .where(eq(turnReports.id, existing.id));
 
-      return NextResponse.json({ id: existing.id, updated: true });
+      return NextResponse.json({
+        id: existing.id,
+        updated: true,
+        financialActions: preparedFinancialActions.actions,
+      });
     }
 
     const id = uuid();
@@ -108,15 +121,27 @@ export async function POST(
       realmId,
       year: game.currentYear,
       season: game.currentSeason,
-      financialActions: JSON.stringify(body.financialActions || []),
+      financialActions: JSON.stringify(preparedFinancialActions.actions),
       politicalActions: JSON.stringify(body.politicalActions || []),
       status: body.status || 'Draft',
     });
 
-    return NextResponse.json({ id, created: true });
+    return NextResponse.json({
+      id,
+      created: true,
+      financialActions: preparedFinancialActions.actions,
+    });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isRuleValidationError(error)) {
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        details: error.details ?? null,
+      }, { status: error.status });
     }
 
     throw error;

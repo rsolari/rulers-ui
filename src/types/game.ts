@@ -117,17 +117,53 @@ export interface PoliticalAction {
   triggerCondition?: string;
 }
 
-// Financial Action in Turn Report
-export interface FinancialAction {
-  type: 'build' | 'recruit' | 'taxChange' | 'spending';
-  buildingType?: BuildingType;
-  troopType?: TroopType;
-  settlementId?: string;
-  taxType?: TaxType;
+// Financial Actions in Turn Report
+export interface BuildFinancialAction {
+  type: 'build';
+  buildingType: BuildingType;
+  settlementId?: string | null;
+  territoryId?: string | null;
+  material?: FortificationMaterial | null;
+  wallSize?: BuildingSize | null;
+  isGuildOwned?: boolean;
+  guildId?: string | null;
+  allottedGosId?: string | null;
+  locationType?: BuildingLocationType;
+  buildingSize?: BuildingSize;
+  takesBuildingSlot?: boolean;
+  constructionTurns?: number;
   technicalKnowledgeKey?: TechnicalKnowledgeKey;
+  description?: string;
+  cost?: number;
+}
+
+export interface RecruitFinancialAction {
+  type: 'recruit';
+  troopType: TroopType;
+  settlementId?: string | null;
+  technicalKnowledgeKey?: TechnicalKnowledgeKey;
+  description?: string;
+  cost?: number;
+}
+
+export interface TaxChangeFinancialAction {
+  type: 'taxChange';
+  taxType: TaxType;
+  description?: string;
+  cost?: number;
+}
+
+export interface SpendingFinancialAction {
+  type: 'spending';
   description?: string;
   cost: number;
 }
+
+export type FinancialAction =
+  | BuildFinancialAction
+  | RecruitFinancialAction
+  | TaxChangeFinancialAction
+  | SpendingFinancialAction;
 
 // Protected Product in Trade
 export interface ProtectedProduct {

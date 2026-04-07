@@ -1,5 +1,7 @@
 import type {
+  BuildingLocationType,
   BuildingMaintenanceState,
+  BuildingSize,
   BuildingType,
   EstateLevel,
   FinancialAction,
@@ -22,11 +24,17 @@ import {
   SEASONS,
   SETTLEMENT_DATA,
   SIEGE_UNIT_DEFS,
+  TERRITORY_FOOD_CAP,
   TAX_RATES,
   TRADED_RESOURCE_SURCHARGE,
   TROOP_DEFS,
 } from './constants';
-import { calculateFoodNeeded, calculateFoodProduced, calculateFortificationFoodNeed, calculateRealmFoodBalance } from './food';
+import {
+  calculateFoodNeeded,
+  calculateFoodProduced,
+  calculateFortificationFoodNeed,
+  distributeTerritoryFoodProduction,
+} from './food';
 import { calculateTradeWealthBonus, type RealmTradeState } from './trade';
 import {
   calculateBuildingUpkeep,
@@ -70,6 +78,7 @@ export interface EconomyBuildingInput {
   maintenanceState?: BuildingMaintenanceState;
   isGuildOwned?: boolean;
   guildId?: string | null;
+  allottedGosId?: string | null;
   material?: string | null;
 }
 
@@ -80,6 +89,10 @@ export interface EconomyStandaloneBuildingInput {
   constructionTurnsRemaining: number;
   territoryId: string;
   territoryName: string;
+  isGuildOwned?: boolean;
+  guildId?: string | null;
+  allottedGosId?: string | null;
+  material?: string | null;
 }
 
 export interface EconomyTroopInput {
@@ -106,8 +119,16 @@ export interface EconomySettlementInput {
   id: string;
   name: string;
   size: keyof typeof SETTLEMENT_DATA;
+  territoryId?: string | null;
   buildings: EconomyBuildingInput[];
   resourceSites: EconomyResourceSiteInput[];
+}
+
+export interface EconomyTerritoryInput {
+  id: string;
+  name: string;
+  foodCapBase?: number;
+  foodCapBonus?: number;
 }
 
 export interface EconomyTradeRouteInput {
@@ -153,6 +174,7 @@ export interface EconomyRealmInput {
   turmoil: number;
   turmoilSources: TurmoilSource[];
   traditions: Tradition[];
+  territories?: EconomyTerritoryInput[];
   settlements: EconomySettlementInput[];
   standaloneBuildings: EconomyStandaloneBuildingInput[];
   troops: EconomyTroopInput[];
@@ -194,10 +216,15 @@ export interface SettlementEconomyBreakdown {
 }
 
 export interface EconomyPendingBuilding {
-  settlementId: string;
+  settlementId: string | null;
+  territoryId: string | null;
+  locationType: BuildingLocationType;
   type: BuildingType;
+  size: BuildingSize;
+  takesBuildingSlot: boolean;
   material?: string | null;
   guildId?: string | null;
+  allottedGosId?: string | null;
   isGuildOwned: boolean;
   constructionTurnsRemaining: number;
   reportId?: string | null;
@@ -293,6 +320,44 @@ function createCostEntry(entry: Omit<EconomyLedgerEntry, 'kind'>): EconomyLedger
   return { kind: 'cost', ...entry };
 }
 
+function resolveSettlementFoodProduction(realm: EconomyRealmInput) {
+  const producedBySettlement = new Map<string, number>();
+  const settlementsByTerritory = new Map<string, Array<{ settlementId: string; uncappedFoodProduced: number }>>();
+
+  for (const settlement of realm.settlements) {
+    const totalSlots = SETTLEMENT_DATA[settlement.size].buildingSlots;
+    const occupiedSlots = settlement.buildings.filter((building) => building.takesBuildingSlot !== false).length;
+    const uncappedFoodProduced = calculateFoodProduced(Math.max(totalSlots - occupiedSlots, 0));
+
+    if (!settlement.territoryId) {
+      producedBySettlement.set(settlement.id, uncappedFoodProduced);
+      continue;
+    }
+
+    const territorySettlements = settlementsByTerritory.get(settlement.territoryId) ?? [];
+    territorySettlements.push({ settlementId: settlement.id, uncappedFoodProduced });
+    settlementsByTerritory.set(settlement.territoryId, territorySettlements);
+  }
+
+  const territoryCapById = new Map((realm.territories ?? []).map((territory) => [
+    territory.id,
+    Math.max(
+      (territory.foodCapBase ?? TERRITORY_FOOD_CAP) + (territory.foodCapBonus ?? 0),
+      0,
+    ),
+  ]));
+
+  for (const [territoryId, settlements] of settlementsByTerritory) {
+    const cap = territoryCapById.get(territoryId) ?? TERRITORY_FOOD_CAP;
+    const allocations = distributeTerritoryFoodProduction(settlements, cap);
+    for (const [settlementId, produced] of allocations) {
+      producedBySettlement.set(settlementId, produced);
+    }
+  }
+
+  return producedBySettlement;
+}
+
 function resolveTaxState(
   realm: EconomyRealmInput,
   actions: FinancialAction[],
@@ -306,7 +371,7 @@ function resolveTaxState(
   );
 
   if (requestedTaxChanges.length > 1) {
-    warnings.push('Multiple tax changes were submitted; the last request was applied.');
+    throw new Error('Multiple tax changes were submitted; only one tax change can be applied in a turn.');
   }
 
   const requestedTaxType = requestedTaxChanges.at(-1)?.taxType;
@@ -437,9 +502,9 @@ function resolveTechnicalKnowledgeKey(
   required: boolean,
 ) {
   if (!required) return null;
-  if (action.technicalKnowledgeKey) return action.technicalKnowledgeKey;
-  if (action.buildingType) return action.buildingType;
-  if (action.troopType) return action.troopType;
+  if ('technicalKnowledgeKey' in action && action.technicalKnowledgeKey) return action.technicalKnowledgeKey;
+  if (action.type === 'build') return action.buildingType;
+  if (action.type === 'recruit') return action.troopType;
   return null;
 }
 
@@ -465,7 +530,7 @@ function calculateActionCost(
   action: FinancialAction,
   availableTechnicalKnowledge: Set<TechnicalKnowledgeKey>,
 ) {
-  const baseCost = Math.max(action.cost, 0);
+  const baseCost = Math.max(action.cost ?? 0, 0);
   const requiresTechnicalKnowledge = hasTechnicalKnowledgePrerequisite(action);
   const knowledgeKey = resolveTechnicalKnowledgeKey(action, requiresTechnicalKnowledge);
   const usesForeignTechnicalKnowledge =
@@ -530,6 +595,7 @@ export function calculateRealmEconomy(
   const pendingBuildings: EconomyPendingBuilding[] = [];
   const pendingTroops: EconomyPendingTroop[] = [];
   const validSettlementIds = new Set(realm.settlements.map((settlement) => settlement.id));
+  const settlementFoodProduced = resolveSettlementFoodProduction(realm);
   const standaloneFortCounts = realm.standaloneBuildings.reduce((counts, building) => {
     if (building.constructionTurnsRemaining > 0) return counts;
     if (building.type === 'Fort') counts.forts += 1;
@@ -541,7 +607,7 @@ export function calculateRealmEconomy(
     const totalSlots = SETTLEMENT_DATA[settlement.size].buildingSlots;
     const occupiedSlots = settlement.buildings.filter((building) => building.takesBuildingSlot !== false).length;
     const emptyBuildingSlots = Math.max(totalSlots - occupiedSlots, 0);
-    const foodProduced = calculateFoodProduced(emptyBuildingSlots);
+    const foodProduced = settlementFoodProduced.get(settlement.id) ?? calculateFoodProduced(emptyBuildingSlots);
     const completedFortificationNeed = settlement.buildings.reduce((sum, building) => {
       if (building.constructionTurnsRemaining > 0) return sum;
       return sum + calculateFortificationFoodNeed(building.type);
@@ -656,8 +722,8 @@ export function calculateRealmEconomy(
     ...building,
     settlementId: null,
     settlementName: building.territoryName,
-    isGuildOwned: false,
-    guildId: null,
+    isGuildOwned: building.isGuildOwned ?? false,
+    guildId: building.guildId ?? null,
   }));
   const allBuildings = [...completeBuildings, ...standaloneBuildings];
 
@@ -744,19 +810,27 @@ export function calculateRealmEconomy(
 
   for (const action of financialActions) {
     if (action.type === 'build') {
+      const buildLocationType = action.locationType ?? (action.settlementId ? 'settlement' : 'territory');
       if (
-        action.buildingType &&
-        action.settlementId &&
-        validSettlementIds.has(action.settlementId) &&
-        BUILDING_DEFS[action.buildingType]
+        BUILDING_DEFS[action.buildingType] &&
+        (
+          (buildLocationType === 'settlement' && action.settlementId && validSettlementIds.has(action.settlementId)) ||
+          buildLocationType === 'territory'
+        )
       ) {
         pendingBuildings.push({
-          settlementId: action.settlementId,
+          settlementId: action.settlementId ?? null,
+          territoryId: action.territoryId ?? null,
+          locationType: buildLocationType,
           type: action.buildingType,
-          material: null,
-          guildId: null,
-          isGuildOwned: false,
-          constructionTurnsRemaining: BUILDING_SIZE_DATA[BUILDING_DEFS[action.buildingType].size].buildTime,
+          size: action.buildingSize ?? BUILDING_DEFS[action.buildingType].size,
+          takesBuildingSlot: action.takesBuildingSlot ?? (BUILDING_DEFS[action.buildingType].takesBuildingSlot ?? true),
+          material: action.material ?? null,
+          guildId: action.guildId ?? null,
+          allottedGosId: action.allottedGosId ?? null,
+          isGuildOwned: action.isGuildOwned ?? false,
+          constructionTurnsRemaining: action.constructionTurns
+            ?? BUILDING_SIZE_DATA[action.buildingSize ?? BUILDING_DEFS[action.buildingType].size].buildTime,
           reportId: realm.report?.id ?? null,
         });
       } else {
@@ -782,6 +856,7 @@ export function calculateRealmEconomy(
   }
 
   for (const { action, cost } of actionCosts) {
+    const actionSettlementId = 'settlementId' in action ? action.settlementId ?? null : null;
     if (cost.baseCost > 0) {
       const label =
         action.description ||
@@ -794,7 +869,7 @@ export function calculateRealmEconomy(
         category: `report-${action.type}`,
         label,
         amount: cost.baseCost,
-        settlementId: action.settlementId ?? null,
+        settlementId: actionSettlementId,
         reportId: realm.report?.id ?? null,
       }));
     }
@@ -804,7 +879,7 @@ export function calculateRealmEconomy(
         category: `technical-knowledge-surcharge`,
         label: `Foreign technical knowledge: ${cost.knowledgeKey}`,
         amount: cost.technicalKnowledgeSurcharge,
-        settlementId: action.settlementId ?? null,
+        settlementId: actionSettlementId,
         reportId: realm.report?.id ?? null,
         metadata: {
           actionType: action.type,
@@ -892,22 +967,12 @@ export function calculateRealmEconomy(
   const netChange = totalRevenue - totalCosts;
   const closingTreasury = realm.treasury + netChange;
 
-  const foodSummary = calculateRealmFoodBalance({
-    settlements: settlementBreakdown.map((settlement) => ({
-      size: realm.settlements.find((candidate) => candidate.id === settlement.settlementId)!.size,
-      occupiedSlots: SETTLEMENT_DATA[realm.settlements.find((candidate) => candidate.id === settlement.settlementId)!.size].buildingSlots - settlement.emptyBuildingSlots,
-      totalSlots: SETTLEMENT_DATA[realm.settlements.find((candidate) => candidate.id === settlement.settlementId)!.size].buildingSlots,
-      fortificationFoodNeeded: settlement.foodNeeded - calculateFoodNeeded(
-        realm.settlements.find((candidate) => candidate.id === settlement.settlementId)!.size,
-      ),
-    })),
-    standaloneForts: standaloneFortCounts.forts,
-    standaloneCastles: standaloneFortCounts.castles,
-    foodProducedModifier: seasonalModifiers.reduce((sum, modifier) => sum + modifier.foodProducedDelta, 0),
-    foodNeededModifier: seasonalModifiers.reduce((sum, modifier) => sum + modifier.foodNeededDelta, 0),
-  });
-  const totalFoodProduced = foodSummary.produced;
-  const totalFoodNeeded = foodSummary.needed;
+  const totalFoodProduced = settlementBreakdown.reduce((sum, settlement) => sum + settlement.foodProduced, 0)
+    + seasonalModifiers.reduce((sum, modifier) => sum + modifier.foodProducedDelta, 0);
+  const totalFoodNeeded = settlementBreakdown.reduce((sum, settlement) => sum + settlement.foodNeeded, 0)
+    + standaloneFortCounts.forts * calculateFortificationFoodNeed('Fort')
+    + standaloneFortCounts.castles * calculateFortificationFoodNeed('Castle')
+    + seasonalModifiers.reduce((sum, modifier) => sum + modifier.foodNeededDelta, 0);
   const foodSurplus = totalFoodProduced - totalFoodNeeded;
   const foodState = resolveFoodState(realm, foodSurplus);
   const baseTurmoilSources = [

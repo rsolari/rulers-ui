@@ -39,6 +39,12 @@ interface SiegeUnit {
   constructionTurnsRemaining: number;
 }
 
+interface SettlementSummary {
+  id: string;
+  name: string;
+  size: string;
+}
+
 async function fetchArmyData(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/armies?realmId=${realmId}`);
   const data = await response.json();
@@ -50,6 +56,11 @@ async function fetchArmyData(gameId: string, realmId: string) {
   };
 }
 
+async function fetchRealmSettlements(gameId: string, realmId: string) {
+  const response = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
+  return response.json() as Promise<SettlementSummary[]>;
+}
+
 export default function ArmyPage() {
   const params = useParams();
   const gameId = params.gameId as string;
@@ -57,20 +68,40 @@ export default function ArmyPage() {
   const [armies, setArmies] = useState<Army[]>([]);
   const [allTroops, setTroops] = useState<Troop[]>([]);
   const [allSiege, setSiege] = useState<SiegeUnit[]>([]);
+  const [settlements, setSettlements] = useState<SettlementSummary[]>([]);
   const [createArmyOpen, setCreateArmyOpen] = useState(false);
   const [recruitOpen, setRecruitOpen] = useState<string | null>(null); // armyId or 'garrison'
   const [newArmyName, setNewArmyName] = useState('');
   const [selectedTroopType, setSelectedTroopType] = useState<TroopType>('Spearmen');
+  const [recruitmentSettlementIdOverride, setRecruitmentSettlementIdOverride] = useState('');
 
   useEffect(() => {
     if (!realmId) return;
 
-    fetchArmyData(gameId, realmId).then((data) => {
-      setArmies(data.armies);
-      setTroops(data.troops);
-      setSiege(data.siegeUnits);
+    let cancelled = false;
+
+    Promise.all([
+      fetchArmyData(gameId, realmId),
+      fetchRealmSettlements(gameId, realmId),
+    ]).then(([armyData, settlementData]) => {
+      if (cancelled) return;
+
+      setArmies(armyData.armies);
+      setTroops(armyData.troops);
+      setSiege(armyData.siegeUnits);
+      setSettlements(settlementData);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [gameId, realmId]);
+
+  const selectedRecruitmentSettlementId = settlements.some(
+    (settlement) => settlement.id === recruitmentSettlementIdOverride,
+  )
+    ? recruitmentSettlementIdOverride
+    : (settlements[0]?.id ?? '');
 
   async function createArmy() {
     if (!newArmyName.trim() || !realmId || !territoryId) return;
@@ -89,7 +120,7 @@ export default function ArmyPage() {
   }
 
   async function recruitTroop() {
-    if (!realmId) return;
+    if (!realmId || !selectedRecruitmentSettlementId) return;
     await fetch(`/api/game/${gameId}/troops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -97,6 +128,8 @@ export default function ArmyPage() {
         realmId,
         type: selectedTroopType,
         armyId: recruitOpen === 'garrison' ? null : recruitOpen,
+        garrisonSettlementId: recruitOpen === 'garrison' ? selectedRecruitmentSettlementId : null,
+        recruitmentSettlementId: selectedRecruitmentSettlementId,
       }),
     });
     const data = await fetchArmyData(gameId, realmId);
@@ -109,6 +142,10 @@ export default function ArmyPage() {
   const troopOptions = Object.entries(TROOP_DEFS).map(([key, def]) => ({
     value: key,
     label: `${key} (${def.class}, ${def.upkeep}/season)`,
+  }));
+  const settlementOptions = settlements.map((settlement) => ({
+    value: settlement.id,
+    label: `${settlement.name} (${settlement.size})`,
   }));
 
   const garrisonTroops = allTroops.filter(t => !t.armyId);
@@ -197,11 +234,20 @@ export default function ArmyPage() {
           <DialogTitle>Recruit Troop</DialogTitle>
           <DialogContent>
             <Select
+              label="Recruit From"
+              options={settlementOptions}
+              value={selectedRecruitmentSettlementId}
+              onChange={e => setRecruitmentSettlementIdOverride(e.target.value)}
+            />
+            <Select
               label="Troop Type"
               options={troopOptions}
               value={selectedTroopType}
               onChange={e => setSelectedTroopType(e.target.value as TroopType)}
             />
+            {settlementOptions.length === 0 && (
+              <p className="mt-3 text-sm text-ink-300">A settlement is required to recruit troops.</p>
+            )}
             {TROOP_DEFS[selectedTroopType] && (
               <div className="mt-3 p-3 medieval-border rounded text-sm space-y-1">
                 <p><strong>Class:</strong> {TROOP_DEFS[selectedTroopType].class}</p>
@@ -216,7 +262,7 @@ export default function ArmyPage() {
           </DialogContent>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setRecruitOpen(null)}>Cancel</Button>
-            <Button variant="accent" onClick={recruitTroop}>Recruit</Button>
+            <Button variant="accent" onClick={recruitTroop} disabled={!selectedRecruitmentSettlementId}>Recruit</Button>
           </DialogFooter>
         </Dialog>
       )}

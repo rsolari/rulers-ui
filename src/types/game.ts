@@ -66,6 +66,35 @@ export type TaxType = 'Tribute' | 'Levy';
 export type Gender = 'Male' | 'Female';
 export type AgeCategory = 'Infant' | 'Adolescent' | 'Adult' | 'Elderly';
 export type EstateLevel = 'Meagre' | 'Comfortable' | 'Ample' | 'Substantial' | 'Luxurious';
+export type GovernanceState =
+  | 'stable'
+  | 'interregnum'
+  | 'surrogate_rule'
+  | 'succession_pending_gm'
+  | 'realm_fallen';
+export type NobleTitleType =
+  | 'settlement_governor'
+  | 'army_general'
+  | 'gos_leader'
+  | 'heir_designation'
+  | 'honorary'
+  | 'custom';
+export type GovernanceEventType =
+  | 'ruler_appointed'
+  | 'heir_designated'
+  | 'office_assigned'
+  | 'office_removed'
+  | 'title_granted'
+  | 'title_revoked'
+  | 'noble_captured'
+  | 'noble_released'
+  | 'noble_died'
+  | 'succession_triggered'
+  | 'succession_resolved'
+  | 'succession_disputed'
+  | 'acting_ruler_set'
+  | 'realm_fell'
+  | 'noble_grievance';
 
 // GOS Types
 export type GOSType = 'Guild' | 'Order' | 'Society';

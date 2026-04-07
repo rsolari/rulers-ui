@@ -77,20 +77,23 @@ describe('POST /api/game/[gameId]/nobles', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      id: 'noble-1',
-      familyId: 'family-1',
-      realmId: 'realm-player',
-      name: 'Sir Rowan',
-      gender: 'Male',
-      age: 'Adult',
-      backstory: null,
-      race: null,
-      personality: 'Stoic and Reserved',
-      relationshipWithRuler: null,
-      belief: null,
-      valuedObject: null,
-      valuedPerson: null,
-      greatestDesire: null,
+      noble: expect.objectContaining({
+        id: 'noble-1',
+        familyId: 'family-1',
+        realmId: 'realm-player',
+        originRealmId: 'realm-player',
+        name: 'Sir Rowan',
+        gender: 'Male',
+        age: 'Adult',
+        backstory: null,
+        race: null,
+        personality: 'Stoic and Reserved',
+        relationshipWithRuler: null,
+        belief: null,
+        valuedObject: null,
+        valuedPerson: null,
+        greatestDesire: null,
+      }),
     });
     expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
     expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');

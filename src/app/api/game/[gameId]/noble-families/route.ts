@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { nobleFamilies } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { nobleFamilies, nobles, realms } from '@/db/schema';
+import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 
@@ -16,7 +16,20 @@ export async function GET(
   }
 
   const families = await db.select().from(nobleFamilies).where(eq(nobleFamilies.realmId, realmId));
-  return NextResponse.json(families);
+  const realm = await db.select({
+    rulerNobleId: realms.rulerNobleId,
+  }).from(realms).where(eq(realms.id, realmId)).get();
+
+  const ruler = realm?.rulerNobleId
+    ? await db.select({
+      familyId: nobles.familyId,
+    }).from(nobles).where(eq(nobles.id, realm.rulerNobleId)).get()
+    : null;
+
+  return NextResponse.json(families.map((family) => ({
+    ...family,
+    isRulingFamily: family.id === ruler?.familyId,
+  })));
 }
 
 export async function POST(
@@ -33,10 +46,14 @@ export async function POST(
       id,
       realmId,
       name: body.name,
-      isRulingFamily: body.isRulingFamily || false,
     });
 
-    return NextResponse.json({ id, ...body, realmId });
+    return NextResponse.json({
+      id,
+      realmId,
+      name: body.name,
+      isRulingFamily: Boolean(body.isRulingFamily),
+    });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

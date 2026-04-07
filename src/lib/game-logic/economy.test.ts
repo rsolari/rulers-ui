@@ -25,13 +25,7 @@ function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput 
         industry: null,
       }],
     }],
-    nobles: [{
-      id: 'noble-1',
-      name: 'Ruler',
-      estateLevel: 'Meagre',
-      isRuler: true,
-      isPrisoner: false,
-    }],
+    nobles: [],
     ...overrides,
   });
 }
@@ -584,20 +578,19 @@ describe('resolveEconomyForRealm', () => {
           id: 'noble-ruler',
           name: 'Ruler',
           estateLevel: 'Meagre',
-          isRuler: true,
+          requiredEstateLevel: 'Luxurious',
           isPrisoner: false,
         },
         {
           id: 'noble-guest',
           name: 'Guest Lord',
           estateLevel: 'Comfortable',
-          isRuler: false,
           isPrisoner: true,
         },
       ],
     }), 1, 'Summer');
 
-    expect(result.totalCosts).toBe(2875);
+    expect(result.totalCosts).toBe(3000);
     expect(result.ledgerEntries).toEqual(expect.arrayContaining([
       expect.objectContaining({ category: 'troop-upkeep', amount: 1000 }),
       expect.objectContaining({ category: 'siege-upkeep', amount: 1500 }),

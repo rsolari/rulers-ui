@@ -181,6 +181,7 @@ async function getPlayerSetupStatuses(gameId: string): Promise<PlayerSetupStatus
         id: realms.id,
         treasury: realms.treasury,
         taxType: realms.taxType,
+        rulerNobleId: realms.rulerNobleId,
       }).from(realms).where(and(
         eq(realms.gameId, gameId),
         inArray(realms.id, realmIds),
@@ -188,8 +189,8 @@ async function getPlayerSetupStatuses(gameId: string): Promise<PlayerSetupStatus
       : Promise.resolve([]),
     realmIds.length > 0
       ? db.select({
+        id: nobles.id,
         realmId: nobles.realmId,
-        isRuler: nobles.isRuler,
       }).from(nobles).where(inArray(nobles.realmId, realmIds))
       : Promise.resolve([]),
     realmIds.length > 0
@@ -223,8 +224,12 @@ async function getPlayerSetupStatuses(gameId: string): Promise<PlayerSetupStatus
   ]);
 
   const realmById = new Map(realmRows.map((realm) => [realm.id, realm]));
-  const rulerRealmIds = new Set(nobleRows.filter((noble) => noble.isRuler).map((noble) => noble.realmId));
-  const supportingNobleRealmIds = new Set(nobleRows.filter((noble) => !noble.isRuler).map((noble) => noble.realmId));
+  const rulerRealmIds = new Set(realmRows.filter((realm) => realm.rulerNobleId).map((realm) => realm.id));
+  const supportingNobleRealmIds = new Set(
+    nobleRows
+      .filter((noble) => realmById.get(noble.realmId)?.rulerNobleId !== noble.id)
+      .map((noble) => noble.realmId),
+  );
   const gosRealmIds = new Set(gosRows.map((gos) => gos.realmId));
   const militaryRealmIds = new Set([
     ...armyRows.map((army) => army.realmId),

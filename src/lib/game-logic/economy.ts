@@ -98,7 +98,7 @@ export interface EconomyNobleInput {
   id: string;
   name: string;
   estateLevel: EstateLevel;
-  isRuler: boolean;
+  requiredEstateLevel?: EstateLevel | null;
   isPrisoner: boolean;
 }
 
@@ -713,17 +713,33 @@ export function calculateRealmEconomy(
   const nobleUpkeep = calculateNobleUpkeep(
     realm.nobles.map((noble) => ({
       estateLevel: noble.estateLevel,
-      isRuler: noble.isRuler,
     })),
   );
+  const underpaidTurmoilSources: TurmoilSource[] = [];
   for (const noble of realm.nobles) {
-    if (noble.isRuler) continue;
     ledgerEntries.push(createCostEntry({
       category: 'noble-upkeep',
       label: `${noble.name} estate upkeep`,
       amount: ESTATE_COSTS[noble.estateLevel],
-      metadata: { nobleId: noble.id },
+      metadata: {
+        nobleId: noble.id,
+        requiredEstateLevel: noble.requiredEstateLevel ?? null,
+      },
     }));
+
+    if (
+      noble.requiredEstateLevel &&
+      ESTATE_COSTS[noble.estateLevel] < ESTATE_COSTS[noble.requiredEstateLevel]
+    ) {
+      underpaidTurmoilSources.push({
+        id: `underpaid-noble:${noble.id}`,
+        description: `${noble.name} is underpaid for their office`,
+        amount: 1,
+        durationType: 'seasonal',
+        seasonsRemaining: 4,
+      });
+      warnings.push(`${noble.name} is underpaid relative to the estate expected for their office.`);
+    }
   }
 
   const prisonerCount = realm.nobles.filter((noble) => noble.isPrisoner).length;
@@ -912,6 +928,7 @@ export function calculateRealmEconomy(
   const foodState = resolveFoodState(realm, foodSurplus);
   const baseTurmoilSources = [
     ...realm.turmoilSources,
+    ...underpaidTurmoilSources,
     ...seasonalModifiers.flatMap((modifier) => modifier.turmoilSources),
   ];
   const currentTurmoilBeforeShortage = calculateTotalTurmoil(

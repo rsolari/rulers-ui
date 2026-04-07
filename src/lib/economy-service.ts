@@ -28,6 +28,7 @@ import {
   type EconomyRealmInput,
   type EconomyResult,
 } from '@/lib/game-logic/economy';
+import { getRequiredEstateLevelsForRealm } from '@/lib/game-logic/governance';
 import { resolveTradeNetwork } from '@/lib/game-logic/trade';
 import type {
   FinancialAction,
@@ -425,21 +426,28 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
     modifiersByRealm.set(realm.id, [...globalModifiers, ...realmModifiers]);
   }
 
-  const economyRealms: EconomyRealmInput[] = realmRows.map((realm) => ({
-    id: realm.id,
-    name: realm.name,
-    treasury: realm.treasury,
-    taxType: realm.taxType as TaxType,
-    levyExpiresYear: realm.levyExpiresYear,
-    levyExpiresSeason: realm.levyExpiresSeason as Season | null,
-    foodBalance: realm.foodBalance,
-    consecutiveFoodShortageSeasons: realm.consecutiveFoodShortageSeasons,
-    consecutiveFoodRecoverySeasons: realm.consecutiveFoodRecoverySeasons,
-    technicalKnowledge: parseJson<TechnicalKnowledgeKey[]>(realm.technicalKnowledge, []),
-    turmoil: realm.turmoil,
-    turmoilSources: parseJson<TurmoilSource[]>(realm.turmoilSources, []),
-    traditions: parseJson<Tradition[]>(realm.traditions, []),
-    settlements: (settlementsByRealm.get(realm.id) ?? []).map((settlement) => ({
+  const economyRealms: EconomyRealmInput[] = realmRows.map((realm) => {
+    const realmSettlements = settlementsByRealm.get(realm.id) ?? [];
+    const requiredEstateByNobleId = getRequiredEstateLevelsForRealm({
+      realmRulerNobleId: realm.rulerNobleId,
+      settlements: realmSettlements,
+    });
+
+    return {
+      id: realm.id,
+      name: realm.name,
+      treasury: realm.treasury,
+      taxType: realm.taxType as TaxType,
+      levyExpiresYear: realm.levyExpiresYear,
+      levyExpiresSeason: realm.levyExpiresSeason as Season | null,
+      foodBalance: realm.foodBalance,
+      consecutiveFoodShortageSeasons: realm.consecutiveFoodShortageSeasons,
+      consecutiveFoodRecoverySeasons: realm.consecutiveFoodRecoverySeasons,
+      technicalKnowledge: parseJson<TechnicalKnowledgeKey[]>(realm.technicalKnowledge, []),
+      turmoil: realm.turmoil,
+      turmoilSources: parseJson<TurmoilSource[]>(realm.turmoilSources, []),
+      traditions: parseJson<Tradition[]>(realm.traditions, []),
+      settlements: realmSettlements.map((settlement) => ({
       id: settlement.id,
       name: settlement.name,
       size: settlement.size as EconomyRealmInput['settlements'][number]['size'],
@@ -472,33 +480,33 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
             : null,
         };
       }),
-    })),
-    standaloneBuildings: (standaloneBuildingsByRealm.get(realm.id) ?? []).map((building) => ({
+      })),
+      standaloneBuildings: (standaloneBuildingsByRealm.get(realm.id) ?? []).map((building) => ({
       id: building.id,
       type: building.type,
       size: building.size as EconomyRealmInput['standaloneBuildings'][number]['size'],
       constructionTurnsRemaining: building.constructionTurnsRemaining,
       territoryId: building.territoryId!,
       territoryName: territoryById.get(building.territoryId!)?.name ?? 'Unknown Territory',
-    })),
-    troops: (troopsByRealm.get(realm.id) ?? []).map((troop) => ({
+      })),
+      troops: (troopsByRealm.get(realm.id) ?? []).map((troop) => ({
       id: troop.id,
       type: troop.type as EconomyRealmInput['troops'][number]['type'],
       recruitmentTurnsRemaining: troop.recruitmentTurnsRemaining,
-    })),
-    siegeUnits: (siegeUnitsByRealm.get(realm.id) ?? []).map((unit) => ({
+      })),
+      siegeUnits: (siegeUnitsByRealm.get(realm.id) ?? []).map((unit) => ({
       id: unit.id,
       type: unit.type as EconomyRealmInput['siegeUnits'][number]['type'],
       constructionTurnsRemaining: unit.constructionTurnsRemaining,
-    })),
-    nobles: (noblesByRealm.get(realm.id) ?? []).map((noble) => ({
+      })),
+      nobles: (noblesByRealm.get(realm.id) ?? []).map((noble) => ({
       id: noble.id,
       name: noble.name,
       estateLevel: noble.estateLevel as EconomyRealmInput['nobles'][number]['estateLevel'],
-      isRuler: noble.isRuler,
+      requiredEstateLevel: requiredEstateByNobleId.get(noble.id) ?? null,
       isPrisoner: noble.isPrisoner,
-    })),
-    tradeRoutes: tradeRouteRows
+      })),
+      tradeRoutes: tradeRouteRows
       .filter((route) => route.realm1Id === realm.id || route.realm2Id === realm.id)
       .map((route) => ({
         id: route.id,
@@ -512,20 +520,21 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
         protectedProducts: parseJson<ProtectedProduct[]>(route.protectedProducts, []),
         importSelectionState: parseJson<TradeImportSelection[]>(route.importSelectionState, []),
       })),
-    guildsOrdersSocieties: (gosByRealm.get(realm.id) ?? []).map((gos) => ({
+      guildsOrdersSocieties: (gosByRealm.get(realm.id) ?? []).map((gos) => ({
       id: gos.id,
       name: gos.name,
       type: gos.type as EconomyRealmInput['guildsOrdersSocieties'][number]['type'],
       income: gos.income,
-    })),
-    seasonalModifiers: modifiersByRealm.get(realm.id) ?? [],
-    report: reportsByRealm.has(realm.id)
-      ? {
-        id: reportsByRealm.get(realm.id)!.id,
-        financialActions: parseJson<FinancialAction[]>(reportsByRealm.get(realm.id)!.financialActions, []),
-      }
-      : null,
-  }));
+      })),
+      seasonalModifiers: modifiersByRealm.get(realm.id) ?? [],
+      report: reportsByRealm.has(realm.id)
+        ? {
+          id: reportsByRealm.get(realm.id)!.id,
+          financialActions: parseJson<FinancialAction[]>(reportsByRealm.get(realm.id)!.financialActions, []),
+        }
+        : null,
+    };
+  });
 
   return {
     game,

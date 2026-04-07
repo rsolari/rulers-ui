@@ -78,7 +78,6 @@ export default function RealmDashboard() {
   const { role, realmId, initState, claimCode, loading } = useRole();
   const [game, setGame] = useState<Game | null>(null);
   const [realm, setRealm] = useState<Realm | null>(null);
-  const [allRealms, setAllRealms] = useState<Realm[]>([]);
   const [territories, setTerritories] = useState<Territory[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [ruler, setRuler] = useState<Ruler | null>(null);
@@ -138,7 +137,6 @@ export default function RealmDashboard() {
 
       setGame(gameData);
       setRealm(realmData);
-      setAllRealms(realmList);
       setTerritories(allTerritories);
       setSettlements(settlementsList);
       setRuler(rulerData);

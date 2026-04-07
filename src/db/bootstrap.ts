@@ -606,6 +606,31 @@ function ensureEconomySchema(database: Database.Database) {
     `);
   }
 
+  if (!tableExists(database, 'turn_resolutions')) {
+    database.exec(`
+      CREATE TABLE turn_resolutions (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        year integer NOT NULL,
+        season text NOT NULL,
+        idempotency_key text,
+        result text DEFAULT '{}' NOT NULL,
+        created_at integer,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS economic_snapshots_game_realm_turn_unique
+      ON economic_snapshots (game_id, realm_id, year, season);
+    CREATE UNIQUE INDEX IF NOT EXISTS turn_resolutions_game_turn_unique
+      ON turn_resolutions (game_id, year, season);
+    CREATE UNIQUE INDEX IF NOT EXISTS turn_resolutions_game_idempotency_unique
+      ON turn_resolutions (game_id, idempotency_key)
+      WHERE idempotency_key IS NOT NULL;
+  `);
+
   addColumnIfMissing(database, 'buildings', 'territory_id text', 'territory_id');
   addColumnIfMissing(database, 'buildings', "location_type text DEFAULT 'settlement' NOT NULL", 'location_type');
   addColumnIfMissing(database, 'buildings', 'takes_building_slot integer DEFAULT 1 NOT NULL', 'takes_building_slot');

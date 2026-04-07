@@ -7,39 +7,15 @@ import {
 } from './trade';
 import type { EconomyRealmInput } from './economy';
 import { createProductSource } from '@/__tests__/helpers/test-factories';
+import { createEconomyRealmFixture, createProtectedImportFixture } from '@/__tests__/fixtures/economy-regression-fixtures';
 
 function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput {
-  return {
+  return createEconomyRealmFixture({
     id: 'realm-1',
     name: 'Realm 1',
     treasury: 1000,
-    taxType: 'Tribute',
-    levyExpiresYear: null,
-    levyExpiresSeason: null,
-    foodBalance: 0,
-    consecutiveFoodShortageSeasons: 0,
-    consecutiveFoodRecoverySeasons: 0,
-    technicalKnowledge: [],
-    turmoil: 0,
-    turmoilSources: [],
-    traditions: [],
-    settlements: [{
-      id: 'settlement-1',
-      name: 'Capital',
-      size: 'Village',
-      buildings: [],
-      resourceSites: [],
-    }],
-    standaloneBuildings: [],
-    troops: [],
-    siegeUnits: [],
-    nobles: [],
-    tradeRoutes: [],
-    guildsOrdersSocieties: [],
-    seasonalModifiers: [],
-    report: null,
     ...overrides,
-  };
+  });
 }
 
 describe('detectExportedProducts', () => {
@@ -185,85 +161,7 @@ describe('resolveTradeNetwork', () => {
   });
 
   it('keeps a protected incumbent import until its protection expires', () => {
-    const sharedRouteA = {
-      id: 'route-a',
-      isActive: true,
-      realm1Id: 'incumbent',
-      realm2Id: 'importer',
-      settlement1Id: 'incumbent-port',
-      settlement2Id: 'import-settlement',
-      productsExported1to2: [],
-      productsExported2to1: [],
-      protectedProducts: [],
-      importSelectionState: [{
-        importingRealmId: 'importer',
-        resourceType: 'Gold',
-        chosenExporterRealmId: 'incumbent',
-        expirySeason: 'Summer',
-        expiryYear: 1,
-      }],
-    };
-    const sharedRouteB = {
-      id: 'route-b',
-      isActive: true,
-      realm1Id: 'challenger',
-      realm2Id: 'importer',
-      settlement1Id: 'challenger-port',
-      settlement2Id: 'import-settlement',
-      productsExported1to2: [],
-      productsExported2to1: [],
-      protectedProducts: [],
-      importSelectionState: [],
-    };
-
-    const importer = createRealm({
-      id: 'importer',
-      settlements: [{
-        id: 'import-settlement',
-        name: 'Importer Port',
-        size: 'Village',
-        buildings: [],
-        resourceSites: [],
-      }],
-      tradeRoutes: [sharedRouteA, sharedRouteB],
-    });
-    const incumbent = createRealm({
-      id: 'incumbent',
-      settlements: [{
-        id: 'incumbent-port',
-        name: 'Incumbent Port',
-        size: 'Village',
-        buildings: [],
-        resourceSites: [{
-          id: 'gold-low',
-          resourceType: 'Gold',
-          rarity: 'Luxury',
-          industry: null,
-        }],
-      }],
-      tradeRoutes: [sharedRouteA, sharedRouteB],
-    });
-    const challenger = createRealm({
-      id: 'challenger',
-      settlements: [{
-        id: 'challenger-port',
-        name: 'Challenger Port',
-        size: 'Village',
-        buildings: [],
-        resourceSites: [{
-          id: 'gold-high',
-          resourceType: 'Gold',
-          rarity: 'Luxury',
-          industry: {
-            id: 'challenger-industry',
-            outputProduct: 'Gold',
-            quality: 'HighQuality',
-            ingredients: [],
-          },
-        }],
-      }],
-      tradeRoutes: [sharedRouteA, sharedRouteB],
-    });
+    const { importer, incumbent, challenger } = createProtectedImportFixture();
 
     const protectedResult = resolveTradeNetwork([importer, incumbent, challenger], {
       currentYear: 1,
@@ -283,6 +181,25 @@ describe('resolveTradeNetwork', () => {
       expirySeason: 'Spring',
       expiryYear: 2,
     }]);
+  });
+
+  it('persists the incumbent selection state while protection is active', () => {
+    const { importer, incumbent, challenger } = createProtectedImportFixture();
+
+    const result = resolveTradeNetwork([importer, incumbent, challenger], {
+      currentYear: 1,
+      currentSeason: 'Spring',
+    });
+
+    expect(result.importSelections).toEqual([
+      expect.objectContaining({
+        importingRealmId: 'importer',
+        resourceType: 'Gold',
+        chosenExporterRealmId: 'incumbent',
+        expirySeason: 'Summer',
+        expiryYear: 1,
+      }),
+    ]);
   });
 
   it('surfaces unresolved equal-quality equal-tax imports until a GM tie-break is provided', () => {

@@ -6,22 +6,12 @@ import {
   type EconomyRealmInput,
 } from './economy';
 import { resolveTradeNetwork } from './trade';
+import { createEconomyRealmFixture, createFoodRecoveryFixture } from '@/__tests__/fixtures/economy-regression-fixtures';
 
 function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput {
-  return {
+  return createEconomyRealmFixture({
     id: 'realm-1',
     name: 'Test Realm',
-    treasury: 10000,
-    taxType: 'Tribute',
-    levyExpiresYear: null,
-    levyExpiresSeason: null,
-    foodBalance: 0,
-    consecutiveFoodShortageSeasons: 0,
-    consecutiveFoodRecoverySeasons: 0,
-    technicalKnowledge: [],
-    turmoil: 0,
-    turmoilSources: [],
-    traditions: [],
     settlements: [{
       id: 'settlement-1',
       name: 'Capital',
@@ -34,9 +24,6 @@ function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput 
         industry: null,
       }],
     }],
-    standaloneBuildings: [],
-    troops: [],
-    siegeUnits: [],
     nobles: [{
       id: 'noble-1',
       name: 'Ruler',
@@ -44,12 +31,8 @@ function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput 
       isRuler: true,
       isPrisoner: false,
     }],
-    tradeRoutes: [],
-    guildsOrdersSocieties: [],
-    seasonalModifiers: [],
-    report: null,
     ...overrides,
-  };
+  });
 }
 
 function createOccupiedBuildings(count: number): EconomyBuildingInput[] {
@@ -518,6 +501,160 @@ describe('resolveEconomyForRealm', () => {
         amount: 200,
       }),
     ]));
+  });
+
+  it('warns when multiple tax changes are submitted and applies the last request', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      report: {
+        id: 'report-tax',
+        financialActions: [
+          { type: 'taxChange', taxType: 'Tribute', cost: 0 },
+          { type: 'taxChange', taxType: 'Levy', cost: 0 },
+        ],
+      },
+    }), 1, 'Spring');
+
+    expect(result.taxTypeApplied).toBe('Levy');
+    expect(result.warnings).toContain('Multiple tax changes were submitted; the last request was applied.');
+  });
+
+  it('infers a levy expiry when levy state is missing one', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      taxType: 'Levy',
+      levyExpiresYear: null,
+      levyExpiresSeason: null,
+    }), 2, 'Autumn');
+
+    expect(result.levyExpiresYear).toBe(3);
+    expect(result.levyExpiresSeason).toBe('Autumn');
+    expect(result.warnings).toContain('Levy tax had no expiry state; one year from the current turn was assumed.');
+  });
+
+  it('records GOS revenue and negative GM treasury modifiers in the ledger', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      guildsOrdersSocieties: [{
+        id: 'gos-1',
+        name: 'Merchant Guild',
+        type: 'Guild',
+        income: 1200,
+      }],
+      seasonalModifiers: [{
+        id: 'event-1:modifier-1',
+        source: 'gm-event',
+        description: 'Emergency levy relief',
+        treasuryDelta: -300,
+        foodProducedDelta: 0,
+        foodNeededDelta: 0,
+        grantedTechnicalKnowledge: [],
+        turmoilSources: [],
+      }],
+    }), 1, 'Autumn');
+
+    expect(result.totalRevenue).toBe(3900);
+    expect(result.totalCosts).toBe(300);
+    expect(result.ledgerEntries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'revenue',
+        category: 'gos-income',
+        amount: 1200,
+      }),
+      expect.objectContaining({
+        kind: 'cost',
+        category: 'gm-event-modifier',
+        amount: 300,
+      }),
+    ]));
+  });
+
+  it('charges recurring troop, siege, noble, and prisoner upkeep', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      troops: [{
+        id: 'troop-1',
+        type: 'Cavalry',
+        recruitmentTurnsRemaining: 0,
+      }],
+      siegeUnits: [{
+        id: 'siege-1',
+        type: 'Cannon',
+        constructionTurnsRemaining: 0,
+      }],
+      nobles: [
+        {
+          id: 'noble-ruler',
+          name: 'Ruler',
+          estateLevel: 'Meagre',
+          isRuler: true,
+          isPrisoner: false,
+        },
+        {
+          id: 'noble-guest',
+          name: 'Guest Lord',
+          estateLevel: 'Comfortable',
+          isRuler: false,
+          isPrisoner: true,
+        },
+      ],
+    }), 1, 'Summer');
+
+    expect(result.totalCosts).toBe(2875);
+    expect(result.ledgerEntries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: 'troop-upkeep', amount: 1000 }),
+      expect.objectContaining({ category: 'siege-upkeep', amount: 1500 }),
+      expect.objectContaining({ category: 'noble-upkeep', amount: 250 }),
+      expect.objectContaining({ category: 'prisoner-upkeep', amount: 125 }),
+    ]));
+  });
+
+  it('clears a persisted food shortage source after a second recovery season', () => {
+    const result = resolveEconomyForRealm(createFoodRecoveryFixture(), 2, 'Spring');
+
+    expect(result.food.consecutiveShortageSeasons).toBe(0);
+    expect(result.food.consecutiveRecoverySeasons).toBe(0);
+    expect(result.turmoil.sources).toEqual([]);
+  });
+
+  it('gives the first guild-owned building on a guild free upkeep but charges duplicates', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      settlements: [{
+        id: 'guild-town',
+        name: 'Guild Town',
+        size: 'Village',
+        buildings: [
+          {
+            id: 'guild-bank-free',
+            type: 'Bank',
+            size: 'Medium',
+            constructionTurnsRemaining: 0,
+            takesBuildingSlot: true,
+            isOperational: true,
+            maintenanceState: 'active',
+            isGuildOwned: true,
+            guildId: 'guild-1',
+            material: null,
+          },
+          {
+            id: 'guild-bank-paid',
+            type: 'Bank',
+            size: 'Medium',
+            constructionTurnsRemaining: 0,
+            takesBuildingSlot: true,
+            isOperational: true,
+            maintenanceState: 'active',
+            isGuildOwned: true,
+            guildId: 'guild-1',
+            material: null,
+          },
+        ],
+        resourceSites: [],
+      }],
+    }), 1, 'Summer');
+
+    const buildingUpkeepEntries = result.ledgerEntries.filter((entry) => entry.category === 'building-upkeep');
+    expect(buildingUpkeepEntries).toHaveLength(1);
+    expect(buildingUpkeepEntries[0]).toMatchObject({
+      buildingId: 'guild-bank-paid',
+      amount: 1000,
+    });
   });
 
   it('expires levy after the marked turn resolves', () => {

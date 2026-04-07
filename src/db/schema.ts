@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 import type {
   BuildingLocationType,
@@ -39,6 +39,7 @@ export const gamesRelations = relations(games, ({ many }) => ({
   turnEvents: many(turnEvents),
   economicSnapshots: many(economicSnapshots),
   economicEntries: many(economicEntries),
+  turnResolutions: many(turnResolutions),
 }));
 
 // ============================================================
@@ -445,7 +446,14 @@ export const economicSnapshots = sqliteTable('economic_snapshots', {
   taxTypeApplied: text('tax_type_applied').notNull(),
   summary: text('summary').default('{}').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
-});
+}, (table) => ([
+  uniqueIndex('economic_snapshots_game_realm_turn_unique').on(
+    table.gameId,
+    table.realmId,
+    table.year,
+    table.season,
+  ),
+]));
 
 export const economicSnapshotsRelations = relations(economicSnapshots, ({ one, many }) => ({
   game: one(games, { fields: [economicSnapshots.gameId], references: [games.id] }),
@@ -478,4 +486,21 @@ export const economicEntriesRelations = relations(economicEntries, ({ one }) => 
   snapshot: one(economicSnapshots, { fields: [economicEntries.snapshotId], references: [economicSnapshots.id] }),
   game: one(games, { fields: [economicEntries.gameId], references: [games.id] }),
   realm: one(realms, { fields: [economicEntries.realmId], references: [realms.id] }),
+}));
+
+export const turnResolutions = sqliteTable('turn_resolutions', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  year: integer('year').notNull(),
+  season: text('season').notNull(),
+  idempotencyKey: text('idempotency_key'),
+  result: text('result').default('{}').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (table) => ([
+  uniqueIndex('turn_resolutions_game_turn_unique').on(table.gameId, table.year, table.season),
+  uniqueIndex('turn_resolutions_game_idempotency_unique').on(table.gameId, table.idempotencyKey),
+]));
+
+export const turnResolutionsRelations = relations(turnResolutions, ({ one }) => ({
+  game: one(games, { fields: [turnResolutions.gameId], references: [games.id] }),
 }));

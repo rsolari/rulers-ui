@@ -57,6 +57,7 @@ describe('POST /api/game/[gameId]/troops', () => {
       body: JSON.stringify({
         realmId: 'realm-player',
         type: 'Spearmen',
+        recruitmentSettlementId: 'settlement-1',
       }),
     }), {
       params: Promise.resolve({ gameId: 'game-1' }),
@@ -66,6 +67,7 @@ describe('POST /api/game/[gameId]/troops', () => {
     expect(actionMocks.createTroopRecruitment).toHaveBeenCalledWith('game-1', {
       realmId: 'realm-player',
       type: 'Spearmen',
+      recruitmentSettlementId: 'settlement-1',
     });
     expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');
     expect(response.status).toBe(201);
@@ -102,6 +104,7 @@ describe('POST /api/game/[gameId]/troops', () => {
       body: JSON.stringify({
         realmId: 'realm-player',
         type: 'Shieldbearers',
+        recruitmentSettlementId: 'settlement-1',
       }),
     }), {
       params: Promise.resolve({ gameId: 'game-1' }),

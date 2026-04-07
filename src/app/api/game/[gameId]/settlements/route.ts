@@ -37,6 +37,23 @@ async function getGoverningNobleMap(settlementList: Array<{
   return new Map(governingNobles.map((noble) => [noble.id, noble]));
 }
 
+function attachBuildingsToSettlements(
+  settlementList: Array<typeof settlements.$inferSelect>,
+  buildingList: Array<typeof buildings.$inferSelect>,
+  governingNobleById: Map<string, GoverningNobleSummary>,
+) {
+  return settlementList.map((settlement) => ({
+    ...settlement,
+    governingNoble: settlement.governingNobleId
+      ? governingNobleById.get(settlement.governingNobleId) ?? null
+      : null,
+    buildings: buildingList.filter((building) => building.settlementId === settlement.id),
+    territoryBuildings: buildingList.filter((building) => (
+      !building.settlementId && building.territoryId === settlement.territoryId
+    )),
+  }));
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ gameId: string }> }
@@ -48,31 +65,22 @@ export async function GET(
 
   if (realmId) {
     const settList = await db.select().from(settlements).where(eq(settlements.realmId, realmId));
-    const settIds = settList.map((settlement) => settlement.id);
     const governingNobleById = await getGoverningNobleMap(settList);
-    const buildingList = settIds.length > 0
-      ? await db.select().from(buildings).where(inArray(buildings.settlementId, settIds))
+    const territoryIds = [...new Set(settList.map((settlement) => settlement.territoryId))];
+    const buildingList = territoryIds.length > 0
+      ? await db.select().from(buildings).where(inArray(buildings.territoryId, territoryIds))
       : [];
 
-    return NextResponse.json(settList.map((settlement) => ({
-      ...settlement,
-      governingNoble: settlement.governingNobleId
-        ? governingNobleById.get(settlement.governingNobleId) ?? null
-        : null,
-      buildings: buildingList.filter((building) => building.settlementId === settlement.id),
-    })));
+    return NextResponse.json(attachBuildingsToSettlements(settList, buildingList, governingNobleById));
   }
 
   if (territoryId) {
     const settList = await db.select().from(settlements).where(eq(settlements.territoryId, territoryId));
     const governingNobleById = await getGoverningNobleMap(settList);
-
-    return NextResponse.json(settList.map((settlement) => ({
-      ...settlement,
-      governingNoble: settlement.governingNobleId
-        ? governingNobleById.get(settlement.governingNobleId) ?? null
-        : null,
-    })));
+    const buildingList = settList.length > 0
+      ? await db.select().from(buildings).where(eq(buildings.territoryId, territoryId))
+      : [];
+    return NextResponse.json(attachBuildingsToSettlements(settList, buildingList, governingNobleById));
   }
 
   const territoryList = await db.select().from(territories).where(eq(territories.gameId, gameId));
@@ -83,19 +91,12 @@ export async function GET(
   }
 
   const settList = await db.select().from(settlements).where(inArray(settlements.territoryId, territoryIds));
-  const settIds = settList.map((settlement) => settlement.id);
   const governingNobleById = await getGoverningNobleMap(settList);
-  const buildingList = settIds.length > 0
-    ? await db.select().from(buildings).where(inArray(buildings.settlementId, settIds))
+  const buildingList = territoryIds.length > 0
+    ? await db.select().from(buildings).where(inArray(buildings.territoryId, territoryIds))
     : [];
 
-  return NextResponse.json(settList.map((settlement) => ({
-    ...settlement,
-    governingNoble: settlement.governingNobleId
-      ? governingNobleById.get(settlement.governingNobleId) ?? null
-      : null,
-    buildings: buildingList.filter((building) => building.settlementId === settlement.id),
-  })));
+  return NextResponse.json(attachBuildingsToSettlements(settList, buildingList, governingNobleById));
 }
 
 export async function POST(

@@ -4,6 +4,7 @@ import { db as defaultDb, type DB } from '@/db';
 import {
   armies,
   buildings,
+  games,
   guildsOrdersSocieties,
   mapHexes,
   realms,
@@ -14,7 +15,13 @@ import {
   troops,
 } from '@/db/schema';
 import { BUILDING_DEFS, BUILDING_SIZE_DATA, RESOURCE_RARITY, SETTLEMENT_DATA, TROOP_DEFS } from '@/lib/game-logic/constants';
-import { canRecruitTroop, getBuildingCost, getRecruitmentUpkeep } from '@/lib/game-logic/recruitment';
+import {
+  canRecruitTroop,
+  getBuildingCost,
+  getRecruitmentUpkeep,
+  getRecruitPerSeason,
+  getSettlementTroopCap,
+} from '@/lib/game-logic/recruitment';
 import type {
   BuildingLocationType,
   BuildingSize,
@@ -29,7 +36,8 @@ import type {
   TroopType,
 } from '@/types/game';
 
-type DatabaseLike = DB;
+type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
+type DatabaseLike = DB | Transaction;
 
 type IdGenerator = () => string;
 
@@ -77,6 +85,8 @@ interface PlacementTerritory {
   gameId: string;
   realmId: string | null;
   name: string;
+  foodCapBase: number;
+  foodCapBonus: number;
   hasRiverAccess: boolean;
   hasSeaAccess: boolean;
 }
@@ -99,8 +109,9 @@ interface BuildingPreparationContext {
   tradedBuildings: BuildingType[];
   gos: GosReference[];
   traditions: Tradition[];
-  hasLocalTechnicalKnowledge: boolean;
-  hasTradedTechnicalKnowledge: boolean;
+  localTechnicalKnowledge: string[];
+  tradedTechnicalKnowledge: string[];
+  hasFoodAccess: boolean;
 }
 
 interface TroopPreparationContext {
@@ -192,11 +203,12 @@ export interface PreparedTradeRouteCreation {
   };
 }
 
-interface CreateBuildingInput {
+export interface CreateBuildingInput {
   settlementId?: string | null;
   territoryId?: string | null;
   hexId?: string | null;
   type: string;
+  technicalKnowledgeKey?: string | null;
   material?: string | null;
   instant?: boolean;
   isGuildOwned?: boolean;
@@ -212,11 +224,12 @@ interface CreateResourceSiteInput {
   rarity?: ResourceRarity | null;
 }
 
-interface CreateTroopInput {
+export interface CreateTroopInput {
   realmId?: string | null;
   type: string;
   armyId?: string | null;
   garrisonSettlementId?: string | null;
+  recruitmentSettlementId?: string | null;
   instant?: boolean;
 }
 
@@ -348,22 +361,15 @@ function resolveResourceAccess(
 function resolveRequirementSource(
   requirement: string,
   context: BuildingPreparationContext,
-  notes: RuleNote[],
+  _notes: RuleNote[],
+  requiredTechnicalKnowledgeKey?: string | null,
 ): AccessSource {
   if (requirement === 'TechnicalKnowledge') {
-    if (context.hasLocalTechnicalKnowledge) {
-      notes.push({
-        code: 'technical_knowledge_scope_ambiguous',
-        message: 'Technical knowledge is stored as an untyped realm-level list, so the validator treats any entry as satisfying the generic TechnicalKnowledge prerequisite.',
-      });
+    if (requiredTechnicalKnowledgeKey && context.localTechnicalKnowledge.includes(requiredTechnicalKnowledgeKey)) {
       return 'local';
     }
 
-    if (context.hasTradedTechnicalKnowledge) {
-      notes.push({
-        code: 'technical_knowledge_scope_ambiguous',
-        message: 'Technical knowledge is stored as an untyped realm-level list, so the validator treats any traded entry as satisfying the generic TechnicalKnowledge prerequisite.',
-      });
+    if (requiredTechnicalKnowledgeKey && context.tradedTechnicalKnowledge.includes(requiredTechnicalKnowledgeKey)) {
       return 'traded';
     }
 
@@ -371,11 +377,7 @@ function resolveRequirementSource(
   }
 
   if (requirement === 'Food') {
-    notes.push({
-      code: 'food_prerequisite_unenforced',
-      message: 'The rulebook lists Food as a prerequisite for Stables, but the current schema models food as derived economy state rather than an explicit build input, so no extra gate was applied here.',
-    });
-    return 'local';
+    return context.hasFoodAccess ? 'local' : 'none';
   }
 
   const options = requirement.split('|') as ResourceType[];
@@ -546,13 +548,14 @@ export function prepareBuildingCreation(
     validateAllottedGos(requiredAllotment, effectiveAllottedGosId, context.gos);
   }
 
+  const requiredTechnicalKnowledgeKey = input.technicalKnowledgeKey ?? buildingType;
   let usesTradeAccess = false;
   for (const requirement of def.prerequisites) {
     if (requirement === 'Guild' || requirement === 'Order' || requirement === 'Society') {
       continue;
     }
 
-    const source = resolveRequirementSource(requirement, context, notes);
+    const source = resolveRequirementSource(requirement, context, notes, requiredTechnicalKnowledgeKey);
     if (source === 'none') {
       throw new RuleValidationError(
         `Missing prerequisite for ${buildingType}: ${requirement}`,
@@ -838,6 +841,8 @@ function loadTerritory(database: DatabaseLike, gameId: string, territoryId?: str
     gameId: territory.gameId,
     realmId: territory.realmId ?? null,
     name: territory.name,
+    foodCapBase: territory.foodCapBase,
+    foodCapBonus: territory.foodCapBonus,
     hasRiverAccess: territory.hasRiverAccess,
     hasSeaAccess: territory.hasSeaAccess,
   };
@@ -862,6 +867,46 @@ function loadSettlement(database: DatabaseLike, settlementId?: string | null): P
     name: settlement.name,
     size: settlement.size as SettlementSize,
   };
+}
+
+function hasRealmFoodAccess(
+  realmTerritories: Array<typeof territories.$inferSelect>,
+  realmSettlements: Array<typeof settlements.$inferSelect>,
+  realmBuildingRows: Array<typeof buildings.$inferSelect>,
+) {
+  const occupiedSlotsBySettlement = new Map<string, number>();
+
+  for (const building of realmBuildingRows) {
+    if (!building.settlementId || !building.takesBuildingSlot) continue;
+    occupiedSlotsBySettlement.set(
+      building.settlementId,
+      (occupiedSlotsBySettlement.get(building.settlementId) ?? 0) + 1,
+    );
+  }
+
+  const settlementsByTerritory = new Map<string, Array<typeof settlements.$inferSelect>>();
+  for (const settlement of realmSettlements) {
+    const territorySettlements = settlementsByTerritory.get(settlement.territoryId) ?? [];
+    territorySettlements.push(settlement);
+    settlementsByTerritory.set(settlement.territoryId, territorySettlements);
+  }
+
+  for (const territory of realmTerritories) {
+    const territoryFoodCapacity = Math.max(territory.foodCapBase + territory.foodCapBonus, 0);
+    if (territoryFoodCapacity <= 0) continue;
+
+    const uncappedFoodProduced = (settlementsByTerritory.get(territory.id) ?? []).reduce((sum, settlement) => {
+      const totalSlots = SETTLEMENT_DATA[settlement.size as SettlementSize].buildingSlots;
+      const occupiedSlots = occupiedSlotsBySettlement.get(settlement.id) ?? 0;
+      return sum + Math.max(totalSlots - occupiedSlots, 0);
+    }, 0);
+
+    if (Math.min(uncappedFoodProduced, territoryFoodCapacity) > 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function loadLandHex(database: DatabaseLike, hexId?: string | null) {
@@ -900,8 +945,9 @@ function loadRealmRuleAccess(database: DatabaseLike, gameId: string, realmId: st
       tradedBuildings: [] as BuildingType[],
       gos: [] as GosReference[],
       traditions: [] as Tradition[],
-      hasLocalTechnicalKnowledge: false,
-      hasTradedTechnicalKnowledge: false,
+      localTechnicalKnowledge: [] as string[],
+      tradedTechnicalKnowledge: [] as string[],
+      hasFoodAccess: false,
     };
   }
 
@@ -975,10 +1021,11 @@ function loadRealmRuleAccess(database: DatabaseLike, gameId: string, realmId: st
       .map((building) => building.type as BuildingType)),
     gos: gosRows.map((row) => ({ id: row.id, type: row.type as GOSType })),
     traditions: parseJson<Tradition[]>(realm.traditions, []),
-    hasLocalTechnicalKnowledge: parseJson<string[]>(realm.technicalKnowledge, []).length > 0,
-    hasTradedTechnicalKnowledge: partnerRealms.some((partnerRealm) => (
-      parseJson<string[]>(partnerRealm.technicalKnowledge, []).length > 0
-    )),
+    localTechnicalKnowledge: dedupe(parseJson<string[]>(realm.technicalKnowledge, [])),
+    tradedTechnicalKnowledge: dedupe(partnerRealms.flatMap((partnerRealm) => (
+      parseJson<string[]>(partnerRealm.technicalKnowledge, [])
+    ))),
+    hasFoodAccess: hasRealmFoodAccess(realmTerritories, realmSettlements, realmBuildingRows),
   };
 }
 
@@ -1080,6 +1127,63 @@ export async function createBuilding(
   return prepared;
 }
 
+export function prepareRealmBuildingCreation(
+  gameId: string,
+  realmId: string,
+  input: CreateBuildingInput,
+  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+) {
+  const database = options.database ?? defaultDb;
+  const settlement = loadSettlement(database, input.settlementId ?? null);
+  if (input.settlementId && !settlement) {
+    throw new RuleValidationError('Settlement not found', 404, 'settlement_not_found', { settlementId: input.settlementId });
+  }
+
+  const derivedTerritoryId = settlement?.territoryId ?? input.territoryId ?? null;
+  const territory = loadTerritory(database, gameId, derivedTerritoryId);
+  if (derivedTerritoryId && !territory) {
+    throw new RuleValidationError('Territory not found', 404, 'territory_not_found', { territoryId: derivedTerritoryId, gameId });
+  }
+
+  const effectiveRealmId = settlement?.realmId ?? territory?.realmId ?? null;
+  if (!effectiveRealmId || effectiveRealmId !== realmId) {
+    throw new RuleValidationError(
+      'Building placement must target a settlement or territory owned by the realm',
+      403,
+      'building_location_not_owned',
+      {
+        realmId,
+        settlementId: input.settlementId ?? null,
+        territoryId: derivedTerritoryId,
+      },
+    );
+  }
+
+  const ruleAccess = loadRealmRuleAccess(database, gameId, effectiveRealmId);
+  const existingBuildings = settlement
+    ? database.select({
+      id: buildings.id,
+      type: buildings.type,
+      takesBuildingSlot: buildings.takesBuildingSlot,
+      constructionTurnsRemaining: buildings.constructionTurnsRemaining,
+    })
+      .from(buildings)
+      .where(eq(buildings.settlementId, settlement.id))
+      .all()
+    : [];
+
+  return prepareBuildingCreation({
+    ...input,
+    territoryId: derivedTerritoryId,
+  }, {
+    gameId,
+    settlement,
+    territory,
+    existingBuildings,
+    ...ruleAccess,
+  }, options.idGenerator);
+}
+
 export async function createResourceSite(
   gameId: string,
   input: CreateResourceSiteInput,
@@ -1113,6 +1217,223 @@ export async function createTroopRecruitment(
 
   if (!realmId) {
     throw new RuleValidationError('realmId required', 400, 'realm_required');
+  }
+
+  return database.transaction((tx) => {
+    const game = tx.select({
+      id: games.id,
+      currentYear: games.currentYear,
+      currentSeason: games.currentSeason,
+    })
+      .from(games)
+      .where(eq(games.id, gameId))
+      .get();
+
+    if (!game) {
+      throw new RuleValidationError('Game not found', 404, 'game_not_found', { gameId });
+    }
+
+    const realm = tx.select({
+      id: realms.id,
+      treasury: realms.treasury,
+    })
+      .from(realms)
+      .where(and(
+        eq(realms.id, realmId),
+        eq(realms.gameId, gameId),
+      ))
+      .get();
+
+    if (!realm) {
+      throw new RuleValidationError('Realm not found', 404, 'realm_not_found', { realmId, gameId });
+    }
+
+    const recruitmentSettlementId = input.recruitmentSettlementId ?? null;
+    if (!recruitmentSettlementId) {
+      throw new RuleValidationError(
+        'recruitmentSettlementId required',
+        400,
+        'recruitment_settlement_required',
+      );
+    }
+
+    const realmSettlements = tx.select({
+      id: settlements.id,
+      size: settlements.size,
+    })
+      .from(settlements)
+      .where(eq(settlements.realmId, realmId))
+      .all();
+
+    const recruitmentSettlement = realmSettlements.find((settlement) => settlement.id === recruitmentSettlementId);
+    if (!recruitmentSettlement) {
+      throw new RuleValidationError(
+        'Recruitment settlement not found for this realm',
+        404,
+        'recruitment_settlement_not_found',
+        { settlementId: recruitmentSettlementId, realmId },
+      );
+    }
+
+    const totalTroopCap = realmSettlements.reduce(
+      (sum, settlement) => sum + getSettlementTroopCap(settlement.size as SettlementSize),
+      0,
+    );
+    const currentTroopCount = tx.select({ id: troops.id })
+      .from(troops)
+      .where(eq(troops.realmId, realmId))
+      .all()
+      .length;
+
+    if (currentTroopCount >= totalTroopCap) {
+      throw new RuleValidationError(
+        'Realm has reached its troop support cap',
+        409,
+        'realm_troop_cap_exceeded',
+        { realmId, currentTroopCount, totalTroopCap },
+      );
+    }
+
+    const seasonalRecruitCap = getRecruitPerSeason(recruitmentSettlement.size as SettlementSize);
+    const currentSeasonRecruitCount = tx.select({ id: troops.id })
+      .from(troops)
+      .where(and(
+        eq(troops.recruitmentSettlementId, recruitmentSettlement.id),
+        eq(troops.recruitmentYear, game.currentYear),
+        eq(troops.recruitmentSeason, game.currentSeason),
+      ))
+      .all()
+      .length;
+
+    if (currentSeasonRecruitCount >= seasonalRecruitCap) {
+      throw new RuleValidationError(
+        'Settlement has reached its recruitment cap for the season',
+        409,
+        'settlement_recruitment_cap_exceeded',
+        {
+          settlementId: recruitmentSettlement.id,
+          year: game.currentYear,
+          season: game.currentSeason,
+          currentSeasonRecruitCount,
+          seasonalRecruitCap,
+        },
+      );
+    }
+
+    const ruleAccess = loadRealmRuleAccess(tx, gameId, realmId);
+    let armyId: string | null = null;
+    let garrisonSettlementId: string | null = null;
+
+    if (input.armyId) {
+      const army = tx.select({ id: armies.id })
+        .from(armies)
+        .where(and(
+          eq(armies.id, input.armyId),
+          eq(armies.realmId, realmId),
+        ))
+        .get();
+
+      if (!army) {
+        throw new RuleValidationError('Army not found for this realm', 404, 'army_not_found', { armyId: input.armyId, realmId });
+      }
+
+      armyId = army.id;
+    }
+
+    if (input.garrisonSettlementId) {
+      const settlement = tx.select({ id: settlements.id })
+        .from(settlements)
+        .where(and(
+          eq(settlements.id, input.garrisonSettlementId),
+          eq(settlements.realmId, realmId),
+        ))
+        .get();
+
+      if (!settlement) {
+        throw new RuleValidationError(
+          'Settlement not found for this realm',
+          404,
+          'garrison_settlement_not_found',
+          { settlementId: input.garrisonSettlementId, realmId },
+        );
+      }
+
+      garrisonSettlementId = settlement.id;
+    }
+
+    const prepared = prepareTroopRecruitment(input, {
+      gameId,
+      realmId,
+      localBuildings: ruleAccess.localBuildings,
+      tradedBuildings: ruleAccess.tradedBuildings,
+      armyId,
+      garrisonSettlementId,
+    }, options.idGenerator);
+
+    const troopCost = prepared.cost.total;
+    if (realm.treasury < troopCost) {
+      throw new RuleValidationError(
+        'Realm treasury cannot afford this recruitment',
+        409,
+        'insufficient_treasury',
+        { realmId, treasury: realm.treasury, troopCost },
+      );
+    }
+
+    const row = {
+      ...prepared.row,
+      recruitmentSettlementId: recruitmentSettlement.id,
+      recruitmentYear: game.currentYear,
+      recruitmentSeason: game.currentSeason,
+    };
+
+    tx.update(realms)
+      .set({ treasury: realm.treasury - troopCost })
+      .where(eq(realms.id, realmId))
+      .run();
+
+    tx.insert(troops).values(row).run();
+
+    return {
+      ...prepared,
+      row,
+    };
+  });
+}
+
+export function prepareRealmTroopRecruitment(
+  gameId: string,
+  realmId: string,
+  input: CreateTroopInput,
+  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+) {
+  const database = options.database ?? defaultDb;
+  const recruitmentSettlementId = input.recruitmentSettlementId ?? null;
+
+  if (!recruitmentSettlementId) {
+    throw new RuleValidationError(
+      'recruitmentSettlementId required',
+      400,
+      'recruitment_settlement_required',
+    );
+  }
+
+  const realmSettlements = database.select({
+    id: settlements.id,
+    size: settlements.size,
+  })
+    .from(settlements)
+    .where(eq(settlements.realmId, realmId))
+    .all();
+
+  const recruitmentSettlement = realmSettlements.find((settlement) => settlement.id === recruitmentSettlementId);
+  if (!recruitmentSettlement) {
+    throw new RuleValidationError(
+      'Recruitment settlement not found for this realm',
+      404,
+      'recruitment_settlement_not_found',
+      { settlementId: recruitmentSettlementId, realmId },
+    );
   }
 
   const ruleAccess = loadRealmRuleAccess(database, gameId, realmId);
@@ -1156,7 +1477,7 @@ export async function createTroopRecruitment(
     garrisonSettlementId = settlement.id;
   }
 
-  const prepared = prepareTroopRecruitment(input, {
+  return prepareTroopRecruitment(input, {
     gameId,
     realmId,
     localBuildings: ruleAccess.localBuildings,
@@ -1164,9 +1485,6 @@ export async function createTroopRecruitment(
     armyId,
     garrisonSettlementId,
   }, options.idGenerator);
-
-  database.insert(troops).values(prepared.row).run();
-  return prepared;
 }
 
 export async function createTradeRoute(

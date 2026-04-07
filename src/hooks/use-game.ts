@@ -24,8 +24,11 @@ interface RealmData {
   traditions: string;
   treasury: number;
   taxType: string;
-  turmoil: number;
   turmoilSources: string;
+  projectedTurmoil?: number | null;
+  turmoilBreakdown?: unknown[];
+  openTurmoilEventId?: string | null;
+  winterUnrestPending?: boolean;
 }
 
 export function useGame(gameId: string) {

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { NobleStatusEditor } from '@/components/governance/NobleStatusEditor';
 import { NobleActivityBadge } from '@/components/governance/NobleActivityBadge';
+import { GmTurnReviewPanel } from '@/components/turn-actions/gm-turn-review-panel';
 import { useRole } from '@/hooks/use-role';
 import type { EconomyOverviewRealmDto } from '@/lib/economy-dto';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
@@ -49,9 +50,11 @@ interface Realm {
   name: string;
   governmentType: string;
   treasury: number;
-  turmoil: number;
   isNPC: boolean;
   traditions: string;
+  projectedTurmoil?: number | null;
+  openTurmoilEventId?: string | null;
+  winterUnrestPending?: boolean;
 }
 
 interface Territory {
@@ -675,9 +678,22 @@ export default function GMDashboard() {
                         Projected {economyOverview[realm.id].projectedTreasury.toLocaleString()}gc
                       </span>
                     )}
-                    <Badge variant={realm.turmoil > 5 ? 'red' : realm.turmoil > 2 ? 'gold' : 'green'}>
-                      Turmoil {realm.turmoil}
+                    <Badge
+                      variant={
+                        (realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0) > 5
+                          ? 'red'
+                          : (realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0) > 2
+                            ? 'gold'
+                            : 'green'
+                      }
+                    >
+                      Turmoil {realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0}
                     </Badge>
+                    {realm.openTurmoilEventId ? (
+                      <Badge variant={realm.winterUnrestPending ? 'red' : 'gold'}>
+                        {realm.winterUnrestPending ? 'Winter unrest' : 'Review open'}
+                      </Badge>
+                    ) : null}
                     {economyOverview[realm.id]?.warningCount ? (
                       <Badge variant="gold">{economyOverview[realm.id].warningCount} warnings</Badge>
                     ) : null}
@@ -1026,6 +1042,8 @@ export default function GMDashboard() {
           {realms.length === 0 && <p className="text-ink-300 text-sm">No realms yet.</p>}
         </CardContent>
       </Card>
+
+      <GmTurnReviewPanel gameId={gameId} />
     </main>
   );
 }

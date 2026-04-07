@@ -1,5 +1,11 @@
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { initializeDatabaseSchema } from '@/db/bootstrap';
+import * as schema from '@/db/schema';
 import {
+  createTroopRecruitment,
   prepareBuildingCreation,
   prepareResourceSiteCreation,
   prepareTradeRouteCreation,
@@ -7,6 +13,15 @@ import {
   RuleValidationError,
 } from './rules-action-service';
 import type { BuildingType, GOSType, ResourceType } from '@/types/game';
+
+function createTestDatabase() {
+  const sqlite = new Database(':memory:');
+  initializeDatabaseSchema(sqlite);
+  return {
+    sqlite,
+    db: drizzle(sqlite, { schema }),
+  };
+}
 
 function expectRuleError(fn: () => unknown) {
   try {
@@ -34,6 +49,8 @@ function createBuildingContext(overrides: Partial<Parameters<typeof prepareBuild
       gameId: 'game-1',
       realmId: 'realm-1',
       name: 'Coreland',
+      foodCapBase: 30,
+      foodCapBonus: 0,
       hasRiverAccess: false,
       hasSeaAccess: false,
     },
@@ -44,8 +61,9 @@ function createBuildingContext(overrides: Partial<Parameters<typeof prepareBuild
     tradedBuildings: [] as BuildingType[],
     gos: [] as Array<{ id: string; type: GOSType }>,
     traditions: [],
-    hasLocalTechnicalKnowledge: false,
-    hasTradedTechnicalKnowledge: false,
+    localTechnicalKnowledge: [] as string[],
+    tradedTechnicalKnowledge: [] as string[],
+    hasFoodAccess: false,
     ...overrides,
   };
 }
@@ -147,30 +165,57 @@ describe('prepareBuildingCreation', () => {
     expect(error.details).toEqual({ requiredType: 'Order' });
   });
 
-  it('adds an ambiguity note when generic technical knowledge is imported via trade', () => {
+  it('uses matching traded technical knowledge keys for building prerequisites', () => {
     const prepared = prepareBuildingCreation({
       settlementId: 'settlement-1',
       type: 'Gunsmith',
     }, createBuildingContext({
       localResources: ['Ore'],
-      hasTradedTechnicalKnowledge: true,
+      tradedTechnicalKnowledge: ['Gunsmith'],
     }), () => 'building-6');
 
     expect(prepared.cost.usesTradeAccess).toBe(true);
-    expect(prepared.notes).toContainEqual(expect.objectContaining({
-      code: 'technical_knowledge_scope_ambiguous',
-    }));
+    expect(prepared.notes).toEqual([]);
   });
 
-  it('records the food prerequisite ambiguity for stables instead of inventing a stricter gate', () => {
+  it('rejects non-matching technical knowledge keys for buildings that require them', () => {
+    const error = expectRuleError(() => prepareBuildingCreation({
+      settlementId: 'settlement-1',
+      type: 'Gunsmith',
+    }, createBuildingContext({
+      localResources: ['Ore'],
+      tradedTechnicalKnowledge: ['CannonFoundry'],
+    }), () => 'building-6b'));
+
+    expect(error.code).toBe('building_prerequisite_unmet');
+    expect(error.details).toEqual({
+      type: 'Gunsmith',
+      missingPrerequisite: 'TechnicalKnowledge',
+    });
+  });
+
+  it('requires actual realm food access for stables', () => {
+    const error = expectRuleError(() => prepareBuildingCreation({
+      settlementId: 'settlement-1',
+      type: 'Stables',
+    }, createBuildingContext(), () => 'building-7'));
+
+    expect(error.code).toBe('building_prerequisite_unmet');
+    expect(error.details).toEqual({
+      type: 'Stables',
+      missingPrerequisite: 'Food',
+    });
+  });
+
+  it('allows stables when the realm currently produces food', () => {
     const prepared = prepareBuildingCreation({
       settlementId: 'settlement-1',
       type: 'Stables',
-    }, createBuildingContext(), () => 'building-7');
+    }, createBuildingContext({
+      hasFoodAccess: true,
+    }), () => 'building-7b');
 
-    expect(prepared.notes).toContainEqual(expect.objectContaining({
-      code: 'food_prerequisite_unenforced',
-    }));
+    expect(prepared.cost.total).toBe(1500);
   });
 });
 
@@ -187,6 +232,8 @@ describe('prepareResourceSiteCreation', () => {
         gameId: 'game-1',
         realmId: 'realm-1',
         name: 'Coreland',
+        foodCapBase: 30,
+        foodCapBonus: 0,
         hasRiverAccess: false,
         hasSeaAccess: false,
       },
@@ -255,6 +302,8 @@ describe('prepareTradeRouteCreation', () => {
         gameId: 'game-1',
         realmId: 'realm-1',
         name: 'North',
+        foodCapBase: 30,
+        foodCapBonus: 0,
         hasRiverAccess: false,
         hasSeaAccess: false,
       },
@@ -263,6 +312,8 @@ describe('prepareTradeRouteCreation', () => {
         gameId: 'game-1',
         realmId: 'realm-2',
         name: 'South',
+        foodCapBase: 30,
+        foodCapBonus: 0,
         hasRiverAccess: false,
         hasSeaAccess: false,
       },
@@ -297,6 +348,8 @@ describe('prepareTradeRouteCreation', () => {
         gameId: 'game-1',
         realmId: 'realm-1',
         name: 'North',
+        foodCapBase: 30,
+        foodCapBonus: 0,
         hasRiverAccess: false,
         hasSeaAccess: true,
       },
@@ -305,6 +358,8 @@ describe('prepareTradeRouteCreation', () => {
         gameId: 'game-1',
         realmId: 'realm-2',
         name: 'South',
+        foodCapBase: 30,
+        foodCapBonus: 0,
         hasRiverAccess: false,
         hasSeaAccess: true,
       },
@@ -315,5 +370,164 @@ describe('prepareTradeRouteCreation', () => {
     }, () => 'trade-2'));
 
     expect(error.code).toBe('trade_route_port_required');
+  });
+});
+
+describe('createTroopRecruitment', () => {
+  function seedRecruitmentContext(
+    db: ReturnType<typeof createTestDatabase>['db'],
+    overrides: {
+      treasury?: number;
+      settlementSize?: 'Village' | 'Town' | 'City';
+      currentYear?: number;
+      currentSeason?: 'Spring' | 'Summer' | 'Autumn' | 'Winter';
+    } = {},
+  ) {
+    const {
+      treasury = 1000,
+      settlementSize = 'Village',
+      currentYear = 2,
+      currentSeason = 'Summer',
+    } = overrides;
+
+    db.insert(schema.games).values({
+      id: 'game-1',
+      name: 'Rules Test',
+      gmCode: 'gm-1',
+      playerCode: 'player-1',
+      currentYear,
+      currentSeason,
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-1',
+      gameId: 'game-1',
+      name: 'Ironhold',
+      governmentType: 'Monarch',
+      treasury,
+      taxType: 'Tribute',
+      turmoilSources: '[]',
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-1',
+      gameId: 'game-1',
+      name: 'Iron Vale',
+      realmId: 'realm-1',
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-1',
+      territoryId: 'territory-1',
+      realmId: 'realm-1',
+      name: 'Ironhold',
+      size: settlementSize,
+    }).run();
+  }
+
+  it('deducts treasury and records the recruitment turn metadata', async () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRecruitmentContext(db);
+
+    const created = await createTroopRecruitment('game-1', {
+      realmId: 'realm-1',
+      type: 'Spearmen',
+      garrisonSettlementId: 'settlement-1',
+      recruitmentSettlementId: 'settlement-1',
+    }, {
+      database: db,
+      idGenerator: () => 'troop-1',
+    });
+
+    expect(created.cost.total).toBe(250);
+    expect(created.row).toMatchObject({
+      id: 'troop-1',
+      garrisonSettlementId: 'settlement-1',
+      recruitmentSettlementId: 'settlement-1',
+      recruitmentYear: 2,
+      recruitmentSeason: 'Summer',
+    });
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-1')).get();
+    const troop = db.select().from(schema.troops).where(eq(schema.troops.id, 'troop-1')).get();
+
+    expect(realm?.treasury).toBe(750);
+    expect(troop).toMatchObject({
+      recruitmentSettlementId: 'settlement-1',
+      recruitmentYear: 2,
+      recruitmentSeason: 'Summer',
+    });
+
+    sqlite.close();
+  });
+
+  it('rejects recruitment after a settlement reaches its seasonal cap', async () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRecruitmentContext(db, { treasury: 5000 });
+
+    for (let index = 0; index < 4; index += 1) {
+      db.insert(schema.troops).values({
+        id: `troop-${index + 1}`,
+        realmId: 'realm-1',
+        type: 'Spearmen',
+        class: 'Basic',
+        armourType: 'Light',
+        condition: 'Healthy',
+        garrisonSettlementId: 'settlement-1',
+        recruitmentSettlementId: 'settlement-1',
+        recruitmentYear: 2,
+        recruitmentSeason: 'Summer',
+        recruitmentTurnsRemaining: 0,
+      }).run();
+    }
+
+    await expect(createTroopRecruitment('game-1', {
+      realmId: 'realm-1',
+      type: 'Spearmen',
+      garrisonSettlementId: 'settlement-1',
+      recruitmentSettlementId: 'settlement-1',
+    }, {
+      database: db,
+      idGenerator: () => 'troop-5',
+    })).rejects.toMatchObject({
+      code: 'settlement_recruitment_cap_exceeded',
+      status: 409,
+    });
+
+    sqlite.close();
+  });
+
+  it('rejects recruitment after a realm reaches its troop support cap', async () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRecruitmentContext(db, { treasury: 5000 });
+
+    for (let index = 0; index < 6; index += 1) {
+      db.insert(schema.troops).values({
+        id: `troop-${index + 1}`,
+        realmId: 'realm-1',
+        type: 'Spearmen',
+        class: 'Basic',
+        armourType: 'Light',
+        condition: 'Healthy',
+        garrisonSettlementId: 'settlement-1',
+        recruitmentTurnsRemaining: 0,
+      }).run();
+    }
+
+    await expect(createTroopRecruitment('game-1', {
+      realmId: 'realm-1',
+      type: 'Spearmen',
+      garrisonSettlementId: 'settlement-1',
+      recruitmentSettlementId: 'settlement-1',
+    }, {
+      database: db,
+      idGenerator: () => 'troop-7',
+    })).rejects.toMatchObject({
+      code: 'realm_troop_cap_exceeded',
+      status: 409,
+    });
+
+    sqlite.close();
   });
 });

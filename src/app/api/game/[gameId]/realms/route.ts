@@ -4,6 +4,7 @@ import { games, realms } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
+import { getEconomyOverview } from '@/lib/economy-service';
 
 export async function GET(
   _request: Request,
@@ -11,7 +12,16 @@ export async function GET(
 ) {
   const { gameId } = await params;
   const realmList = await db.select().from(realms).where(eq(realms.gameId, gameId));
-  return NextResponse.json(realmList);
+  const overview = getEconomyOverview(gameId);
+  const overviewByRealmId = new Map((overview?.realms ?? []).map((entry) => [entry.realmId, entry]));
+
+  return NextResponse.json(realmList.map((realm) => ({
+    ...realm,
+    projectedTurmoil: overviewByRealmId.get(realm.id)?.projectedTurmoil ?? null,
+    turmoilBreakdown: overviewByRealmId.get(realm.id)?.turmoilBreakdown ?? [],
+    openTurmoilEventId: overviewByRealmId.get(realm.id)?.openTurmoilEventId ?? null,
+    winterUnrestPending: overviewByRealmId.get(realm.id)?.winterUnrestPending ?? false,
+  })));
 }
 
 export async function POST(
@@ -38,7 +48,6 @@ export async function POST(
       foodBalance: body.foodBalance ?? 0,
       consecutiveFoodShortageSeasons: body.consecutiveFoodShortageSeasons ?? 0,
       consecutiveFoodRecoverySeasons: body.consecutiveFoodRecoverySeasons ?? 0,
-      turmoil: 0,
       turmoilSources: '[]',
     });
 
@@ -85,8 +94,6 @@ export async function PATCH(
         'foodBalance',
         'consecutiveFoodShortageSeasons',
         'consecutiveFoodRecoverySeasons',
-        'turmoil',
-        'turmoilSources',
       ]
       : ['name', 'governmentType', 'traditions'];
 
@@ -110,8 +117,6 @@ export async function PATCH(
     if (isGM && body.consecutiveFoodRecoverySeasons !== undefined) {
       updates.consecutiveFoodRecoverySeasons = body.consecutiveFoodRecoverySeasons;
     }
-    if (isGM && body.turmoil !== undefined) updates.turmoil = body.turmoil;
-    if (isGM && body.turmoilSources !== undefined) updates.turmoilSources = JSON.stringify(body.turmoilSources);
 
     await db.update(realms)
       .set(updates)

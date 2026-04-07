@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
+import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
 import { generateGameCode, isAuthError, requireGM, requireInitState } from '@/lib/auth';
+import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
 import {
   DEFAULT_CURATED_MAP_KEY,
   getActiveCuratedMapTerritories,
@@ -129,7 +130,6 @@ export async function POST(
             foodBalance: 0,
             consecutiveFoodShortageSeasons: 0,
             consecutiveFoodRecoverySeasons: 0,
-            turmoil: 0,
             turmoilSources: '[]',
           }).run();
         }
@@ -204,6 +204,21 @@ export async function POST(
             name: resource.settlement.name,
             size: settlementSize,
           }).run();
+
+          for (const fortification of getStartingSettlementFortifications(settlementSize)) {
+            tx.insert(buildings).values({
+              id: uuid(),
+              settlementId,
+              territoryId,
+              hexId: settlementHexId,
+              locationType: 'settlement',
+              type: fortification.type,
+              category: fortification.category,
+              size: fortification.size,
+              material: fortification.material,
+              takesBuildingSlot: fortification.takesBuildingSlot,
+            }).run();
+          }
 
           tx.insert(resourceSites).values({
             id: resourceSiteId,

@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { playerSlots, realms, settlements, territories, troops } from '@/db/schema';
+import { buildings, playerSlots, realms, settlements, territories, troops } from '@/db/schema';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
+import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
 import { getAvailableSettlementHexId } from '@/lib/game-logic/maps';
 import { REALM_STARTING_TROOPS } from '@/lib/game-logic/map-generation';
 
@@ -56,7 +57,6 @@ export async function POST(
         isNPC: false,
         treasury: 0,
         taxType: 'Tribute',
-        turmoil: 0,
         turmoilSources: '[]',
       }).run();
 
@@ -70,6 +70,21 @@ export async function POST(
         isCapital: true,
         governingNobleId: null,
       }).run();
+
+      for (const fortification of getStartingSettlementFortifications('Town')) {
+        tx.insert(buildings).values({
+          id: uuid(),
+          settlementId: townId,
+          territoryId: territory.id,
+          hexId: settlementHexId,
+          locationType: 'settlement',
+          type: fortification.type,
+          category: fortification.category,
+          size: fortification.size,
+          material: fortification.material,
+          takesBuildingSlot: fortification.takesBuildingSlot,
+        }).run();
+      }
 
       // Create starting garrison: 5 Spearmen in the town
       for (let i = 0; i < REALM_STARTING_TROOPS; i++) {

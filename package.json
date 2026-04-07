@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "oxlint --deny-warnings .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -37,9 +37,8 @@
     "@vitest/coverage-v8": "^4.0.18",
     "agentation": "^3.0.2",
     "drizzle-kit": "^0.31.9",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
     "jsdom": "^28.1.0",
+    "oxlint": "^1.59.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"

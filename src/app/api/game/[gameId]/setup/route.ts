@@ -4,12 +4,15 @@ import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
 import { generateGameCode, isAuthError, requireGM, requireInitState } from '@/lib/auth';
+import { initializeRealmCapital } from '@/lib/game-logic/realm-bootstrap';
 import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
 import {
   DEFAULT_CURATED_MAP_KEY,
   getActiveCuratedMapTerritories,
+  getCuratedMapDefinition,
   importCuratedGameMap,
 } from '@/lib/game-logic/maps';
+import { buildCuratedTerritoryMapData, getPreferredTerritoryHexIds } from '@/lib/maps/territory-map';
 import type { GovernmentType, ResourceRarity, ResourceType, SettlementSize, Tradition } from '@/types/game';
 
 type OwnershipKind = 'player' | 'npc' | 'neutral';
@@ -65,6 +68,7 @@ export async function POST(
 
     const body = await request.json() as SetupRequestBody;
     const mapKey = body.mapKey ?? DEFAULT_CURATED_MAP_KEY;
+    const curatedMapDefinition = getCuratedMapDefinition(mapKey);
     const territoryInputs = Array.isArray(body.territories) ? body.territories as SetupTerritoryInput[] : [];
     const curatedTerritories = getActiveCuratedMapTerritories(mapKey, territoryInputs.length);
     const territoryIds: string[] = [];
@@ -249,6 +253,31 @@ export async function POST(
             resourceType: resource.resourceType,
             rarity: resource.rarity || 'Common',
           }).run();
+        }
+
+        if (ownershipByIndex.get(territoryIndex)?.kind === 'npc' && realmId && curatedTerritory) {
+          const territoryMap = buildCuratedTerritoryMapData(
+            curatedMapDefinition,
+            curatedTerritory.key,
+            territory.name || curatedTerritory.name,
+          );
+          const capitalHexId = getPreferredTerritoryHexIds(territoryMap)
+            .map((hexKey) => importedMap.hexIdsByCoordKey.get(hexKey) ?? null)
+            .find((hexId): hexId is string => Boolean(hexId && !usedHexIds.has(hexId)));
+
+          if (!capitalHexId) {
+            throw Object.assign(
+              new Error(`Unable to place an NPC capital for ${territory.name}; no open land hexes remain.`),
+              { status: 400 }
+            );
+          }
+
+          initializeRealmCapital(tx, {
+            realmId,
+            territoryId,
+            capitalHexId,
+            capitalName: `${territory.owner?.realmName?.trim() || territory.name} Capital`,
+          });
         }
       }
 

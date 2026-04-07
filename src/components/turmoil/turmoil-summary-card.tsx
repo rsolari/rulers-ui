@@ -1,11 +1,13 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { TurmoilSource } from '@/types/game';
+import { TAX_TURMOIL } from '@/lib/game-logic/constants';
+import type { TaxType, TurmoilSource } from '@/types/game';
 
 interface TurmoilSummaryCardProps {
   title?: string;
   projectedTurmoil: number;
   turmoilBreakdown: TurmoilSource[];
+  taxType: TaxType;
   incidentLabel?: string | null;
 }
 
@@ -13,9 +15,11 @@ export function TurmoilSummaryCard({
   title = 'Turmoil',
   projectedTurmoil,
   turmoilBreakdown,
+  taxType,
   incidentLabel,
 }: TurmoilSummaryCardProps) {
   const variant = projectedTurmoil > 5 ? 'red' : projectedTurmoil > 2 ? 'gold' : 'green';
+  const baseTurmoil = TAX_TURMOIL[taxType];
 
   return (
     <Card>
@@ -34,14 +38,16 @@ export function TurmoilSummaryCard({
           </div>
         ) : null}
         <div className="space-y-2">
-          {turmoilBreakdown.length > 0 ? turmoilBreakdown.map((source) => (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-ink-300">Base ({taxType} tax)</span>
+            <strong>+{baseTurmoil}</strong>
+          </div>
+          {turmoilBreakdown.map((source) => (
             <div key={source.id} className="flex items-center justify-between text-sm">
               <span className="text-ink-300">{source.description}</span>
               <strong>{source.amount > 0 ? `+${source.amount}` : source.amount}</strong>
             </div>
-          )) : (
-            <p className="text-sm text-ink-300">No active turmoil sources.</p>
-          )}
+          ))}
         </div>
       </CardContent>
     </Card>

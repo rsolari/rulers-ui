@@ -24,7 +24,7 @@ export async function POST(
       await requireGM(gameId);
     }
 
-    const governingNobleId = db.transaction((tx) => assignSettlementGovernor(tx, {
+    const governingNobleId = await db.transaction((tx) => assignSettlementGovernor(tx, {
       gameId,
       settlementId,
       nobleId: body.nobleId ?? null,

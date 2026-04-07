@@ -145,7 +145,7 @@ export default function CreateRulerPage() {
     return () => {
       cancelled = true;
     };
-  }, [gameId, realmId, router]);
+  }, [gameId, realmId, router, isGmManaging]);
 
   function updateField<K extends keyof RulerPayload>(field: K, value: RulerPayload[K]) {
     setForm((current) => ({ ...current, [field]: value }));

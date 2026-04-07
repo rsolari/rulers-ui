@@ -52,7 +52,6 @@ interface Realm {
 interface Territory {
   id: string;
   name: string;
-  climate: string | null;
   realmId: string | null;
 }
 
@@ -192,7 +191,6 @@ export default function RealmDashboard() {
     } : current);
     setSaving(false);
   }
-
   if (!game || !realm) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -407,7 +405,6 @@ export default function RealmDashboard() {
                       <div key={territory.id} className="p-3 medieval-border rounded space-y-2 border-gold-500/50">
                         <div className="flex items-center justify-between">
                           <span className="font-heading font-semibold">{territory.name}</span>
-                          {territory.climate && <Badge>{territory.climate}</Badge>}
                         </div>
                         {territorySettlements.length > 0 && (
                           <div className="space-y-1 ml-4">
@@ -462,6 +459,11 @@ export default function RealmDashboard() {
         <Link href={`/game/${gameId}/realm/trade`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent><p className="font-heading font-bold pt-4">Trade & Resources</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/map`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Map</p></CardContent>
           </Card>
         </Link>
       </div>

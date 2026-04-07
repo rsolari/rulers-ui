@@ -121,17 +121,53 @@ export interface PoliticalAction {
   triggerCondition?: string;
 }
 
-// Financial Action in Turn Report
-export interface FinancialAction {
-  type: 'build' | 'recruit' | 'taxChange' | 'spending';
-  buildingType?: BuildingType;
-  troopType?: TroopType;
-  settlementId?: string;
-  taxType?: TaxType;
+// Financial Actions in Turn Report
+export interface BuildFinancialAction {
+  type: 'build';
+  buildingType: BuildingType;
+  settlementId?: string | null;
+  territoryId?: string | null;
+  material?: FortificationMaterial | null;
+  wallSize?: BuildingSize | null;
+  isGuildOwned?: boolean;
+  guildId?: string | null;
+  allottedGosId?: string | null;
+  locationType?: BuildingLocationType;
+  buildingSize?: BuildingSize;
+  takesBuildingSlot?: boolean;
+  constructionTurns?: number;
   technicalKnowledgeKey?: TechnicalKnowledgeKey;
+  description?: string;
+  cost?: number;
+}
+
+export interface RecruitFinancialAction {
+  type: 'recruit';
+  troopType: TroopType;
+  settlementId?: string | null;
+  technicalKnowledgeKey?: TechnicalKnowledgeKey;
+  description?: string;
+  cost?: number;
+}
+
+export interface TaxChangeFinancialAction {
+  type: 'taxChange';
+  taxType: TaxType;
+  description?: string;
+  cost?: number;
+}
+
+export interface SpendingFinancialAction {
+  type: 'spending';
   description?: string;
   cost: number;
 }
+
+export type FinancialAction =
+  | BuildFinancialAction
+  | RecruitFinancialAction
+  | TaxChangeFinancialAction
+  | SpendingFinancialAction;
 
 export interface ActionCommentRecord {
   id: string;
@@ -162,6 +198,16 @@ export interface TurnActionRecord {
   buildingType: BuildingType | null;
   troopType: TroopType | null;
   settlementId: string | null;
+  territoryId: string | null;
+  material: FortificationMaterial | null;
+  wallSize: BuildingSize | null;
+  isGuildOwned: boolean | null;
+  guildId: string | null;
+  allottedGosId: string | null;
+  locationType: BuildingLocationType | null;
+  buildingSize: BuildingSize | null;
+  takesBuildingSlot: boolean | null;
+  constructionTurns: number | null;
   taxType: TaxType | null;
   technicalKnowledgeKey: TechnicalKnowledgeKey | null;
   cost: number;
@@ -216,6 +262,16 @@ export interface TurnActionCreateDto {
   buildingType?: BuildingType | null;
   troopType?: TroopType | null;
   settlementId?: string | null;
+  territoryId?: string | null;
+  material?: FortificationMaterial | null;
+  wallSize?: BuildingSize | null;
+  isGuildOwned?: boolean | null;
+  guildId?: string | null;
+  allottedGosId?: string | null;
+  locationType?: BuildingLocationType | null;
+  buildingSize?: BuildingSize | null;
+  takesBuildingSlot?: boolean | null;
+  constructionTurns?: number | null;
   taxType?: TaxType | null;
   technicalKnowledgeKey?: TechnicalKnowledgeKey | null;
   cost?: number;
@@ -231,6 +287,16 @@ export interface TurnActionUpdateDto {
   buildingType?: BuildingType | null;
   troopType?: TroopType | null;
   settlementId?: string | null;
+  territoryId?: string | null;
+  material?: FortificationMaterial | null;
+  wallSize?: BuildingSize | null;
+  isGuildOwned?: boolean | null;
+  guildId?: string | null;
+  allottedGosId?: string | null;
+  locationType?: BuildingLocationType | null;
+  buildingSize?: BuildingSize | null;
+  takesBuildingSlot?: boolean | null;
+  constructionTurns?: number | null;
   taxType?: TaxType | null;
   technicalKnowledgeKey?: TechnicalKnowledgeKey | null;
   cost?: number;

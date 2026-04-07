@@ -2,8 +2,14 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
+import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
 import { generateGameCode, isAuthError, requireGM, requireInitState } from '@/lib/auth';
+import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
+import {
+  DEFAULT_CURATED_MAP_KEY,
+  getActiveCuratedMapTerritories,
+  importCuratedGameMap,
+} from '@/lib/game-logic/maps';
 import type { GovernmentType, ResourceRarity, ResourceType, SettlementSize, Tradition } from '@/types/game';
 
 type OwnershipKind = 'player' | 'npc' | 'neutral';
@@ -19,7 +25,6 @@ interface SetupResourceInput {
 
 interface SetupTerritoryInput {
   name: string;
-  climate?: string;
   description?: string;
   type: 'Realm' | 'Neutral';
   resources?: SetupResourceInput[];
@@ -30,6 +35,11 @@ interface SetupTerritoryInput {
     governmentType?: GovernmentType;
     traditions?: Tradition[];
   };
+}
+
+interface SetupRequestBody {
+  mapKey?: string;
+  territories?: SetupTerritoryInput[];
 }
 
 async function generateUniqueClaimCode(usedCodes: Set<string>) {
@@ -52,8 +62,10 @@ export async function POST(
     await requireGM(gameId);
     await requireInitState(gameId, 'gm_world_setup');
 
-    const body = await request.json();
+    const body = await request.json() as SetupRequestBody;
+    const mapKey = body.mapKey ?? DEFAULT_CURATED_MAP_KEY;
     const territoryInputs = Array.isArray(body.territories) ? body.territories as SetupTerritoryInput[] : [];
+    const curatedTerritories = getActiveCuratedMapTerritories(mapKey, territoryInputs.length);
     const territoryIds: string[] = [];
     const npcRealmIds: string[] = [];
     const createdSlotCodes: string[] = [];
@@ -66,7 +78,7 @@ export async function POST(
     }
 
     const ownershipByIndex = new Map<number, { kind: OwnershipKind; realmId: string | null }>();
-    const playerSlotRows: Array<typeof playerSlots.$inferInsert> = [];
+    const playerSlotRowsByIndex = new Map<number, typeof playerSlots.$inferInsert>();
 
     for (const [territoryIndex, territory] of territoryInputs.entries()) {
       const ownerKind: OwnershipKind = territory.owner?.kind
@@ -75,7 +87,7 @@ export async function POST(
       if (ownerKind === 'player') {
         const claimCode = await generateUniqueClaimCode(usedCodes);
         createdSlotCodes.push(claimCode);
-        playerSlotRows.push({
+        playerSlotRowsByIndex.set(territoryIndex, {
           id: uuid(),
           gameId,
           claimCode,
@@ -124,34 +136,56 @@ export async function POST(
         }
       }
 
+      const territoryIdsByKey: Record<string, string> = {};
+
       for (const [territoryIndex, territory] of territoryInputs.entries()) {
         const territoryId = uuid();
         territoryIds.push(territoryId);
+        const curatedTerritory = curatedTerritories[territoryIndex];
 
         tx.insert(territories).values({
           id: territoryId,
           gameId,
-          name: territory.name,
-          climate: territory.climate || null,
-          description: territory.description || null,
+          name: territory.name || curatedTerritory?.name || `Territory ${territoryIndex + 1}`,
+          description: territory.description || curatedTerritory?.description || null,
           realmId: ownershipByIndex.get(territoryIndex)?.realmId ?? null,
         }).run();
 
-        const pendingSlot = playerSlotRows.find((slot) => slot.territoryId === '');
+        if (curatedTerritory) {
+          territoryIdsByKey[curatedTerritory.key] = territoryId;
+        }
+
+        const pendingSlot = playerSlotRowsByIndex.get(territoryIndex);
         if (ownershipByIndex.get(territoryIndex)?.kind === 'player' && pendingSlot) {
           pendingSlot.territoryId = territoryId;
         }
       }
 
-      for (const slot of playerSlotRows) {
+      const importedMap = importCuratedGameMap(tx, {
+        gameId,
+        mapKey,
+        territoryIdsByKey,
+      });
+
+      for (const slot of playerSlotRowsByIndex.values()) {
         tx.insert(playerSlots).values(slot).run();
       }
 
       for (const [territoryIndex, territory] of territoryInputs.entries()) {
         const territoryId = territoryIds[territoryIndex];
         const realmId = ownershipByIndex.get(territoryIndex)?.realmId ?? null;
+        const curatedTerritory = curatedTerritories[territoryIndex];
+        const territoryHexIds = curatedTerritory
+          ? [...(importedMap.territoryHexIds.get(curatedTerritory.key) ?? [])]
+          : [];
 
         for (const resource of territory.resources || []) {
+          const settlementHexId = territoryHexIds.shift() ?? null;
+
+          if (!settlementHexId && territoryHexIds.length === 0 && curatedTerritory) {
+            throw new Error(`Map territory ${curatedTerritory.key} does not have enough land hexes for starting settlements.`);
+          }
+
           const settlementId = uuid();
           const resourceSiteId = uuid();
 
@@ -166,10 +200,26 @@ export async function POST(
           tx.insert(settlements).values({
             id: settlementId,
             territoryId,
+            hexId: settlementHexId,
             realmId,
             name: resource.settlement.name,
             size: settlementSize,
           }).run();
+
+          for (const fortification of getStartingSettlementFortifications(settlementSize)) {
+            tx.insert(buildings).values({
+              id: uuid(),
+              settlementId,
+              territoryId,
+              hexId: settlementHexId,
+              locationType: 'settlement',
+              type: fortification.type,
+              category: fortification.category,
+              size: fortification.size,
+              material: fortification.material,
+              takesBuildingSlot: fortification.takesBuildingSlot,
+            }).run();
+          }
 
           tx.insert(resourceSites).values({
             id: resourceSiteId,
@@ -195,8 +245,9 @@ export async function POST(
     return NextResponse.json({
       territories: territoryIds.length,
       npcRealms: npcRealmIds.length,
-      playerSlots: playerSlotRows.length,
+      playerSlots: playerSlotRowsByIndex.size,
       claimCodes: createdSlotCodes,
+      mapKey,
       success: true,
     });
   } catch (error) {

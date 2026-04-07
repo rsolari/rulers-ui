@@ -29,7 +29,6 @@ export async function POST(
       gameId,
       name: body.name,
       realmId: body.realmId || null,
-      climate: body.climate || null,
       description: body.description || null,
     });
 
@@ -59,7 +58,6 @@ export async function PATCH(
     const updates: Record<string, unknown> = {};
     if (body.realmId !== undefined) updates.realmId = body.realmId;
     if (body.name !== undefined) updates.name = body.name;
-    if (body.climate !== undefined) updates.climate = body.climate;
     if (body.description !== undefined) updates.description = body.description;
     if (body.foodCapBase !== undefined) updates.foodCapBase = body.foodCapBase;
     if (body.foodCapBonus !== undefined) updates.foodCapBonus = body.foodCapBonus;

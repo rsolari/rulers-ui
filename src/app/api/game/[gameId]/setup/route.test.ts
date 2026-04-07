@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
+import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
 
 const mocks = vi.hoisted(() => {
   const operations: Array<{
@@ -52,6 +52,21 @@ const authMocks = vi.hoisted(() => ({
 vi.mock('@/db', () => ({ db: mocks.db }));
 vi.mock('@/lib/auth', () => authMocks);
 
+const mapMocks = vi.hoisted(() => ({
+  DEFAULT_CURATED_MAP_KEY: 'world-v1',
+  getActiveCuratedMapTerritories: vi.fn(() => [{
+    key: 'kingdom-1',
+    name: 'Kingdom 1',
+    description: 'Map Description',
+  }]),
+  importCuratedGameMap: vi.fn(() => ({
+    gameMapId: 'game-map-1',
+    territoryHexIds: new Map([['kingdom-1', ['hex-1', 'hex-2', 'hex-3']]]),
+  })),
+}));
+
+vi.mock('@/lib/game-logic/maps', () => mapMocks);
+
 const uuidMock = vi.hoisted(() => vi.fn());
 vi.mock('uuid', () => ({ v4: uuidMock }));
 
@@ -63,6 +78,8 @@ describe('POST /api/game/[gameId]/setup', () => {
     mocks.operations.length = 0;
     uuidMock.mockReset();
     authMocks.generateGameCode.mockReset();
+    mapMocks.getActiveCuratedMapTerritories.mockClear();
+    mapMocks.importCuratedGameMap.mockClear();
   });
 
   it('returns 404 when the game does not exist', async () => {
@@ -99,7 +116,6 @@ describe('POST /api/game/[gameId]/setup', () => {
       body: JSON.stringify({
         territories: [{
           name: 'T1',
-          climate: 'Temperate',
           description: '',
           type: 'Realm',
           owner: {
@@ -118,6 +134,13 @@ describe('POST /api/game/[gameId]/setup', () => {
     });
 
     expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mapMocks.importCuratedGameMap).toHaveBeenCalledWith(expect.anything(), {
+      gameId: 'game-1',
+      mapKey: 'world-v1',
+      territoryIdsByKey: {
+        'kingdom-1': 'territory-1',
+      },
+    });
     expect(mocks.operations).toEqual([
       {
         kind: 'insert',
@@ -126,8 +149,7 @@ describe('POST /api/game/[gameId]/setup', () => {
           id: 'territory-1',
           gameId: 'game-1',
           name: 'T1',
-          climate: 'Temperate',
-          description: null,
+          description: 'Map Description',
           realmId: null,
         },
       },
@@ -151,6 +173,7 @@ describe('POST /api/game/[gameId]/setup', () => {
         values: {
           id: 'settlement-1',
           territoryId: 'territory-1',
+          hexId: 'hex-1',
           realmId: null,
           name: 'S1',
           size: 'Village',
@@ -184,6 +207,7 @@ describe('POST /api/game/[gameId]/setup', () => {
       npcRealms: 0,
       playerSlots: 1,
       claimCodes: ['CLAIM1'],
+      mapKey: 'world-v1',
       success: true,
     });
   });
@@ -204,7 +228,6 @@ describe('POST /api/game/[gameId]/setup', () => {
       body: JSON.stringify({
         territories: [{
           name: 'NPC Territory',
-          climate: 'Temperate',
           description: '',
           type: 'Realm',
           owner: {
@@ -254,8 +277,7 @@ describe('POST /api/game/[gameId]/setup', () => {
           id: 'territory-1',
           gameId: 'game-1',
           name: 'NPC Territory',
-          climate: 'Temperate',
-          description: null,
+          description: 'Map Description',
           realmId: 'realm-1',
         },
       },
@@ -265,6 +287,7 @@ describe('POST /api/game/[gameId]/setup', () => {
         values: {
           id: 'settlement-1',
           territoryId: 'territory-1',
+          hexId: 'hex-1',
           realmId: 'realm-1',
           name: 'S1',
           size: 'Village',
@@ -298,6 +321,114 @@ describe('POST /api/game/[gameId]/setup', () => {
       npcRealms: 1,
       playerSlots: 0,
       claimCodes: [],
+      mapKey: 'world-v1',
+      success: true,
+    });
+  });
+
+  it('adds wooden fortifications to initial towns and stone fortifications to initial cities', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+    authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'gm_world_setup' });
+
+    let uuidCounter = 0;
+    uuidMock.mockImplementation(() => `uuid-${++uuidCounter}`);
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        territories: [{
+          name: 'Neutral Territory',
+          type: 'Neutral',
+          resources: [{
+            resourceType: 'Ore',
+            rarity: 'Common',
+            settlement: { name: 'Market Town', size: 'Town' },
+          }, {
+            resourceType: 'Gold',
+            rarity: 'Luxury',
+            settlement: { name: 'Old Capital', size: 'City' },
+          }],
+        }],
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    const fortificationOperations = mocks.operations.filter((operation) => operation.table === buildings);
+    expect(fortificationOperations).toEqual([
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-4',
+          settlementId: 'uuid-2',
+          territoryId: 'uuid-1',
+          hexId: 'hex-1',
+          locationType: 'settlement',
+          type: 'Walls',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Timber',
+          takesBuildingSlot: false,
+        },
+      },
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-5',
+          settlementId: 'uuid-2',
+          territoryId: 'uuid-1',
+          hexId: 'hex-1',
+          locationType: 'settlement',
+          type: 'Gatehouse',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Timber',
+          takesBuildingSlot: false,
+        },
+      },
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-8',
+          settlementId: 'uuid-6',
+          territoryId: 'uuid-1',
+          hexId: 'hex-2',
+          locationType: 'settlement',
+          type: 'Walls',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Stone',
+          takesBuildingSlot: false,
+        },
+      },
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-9',
+          settlementId: 'uuid-6',
+          territoryId: 'uuid-1',
+          hexId: 'hex-2',
+          locationType: 'settlement',
+          type: 'Gatehouse',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Stone',
+          takesBuildingSlot: false,
+        },
+      },
+    ]);
+
+    await expect(response.json()).resolves.toEqual({
+      territories: 1,
+      npcRealms: 0,
+      playerSlots: 0,
+      claimCodes: [],
+      mapKey: 'world-v1',
       success: true,
     });
   });

@@ -21,7 +21,7 @@ import {
   turnReports,
   turnResolutions,
 } from '@/db/schema';
-import { BUILDING_DEFS, getNextSeason, SEASONS, TROOP_DEFS } from '@/lib/game-logic/constants';
+import { BUILDING_DEFS, getNextSeason, SEASONS, SETTLEMENT_DATA, TERRITORY_FOOD_CAP, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { parseStoredEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 import { mapTurnActionRowToFinancialAction } from '@/lib/turn-action-service';
 import {
@@ -31,11 +31,13 @@ import {
   type EconomyResult,
 } from '@/lib/game-logic/economy';
 import { resolveTradeNetwork } from '@/lib/game-logic/trade';
+import { prepareTurnReportFinancialActions } from '@/lib/turn-report-financial-actions';
 import type {
   FinancialAction,
   ProtectedProduct,
   ResourceType,
   Season,
+  SettlementSize,
   TechnicalKnowledgeKey,
   TaxType,
   TradeImportSelection,
@@ -68,6 +70,8 @@ function deriveReportStatus(actions: Array<typeof turnActions.$inferSelect>) {
   if (actions.some((action) => action.status === 'submitted' || action.status === 'executed')) return 'submitted';
   return 'draft';
 }
+
+const SETTLEMENT_GROWTH_ORDER: SettlementSize[] = ['Village', 'Town', 'City'];
 
 interface InvalidModifierEvent {
   id: string;
@@ -132,27 +136,51 @@ export function isEconomyResolutionError(error: unknown): error is EconomyResolu
   return error instanceof EconomyResolutionError;
 }
 
-function appendWarning(
-  warningsByRealm: Record<string, string[]>,
-  realmId: string,
-  message: string,
-) {
-  const existing = warningsByRealm[realmId] ?? [];
-  warningsByRealm[realmId] = [...existing, message];
-}
-
 function validateActionCost(
   realmId: string,
   action: FinancialAction,
   index: number,
   issues: EconomyValidationIssue[],
 ) {
-  if (!Number.isInteger(action.cost) || action.cost < 0) {
+  if (!Number.isInteger(action.cost) || (action.cost ?? 0) < 0) {
     issues.push({
       realmId,
       message: `Financial action ${index + 1} must use a non-negative integer cost.`,
     });
   }
+}
+
+function hasRealmFoodAccess(realm: EconomyRealmInput) {
+  const settlementsByTerritory = new Map<string, number>();
+
+  for (const settlement of realm.settlements) {
+    const totalSlots = SETTLEMENT_DATA[settlement.size].buildingSlots;
+    const occupiedSlots = settlement.buildings.filter((building) => building.takesBuildingSlot !== false).length;
+    const emptySlots = Math.max(totalSlots - occupiedSlots, 0);
+
+    if (!settlement.territoryId) {
+      if (emptySlots > 0) return true;
+      continue;
+    }
+
+    settlementsByTerritory.set(
+      settlement.territoryId,
+      (settlementsByTerritory.get(settlement.territoryId) ?? 0) + emptySlots,
+    );
+  }
+
+  for (const [territoryId, uncappedFood] of settlementsByTerritory) {
+    const territory = realm.territories?.find((candidate) => candidate.id === territoryId);
+    const cap = territory
+      ? Math.max((territory.foodCapBase ?? TERRITORY_FOOD_CAP) + (territory.foodCapBonus ?? 0), 0)
+      : TERRITORY_FOOD_CAP;
+
+    if (Math.min(uncappedFood, cap) > 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function validateEconomyTurn(state: LoadedEconomyState): EconomyTurnValidationResult {
@@ -171,12 +199,20 @@ function validateEconomyTurn(state: LoadedEconomyState): EconomyTurnValidationRe
   for (const realm of state.economyRealms) {
     const validSettlementIds = new Set(realm.settlements.map((settlement) => settlement.id));
     const actions = realm.report?.financialActions ?? [];
+    const taxChangeCount = actions.filter((action) => action.type === 'taxChange').length;
+
+    if (taxChangeCount > 1) {
+      errors.push({
+        realmId: realm.id,
+        message: 'Only one tax change can be submitted in a turn.',
+      });
+    }
 
     for (const [index, action] of actions.entries()) {
       validateActionCost(realm.id, action, index, errors);
 
       if (action.type === 'build') {
-        if (!action.buildingType || !(action.buildingType in BUILDING_DEFS)) {
+        if (!(action.buildingType in BUILDING_DEFS)) {
           errors.push({
             realmId: realm.id,
             message: `Build action ${index + 1} is missing a known building type.`,
@@ -184,7 +220,10 @@ function validateEconomyTurn(state: LoadedEconomyState): EconomyTurnValidationRe
           continue;
         }
 
-        if (!action.settlementId || !validSettlementIds.has(action.settlementId)) {
+        if (
+          action.locationType === 'settlement' &&
+          (!action.settlementId || !validSettlementIds.has(action.settlementId))
+        ) {
           errors.push({
             realmId: realm.id,
             message:
@@ -192,13 +231,18 @@ function validateEconomyTurn(state: LoadedEconomyState): EconomyTurnValidationRe
           });
         }
 
-        if (action.buildingType === 'Stables') {
-          appendWarning(
-            warningsByRealm,
-            realm.id,
-            'Stables requires Food in the rulebook, but the current report schema has no explicit build-time food input. ' +
-              'Resolution keeps the existing backend behavior until that input exists.',
-          );
+        if (action.locationType === 'territory' && !action.territoryId) {
+          errors.push({
+            realmId: realm.id,
+            message: `Build action ${index + 1} for ${action.buildingType} must target a realm-owned territory.`,
+          });
+        }
+
+        if (action.buildingType === 'Stables' && !hasRealmFoodAccess(realm)) {
+          errors.push({
+            realmId: realm.id,
+            message: `Build action ${index + 1} for Stables requires realm food production.`,
+          });
         }
 
         continue;
@@ -469,10 +513,19 @@ function loadGameEconomyState(
     turmoil: realm.turmoil,
     turmoilSources: parseJson<TurmoilSource[]>(realm.turmoilSources, []),
     traditions: parseJson<Tradition[]>(realm.traditions, []),
+    territories: territoryRows
+      .filter((territory) => territory.realmId === realm.id)
+      .map((territory) => ({
+        id: territory.id,
+        name: territory.name,
+        foodCapBase: territory.foodCapBase,
+        foodCapBonus: territory.foodCapBonus,
+      })),
     settlements: (settlementsByRealm.get(realm.id) ?? []).map((settlement) => ({
       id: settlement.id,
       name: settlement.name,
       size: settlement.size as EconomyRealmInput['settlements'][number]['size'],
+      territoryId: settlement.territoryId,
       buildings: (buildingsBySettlement.get(settlement.id) ?? []).map((building) => ({
         id: building.id,
         type: building.type,
@@ -483,6 +536,7 @@ function loadGameEconomyState(
         maintenanceState: building.maintenanceState,
         isGuildOwned: building.isGuildOwned,
         guildId: building.guildId,
+        allottedGosId: building.allottedGosId,
         material: building.material,
       })),
       resourceSites: (resourceSitesBySettlement.get(settlement.id) ?? []).map((resourceSite) => {
@@ -510,6 +564,10 @@ function loadGameEconomyState(
       constructionTurnsRemaining: building.constructionTurnsRemaining,
       territoryId: building.territoryId!,
       territoryName: territoryById.get(building.territoryId!)?.name ?? 'Unknown Territory',
+      isGuildOwned: building.isGuildOwned,
+      guildId: building.guildId,
+      allottedGosId: building.allottedGosId,
+      material: building.material,
     })),
     troops: (troopsByRealm.get(realm.id) ?? []).map((troop) => ({
       id: troop.id,
@@ -571,6 +629,40 @@ function loadGameEconomyState(
   };
 }
 
+function prepareEconomyReportActions(
+  database: DatabaseExecutor,
+  gameId: string,
+  realms: EconomyRealmInput[],
+) {
+  const normalizedFinancialActionsByReportId = new Map<string, FinancialAction[]>();
+
+  const preparedRealms = realms.map((realm) => {
+    if (!realm.report) return realm;
+
+    const prepared = prepareTurnReportFinancialActions(
+      gameId,
+      realm.id,
+      realm.report.financialActions,
+      { database },
+    );
+
+    normalizedFinancialActionsByReportId.set(realm.report.id, prepared.actions);
+
+    return {
+      ...realm,
+      report: {
+        ...realm.report,
+        financialActions: prepared.actions,
+      },
+    };
+  });
+
+  return {
+    preparedRealms,
+    normalizedFinancialActionsByReportId,
+  };
+}
+
 function formatProjectionResponse(result: EconomyResult, realm: EconomyRealmInput) {
   return {
     realm: {
@@ -611,6 +703,48 @@ function parseStoredTurnResolution(record: typeof turnResolutions.$inferSelect):
 
 function withReplay(result: AdvanceGameTurnResult): AdvanceGameTurnResult {
   return { ...result, replayed: true };
+}
+
+function getNextSettlementSize(size: SettlementSize): SettlementSize | null {
+  const currentIndex = SETTLEMENT_GROWTH_ORDER.indexOf(size);
+  if (currentIndex < 0 || currentIndex === SETTLEMENT_GROWTH_ORDER.length - 1) return null;
+  return SETTLEMENT_GROWTH_ORDER[currentIndex + 1];
+}
+
+function resolveSettlementGrowth(
+  database: DatabaseExecutor,
+  settlementStates: Array<{ id: string; size: SettlementSize }>,
+) {
+  if (settlementStates.length === 0) return;
+
+  const settlementIds = settlementStates.map((settlement) => settlement.id);
+  const currentBuildings = database.select({
+    settlementId: buildings.settlementId,
+    takesBuildingSlot: buildings.takesBuildingSlot,
+  }).from(buildings).where(inArray(buildings.settlementId, settlementIds)).all();
+
+  const occupiedSlotsBySettlement = new Map<string, number>();
+  for (const building of currentBuildings) {
+    if (!building.settlementId || !building.takesBuildingSlot) continue;
+    occupiedSlotsBySettlement.set(
+      building.settlementId,
+      (occupiedSlotsBySettlement.get(building.settlementId) ?? 0) + 1,
+    );
+  }
+
+  for (const settlement of settlementStates) {
+    const nextSize = getNextSettlementSize(settlement.size);
+    if (!nextSize) continue;
+
+    const occupiedSlots = occupiedSlotsBySettlement.get(settlement.id) ?? 0;
+    const growthThreshold = SETTLEMENT_DATA[settlement.size].buildingSlots - 1;
+    if (occupiedSlots < growthThreshold) continue;
+
+    database.update(settlements)
+      .set({ size: nextSize })
+      .where(eq(settlements.id, settlement.id))
+      .run();
+  }
 }
 
 export function createEconomyService(database: DB = defaultDb) {
@@ -818,7 +952,13 @@ export function createEconomyService(database: DB = defaultDb) {
         return withReplay(parseStoredTurnResolution(currentTurnResolution));
       }
 
-      const validation = validateEconomyTurn(state);
+      const preparedReports = prepareEconomyReportActions(tx, gameId, state.economyRealms);
+      const preparedState: LoadedEconomyState = {
+        ...state,
+        economyRealms: preparedReports.preparedRealms,
+      };
+
+      const validation = validateEconomyTurn(preparedState);
       if (validation.errors.length > 0) {
         throw new EconomyResolutionError(
           'Turn resolution contains invalid economy inputs.',
@@ -830,12 +970,12 @@ export function createEconomyService(database: DB = defaultDb) {
         );
       }
 
-      const tradeResolution = resolveTradeNetwork(state.economyRealms, {
+      const tradeResolution = resolveTradeNetwork(preparedState.economyRealms, {
         currentYear,
         currentSeason,
       });
 
-      const resolvedRealms = state.economyRealms.map((realm) => {
+      const resolvedRealms = preparedState.economyRealms.map((realm) => {
         const result = resolveEconomyForRealm(
           realm,
           currentYear,
@@ -927,21 +1067,23 @@ export function createEconomyService(database: DB = defaultDb) {
         }
 
         for (const pendingBuilding of result.pendingBuildings) {
-          const buildingDef = BUILDING_DEFS[pendingBuilding.type];
           const remainingTurns = Math.max(pendingBuilding.constructionTurnsRemaining - 1, 0);
           tx.insert(buildings).values({
             id: uuid(),
             settlementId: pendingBuilding.settlementId,
+            territoryId: pendingBuilding.territoryId,
+            locationType: pendingBuilding.locationType,
             type: pendingBuilding.type,
-            category: buildingDef.category,
-            size: buildingDef.size,
+            category: BUILDING_DEFS[pendingBuilding.type].category,
+            size: pendingBuilding.size,
             material: pendingBuilding.material ?? null,
-            takesBuildingSlot: buildingDef.takesBuildingSlot ?? true,
+            takesBuildingSlot: pendingBuilding.takesBuildingSlot,
             isOperational: remainingTurns === 0,
             maintenanceState: 'active',
             constructionTurnsRemaining: remainingTurns,
             isGuildOwned: pendingBuilding.isGuildOwned,
             guildId: pendingBuilding.guildId ?? null,
+            allottedGosId: pendingBuilding.allottedGosId ?? null,
           }).run();
         }
 
@@ -988,6 +1130,16 @@ export function createEconomyService(database: DB = defaultDb) {
           .where(eq(siegeUnits.id, unit.id))
           .run();
       }
+
+      resolveSettlementGrowth(
+        tx,
+        state.economyRealms.flatMap((realm) =>
+          realm.settlements.map((settlement) => ({
+            id: settlement.id,
+            size: settlement.size,
+          }))
+        ),
+      );
 
       for (const route of state.tradeRouteRows) {
         const resolvedRoute = tradeResolution.routes[route.id];

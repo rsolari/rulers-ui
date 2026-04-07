@@ -5,6 +5,7 @@ import {
   resolveIndustryProduct,
 } from './products';
 import type { IndustryProductInput } from './products';
+import type { ResourceType } from '@/types/game';
 
 function createProduct(overrides: Partial<IndustryProductInput>): IndustryProductInput {
   return {
@@ -51,7 +52,18 @@ describe('calculateProductQualityTier', () => {
 });
 
 describe('resolveIndustryProduct', () => {
-  it.each([
+  it.each<{
+    name: string;
+    product: IndustryProductInput;
+    availableResources: ResourceType[];
+    expected: {
+      isLegal: boolean;
+      isDegraded: boolean;
+      ingredientCount: number;
+      wealth: number;
+      qualityTier: number;
+    };
+  }>([
     {
       name: 'base common product',
       product: createProduct({ baseResourceType: 'Ore' }),
@@ -132,10 +144,17 @@ describe('resolveIndustryProduct', () => {
       },
     },
   ])('$name', ({ product, availableResources, expected }) => {
-    expect(resolveIndustryProduct(product, availableResources)).toMatchObject(expected);
+    expect(resolveIndustryProduct(product, availableResources as ResourceType[])).toMatchObject(expected);
   });
 
-  it.each([
+  it.each<{
+    name: string;
+    product: IndustryProductInput;
+    availableResources: ResourceType[];
+    expectedIssue: string;
+    expectedWealth: number;
+    expectedTier: number;
+  }>([
     {
       name: 'common base rejects an unsupported luxury ingredient',
       product: createProduct({ baseResourceType: 'Stone', ingredients: ['Lacquer'] }),
@@ -180,7 +199,7 @@ describe('resolveIndustryProduct', () => {
       expectedTier: 1,
     },
   ])('$name', ({ product, availableResources, expectedIssue, expectedWealth, expectedTier }) => {
-    const resolved = resolveIndustryProduct(product, availableResources);
+    const resolved = resolveIndustryProduct(product, availableResources as ResourceType[]);
 
     expect(resolved.isLegal).toBe(false);
     expect(resolved.issues).toEqual(expect.arrayContaining([

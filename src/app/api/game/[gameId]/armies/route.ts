@@ -4,6 +4,7 @@ import { armies, nobles, siegeUnits, territories, troops } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { getDefaultArmyHexId, getLandHexById } from '@/lib/game-logic/maps';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 
 export async function GET(
@@ -33,6 +34,19 @@ export async function POST(
     const access = await requireOwnedRealmAccess(gameId, body.realmId);
     const realmId = access.realmId;
     const isPlayer = access.session.gameId === gameId && access.session.role === 'player';
+    const locationHex = body.locationHexId
+      ? await getLandHexById(db, body.locationHexId)
+      : null;
+
+    let locationTerritoryId = body.locationTerritoryId as string | undefined;
+
+    if (locationHex) {
+      locationTerritoryId = locationHex.territoryId ?? undefined;
+    }
+
+    if (!locationTerritoryId) {
+      return NextResponse.json({ error: 'locationTerritoryId or locationHexId required' }, { status: 400 });
+    }
 
     const locationTerritory = await db.select({
       id: territories.id,
@@ -40,7 +54,7 @@ export async function POST(
     })
       .from(territories)
       .where(and(
-        eq(territories.id, body.locationTerritoryId),
+        eq(territories.id, locationTerritoryId),
         eq(territories.gameId, gameId),
       ))
       .get();
@@ -52,6 +66,18 @@ export async function POST(
     if (isPlayer && locationTerritory.realmId !== realmId) {
       return NextResponse.json({ error: 'Army must be placed in your territory' }, { status: 403 });
     }
+
+    if (body.locationHexId && !locationHex) {
+      return NextResponse.json({ error: 'Army must be placed on a land hex' }, { status: 400 });
+    }
+
+    const destinationHex = body.destinationHexId
+      ? await getLandHexById(db, body.destinationHexId)
+      : null;
+    const destinationTerritoryId = destinationHex?.territoryId ?? body.destinationTerritoryId ?? null;
+
+    const locationHexId = locationHex?.id
+      ?? await getDefaultArmyHexId(db, locationTerritory.id, realmId);
 
     if (body.generalId) {
       const general = await db.select({ id: nobles.id })
@@ -73,14 +99,24 @@ export async function POST(
       realmId,
       name: body.name,
       generalId: body.generalId || null,
-      locationTerritoryId: body.locationTerritoryId,
-      destinationTerritoryId: body.destinationTerritoryId || null,
+      locationTerritoryId: locationTerritory.id,
+      destinationTerritoryId,
+      locationHexId,
+      destinationHexId: destinationHex?.id ?? null,
       movementTurnsRemaining: 0,
     });
 
     await recomputeGameInitState(gameId);
 
-    return NextResponse.json({ id, ...body, realmId });
+    return NextResponse.json({
+      id,
+      ...body,
+      realmId,
+      locationTerritoryId: locationTerritory.id,
+      locationHexId,
+      destinationTerritoryId,
+      destinationHexId: destinationHex?.id ?? null,
+    });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

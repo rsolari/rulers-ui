@@ -5,6 +5,8 @@ import type {
   ActionKind,
   BuildingLocationType,
   BuildingMaintenanceState,
+  BuildingSize,
+  FortificationMaterial,
   GameInitState,
   GamePhase,
   GMSetupState,
@@ -18,6 +20,7 @@ import type {
   TurnActionOutcome,
   TurnActionStatus,
 } from '@/types/game';
+import type { MapFeatureType, MapHexKind, MapTerrainType, WaterHexKind } from '@/lib/maps/types';
 
 // ============================================================
 // GAMES
@@ -40,6 +43,7 @@ export const games = sqliteTable('games', {
 export const gamesRelations = relations(games, ({ many }) => ({
   realms: many(realms),
   territories: many(territories),
+  gameMaps: many(gameMaps),
   playerSlots: many(playerSlots),
   tradeRoutes: many(tradeRoutes),
   turnReports: many(turnReports),
@@ -102,7 +106,6 @@ export const territories = sqliteTable('territories', {
   gameId: text('game_id').notNull().references(() => games.id),
   name: text('name').notNull(),
   realmId: text('realm_id').references(() => realms.id),
-  climate: text('climate'),
   description: text('description'),
   foodCapBase: integer('food_cap_base').default(30).notNull(),
   foodCapBonus: integer('food_cap_bonus').default(0).notNull(),
@@ -113,9 +116,80 @@ export const territories = sqliteTable('territories', {
 export const territoriesRelations = relations(territories, ({ one, many }) => ({
   game: one(games, { fields: [territories.gameId], references: [games.id] }),
   realm: one(realms, { fields: [territories.realmId], references: [realms.id] }),
+  mapHexes: many(mapHexes),
   settlements: many(settlements),
   playerSlots: many(playerSlots),
   resourceSites: many(resourceSites),
+}));
+
+// ============================================================
+// MAPS
+// ============================================================
+
+export const gameMaps = sqliteTable('game_maps', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  mapKey: text('map_key').notNull(),
+  name: text('name').notNull(),
+  version: integer('version').notNull(),
+}, (table) => ({
+  gameIdUniqueIdx: uniqueIndex('game_maps_game_id_unique').on(table.gameId),
+}));
+
+export const gameMapsRelations = relations(gameMaps, ({ one, many }) => ({
+  game: one(games, { fields: [gameMaps.gameId], references: [games.id] }),
+  hexes: many(mapHexes),
+}));
+
+export const mapHexes = sqliteTable('map_hexes', {
+  id: text('id').primaryKey(),
+  gameMapId: text('game_map_id').notNull().references(() => gameMaps.id),
+  q: integer('q').notNull(),
+  r: integer('r').notNull(),
+  hexKind: text('hex_kind').$type<MapHexKind>().notNull(),
+  waterKind: text('water_kind').$type<WaterHexKind>(),
+  terrainType: text('terrain_type').$type<MapTerrainType>(),
+  territoryId: text('territory_id').references(() => territories.id),
+}, (table) => ({
+  gameMapCoordUniqueIdx: uniqueIndex('map_hexes_game_map_coord_unique').on(table.gameMapId, table.q, table.r),
+}));
+
+export const mapHexesRelations = relations(mapHexes, ({ one, many }) => ({
+  gameMap: one(gameMaps, { fields: [mapHexes.gameMapId], references: [gameMaps.id] }),
+  territory: one(territories, { fields: [mapHexes.territoryId], references: [territories.id] }),
+  features: many(mapHexFeatures),
+  settlements: many(settlements),
+  buildings: many(buildings),
+  armiesAtLocation: many(armies, { relationName: 'army_location_hex' }),
+  armiesAtDestination: many(armies, { relationName: 'army_destination_hex' }),
+  landmarks: many(mapLandmarks),
+}));
+
+export const mapHexFeatures = sqliteTable('map_hex_features', {
+  id: text('id').primaryKey(),
+  hexId: text('hex_id').notNull().references(() => mapHexes.id),
+  featureType: text('feature_type').$type<MapFeatureType>().notNull(),
+  name: text('name'),
+  metadata: text('metadata'),
+});
+
+export const mapHexFeaturesRelations = relations(mapHexFeatures, ({ one }) => ({
+  hex: one(mapHexes, { fields: [mapHexFeatures.hexId], references: [mapHexes.id] }),
+}));
+
+export const mapLandmarks = sqliteTable('map_landmarks', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  hexId: text('hex_id').notNull().references(() => mapHexes.id),
+  name: text('name').notNull(),
+  kind: text('kind').notNull(),
+  description: text('description'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const mapLandmarksRelations = relations(mapLandmarks, ({ one }) => ({
+  game: one(games, { fields: [mapLandmarks.gameId], references: [games.id] }),
+  hex: one(mapHexes, { fields: [mapLandmarks.hexId], references: [mapHexes.id] }),
 }));
 
 // ============================================================
@@ -146,6 +220,7 @@ export const playerSlotsRelations = relations(playerSlots, ({ one }) => ({
 export const settlements = sqliteTable('settlements', {
   id: text('id').primaryKey(),
   territoryId: text('territory_id').notNull().references(() => territories.id),
+  hexId: text('hex_id').references(() => mapHexes.id),
   realmId: text('realm_id').references(() => realms.id),
   name: text('name').notNull(),
   size: text('size').notNull(), // Village | Town | City
@@ -154,6 +229,7 @@ export const settlements = sqliteTable('settlements', {
 
 export const settlementsRelations = relations(settlements, ({ one, many }) => ({
   territory: one(territories, { fields: [settlements.territoryId], references: [territories.id] }),
+  hex: one(mapHexes, { fields: [settlements.hexId], references: [mapHexes.id] }),
   realm: one(realms, { fields: [settlements.realmId], references: [realms.id] }),
   buildings: many(buildings),
   resourceSites: many(resourceSites),
@@ -169,6 +245,7 @@ export const buildings = sqliteTable('buildings', {
   id: text('id').primaryKey(),
   settlementId: text('settlement_id').references(() => settlements.id),
   territoryId: text('territory_id').references(() => territories.id),
+  hexId: text('hex_id').references(() => mapHexes.id),
   locationType: text('location_type').$type<BuildingLocationType>().default('settlement').notNull(),
   type: text('type').notNull(),
   category: text('category').notNull(),
@@ -187,6 +264,7 @@ export const buildings = sqliteTable('buildings', {
 export const buildingsRelations = relations(buildings, ({ one }) => ({
   settlement: one(settlements, { fields: [buildings.settlementId], references: [settlements.id] }),
   territory: one(territories, { fields: [buildings.territoryId], references: [territories.id] }),
+  hex: one(mapHexes, { fields: [buildings.hexId], references: [mapHexes.id] }),
   guild: one(guildsOrdersSocieties, { fields: [buildings.guildId], references: [guildsOrdersSocieties.id] }),
   allottedGos: one(guildsOrdersSocieties, { fields: [buildings.allottedGosId], references: [guildsOrdersSocieties.id] }),
 }));
@@ -287,11 +365,13 @@ export const nobles = sqliteTable('nobles', {
   isPrisoner: integer('is_prisoner', { mode: 'boolean' }).default(false).notNull(),
   prisonerOfRealmId: text('prisoner_of_realm_id'),
   locationTerritoryId: text('location_territory_id'),
+  locationHexId: text('location_hex_id').references(() => mapHexes.id),
 });
 
 export const noblesRelations = relations(nobles, ({ one }) => ({
   family: one(nobleFamilies, { fields: [nobles.familyId], references: [nobleFamilies.id] }),
   realm: one(realms, { fields: [nobles.realmId], references: [realms.id] }),
+  locationHex: one(mapHexes, { fields: [nobles.locationHexId], references: [mapHexes.id] }),
 }));
 
 // ============================================================
@@ -305,12 +385,24 @@ export const armies = sqliteTable('armies', {
   generalId: text('general_id'),
   locationTerritoryId: text('location_territory_id').notNull().references(() => territories.id),
   destinationTerritoryId: text('destination_territory_id'),
+  locationHexId: text('location_hex_id').references(() => mapHexes.id),
+  destinationHexId: text('destination_hex_id').references(() => mapHexes.id),
   movementTurnsRemaining: integer('movement_turns_remaining').default(0).notNull(),
 });
 
 export const armiesRelations = relations(armies, ({ one, many }) => ({
   realm: one(realms, { fields: [armies.realmId], references: [realms.id] }),
   locationTerritory: one(territories, { fields: [armies.locationTerritoryId], references: [territories.id] }),
+  locationHex: one(mapHexes, {
+    fields: [armies.locationHexId],
+    references: [mapHexes.id],
+    relationName: 'army_location_hex',
+  }),
+  destinationHex: one(mapHexes, {
+    fields: [armies.destinationHexId],
+    references: [mapHexes.id],
+    relationName: 'army_destination_hex',
+  }),
   troops: many(troops),
   siegeUnits: many(siegeUnits),
 }));
@@ -328,6 +420,9 @@ export const troops = sqliteTable('troops', {
   condition: text('condition').default('Healthy').notNull(),
   armyId: text('army_id').references(() => armies.id),
   garrisonSettlementId: text('garrison_settlement_id').references(() => settlements.id),
+  recruitmentSettlementId: text('recruitment_settlement_id').references(() => settlements.id),
+  recruitmentYear: integer('recruitment_year'),
+  recruitmentSeason: text('recruitment_season'),
   recruitmentTurnsRemaining: integer('recruitment_turns_remaining').default(0).notNull(),
 });
 
@@ -438,6 +533,16 @@ export const turnActions = sqliteTable('turn_actions', {
   buildingType: text('building_type'),
   troopType: text('troop_type'),
   settlementId: text('settlement_id'),
+  territoryId: text('territory_id'),
+  material: text('material').$type<FortificationMaterial>(),
+  wallSize: text('wall_size').$type<BuildingSize>(),
+  isGuildOwned: integer('is_guild_owned', { mode: 'boolean' }),
+  guildId: text('guild_id'),
+  allottedGosId: text('allotted_gos_id'),
+  locationType: text('location_type').$type<BuildingLocationType>(),
+  buildingSize: text('building_size').$type<BuildingSize>(),
+  takesBuildingSlot: integer('takes_building_slot', { mode: 'boolean' }),
+  constructionTurns: integer('construction_turns'),
   taxType: text('tax_type'),
   technicalKnowledgeKey: text('technical_knowledge_key').$type<TechnicalKnowledgeKey>(),
   cost: integer('cost').default(0).notNull(),

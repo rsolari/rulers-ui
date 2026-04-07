@@ -1,17 +1,25 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB } from '@/db';
-import { actionComments, games, realms, settlements, turnActions, turnReports } from '@/db/schema';
+import { actionComments, games, realms, settlements, territories, turnActions, turnReports } from '@/db/schema';
 import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import type {
   ActionCommentCreateDto,
   ActionCommentRecord,
   ActionKind,
   ActionWord,
+  BuildFinancialAction,
+  BuildingLocationType,
+  BuildingSize,
+  BuildingType,
   CurrentTurnResponseDto,
   FinancialAction,
+  FortificationMaterial,
   ReportStatus,
+  RecruitFinancialAction,
   Season,
+  TaxChangeFinancialAction,
+  TaxType,
   TurnPhase,
   TurnActionCreateDto,
   TurnActionOutcome,
@@ -23,8 +31,6 @@ import type {
   TurnReportRecord,
   TurnSubmitResponseDto,
   TroopType,
-  TaxType,
-  BuildingType,
 } from '@/types/game';
 import { ACTION_WORDS } from '@/types/game';
 
@@ -121,6 +127,16 @@ function serializeAction(action: TurnActionRow, comments: ActionCommentRecord[])
     buildingType: (action.buildingType as BuildingType | null) ?? null,
     troopType: (action.troopType as TroopType | null) ?? null,
     settlementId: action.settlementId ?? null,
+    territoryId: action.territoryId ?? null,
+    material: (action.material as FortificationMaterial | null) ?? null,
+    wallSize: (action.wallSize as BuildingSize | null) ?? null,
+    isGuildOwned: action.isGuildOwned ?? null,
+    guildId: action.guildId ?? null,
+    allottedGosId: action.allottedGosId ?? null,
+    locationType: (action.locationType as BuildingLocationType | null) ?? null,
+    buildingSize: (action.buildingSize as BuildingSize | null) ?? null,
+    takesBuildingSlot: action.takesBuildingSlot ?? null,
+    constructionTurns: action.constructionTurns ?? null,
     taxType: (action.taxType as TaxType | null) ?? null,
     technicalKnowledgeKey: action.technicalKnowledgeKey ?? null,
     cost: action.cost,
@@ -196,6 +212,30 @@ function assertValidBuildingType(value: string | null | undefined) {
   return value as BuildingType;
 }
 
+function assertValidBuildingLocationType(value: string | null | undefined) {
+  if (!value) return null;
+  if (value !== 'settlement' && value !== 'territory') {
+    throw new TurnActionError('Unknown building location type.', 400, 'invalid_location_type', { locationType: value });
+  }
+  return value as BuildingLocationType;
+}
+
+function assertValidBuildingSize(value: string | null | undefined) {
+  if (!value) return null;
+  if (!['Tiny', 'Small', 'Medium', 'Large', 'Colossal'].includes(value)) {
+    throw new TurnActionError('Unknown building size.', 400, 'invalid_building_size', { buildingSize: value });
+  }
+  return value as BuildingSize;
+}
+
+function assertValidMaterial(value: string | null | undefined) {
+  if (!value) return null;
+  if (value !== 'Timber' && value !== 'Stone') {
+    throw new TurnActionError('Unknown fortification material.', 400, 'invalid_material', { material: value });
+  }
+  return value as FortificationMaterial;
+}
+
 function assertValidTroopType(value: string | null | undefined) {
   if (!value) return null;
   if (!(value in TROOP_DEFS)) {
@@ -222,6 +262,19 @@ function normalizeNullableString(value: unknown) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeNullableBoolean(value: unknown) {
+  return typeof value === 'boolean' ? value : null;
+}
+
+function normalizeNullableInteger(value: unknown) {
+  if (value === undefined || value === null || value === '') return null;
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    throw new TurnActionError('Action values must use non-negative integers.', 400, 'invalid_integer_value');
+  }
+  return numeric;
+}
+
 function normalizeCost(value: unknown) {
   if (value === undefined) return 0;
   const numeric = typeof value === 'number' ? value : Number(value);
@@ -237,13 +290,49 @@ function mapTurnActionRowToFinancialAction(action: TurnActionRow): FinancialActi
     throw new TurnActionError('Cannot map a non-financial turn action into a financial action.', 500, 'invalid_financial_action_row');
   }
 
+  if (type === 'build') {
+    return {
+      type,
+      buildingType: action.buildingType as BuildFinancialAction['buildingType'],
+      settlementId: action.settlementId ?? undefined,
+      territoryId: action.territoryId ?? undefined,
+      material: (action.material as BuildFinancialAction['material']) ?? undefined,
+      wallSize: (action.wallSize as BuildFinancialAction['wallSize']) ?? undefined,
+      isGuildOwned: action.isGuildOwned ?? undefined,
+      guildId: action.guildId ?? undefined,
+      allottedGosId: action.allottedGosId ?? undefined,
+      locationType: (action.locationType as BuildFinancialAction['locationType']) ?? undefined,
+      buildingSize: (action.buildingSize as BuildFinancialAction['buildingSize']) ?? undefined,
+      takesBuildingSlot: action.takesBuildingSlot ?? undefined,
+      constructionTurns: action.constructionTurns ?? undefined,
+      technicalKnowledgeKey: action.technicalKnowledgeKey ?? undefined,
+      description: action.description || undefined,
+      cost: action.cost,
+    };
+  }
+
+  if (type === 'recruit') {
+    return {
+      type,
+      troopType: action.troopType as RecruitFinancialAction['troopType'],
+      settlementId: action.settlementId ?? undefined,
+      technicalKnowledgeKey: action.technicalKnowledgeKey ?? undefined,
+      description: action.description || undefined,
+      cost: action.cost,
+    };
+  }
+
+  if (type === 'taxChange') {
+    return {
+      type,
+      taxType: action.taxType as TaxChangeFinancialAction['taxType'],
+      description: action.description || undefined,
+      cost: action.cost,
+    };
+  }
+
   return {
     type,
-    buildingType: action.buildingType as FinancialAction['buildingType'],
-    troopType: action.troopType as FinancialAction['troopType'],
-    settlementId: action.settlementId ?? undefined,
-    taxType: action.taxType as FinancialAction['taxType'],
-    technicalKnowledgeKey: action.technicalKnowledgeKey ?? undefined,
     description: action.description || undefined,
     cost: action.cost,
   };
@@ -260,6 +349,17 @@ function getSettlementIdsForRealm(database: DatabaseExecutor, realmId: string) {
   );
 }
 
+function getTerritoryIdsForRealm(database: DatabaseExecutor, realmId: string) {
+  return new Set(
+    database
+      .select({ id: territories.id })
+      .from(territories)
+      .where(eq(territories.realmId, realmId))
+      .all()
+      .map((territory) => territory.id),
+  );
+}
+
 function assertSettlementOwnership(validSettlementIds: Set<string>, settlementId: string | null | undefined) {
   if (!settlementId) return;
   if (!validSettlementIds.has(settlementId)) {
@@ -272,10 +372,23 @@ function assertSettlementOwnership(validSettlementIds: Set<string>, settlementId
   }
 }
 
+function assertTerritoryOwnership(validTerritoryIds: Set<string>, territoryId: string | null | undefined) {
+  if (!territoryId) return;
+  if (!validTerritoryIds.has(territoryId)) {
+    throw new TurnActionError(
+      'Actions must target territories owned by the acting realm.',
+      400,
+      'invalid_territory_ownership',
+      { territoryId },
+    );
+  }
+}
+
 function buildDraftFields(
   kind: ActionKind,
   input: TurnActionCreateDto | TurnActionUpdateDto,
   validSettlementIds: Set<string>,
+  validTerritoryIds: Set<string>,
 ) {
   const description = normalizeDescription(input.description);
 
@@ -292,6 +405,16 @@ function buildDraftFields(
       buildingType: null,
       troopType: null,
       settlementId: null,
+      territoryId: null,
+      material: null,
+      wallSize: null,
+      isGuildOwned: null,
+      guildId: null,
+      allottedGosId: null,
+      locationType: null,
+      buildingSize: null,
+      takesBuildingSlot: null,
+      constructionTurns: null,
       taxType: null,
       technicalKnowledgeKey: null,
       cost: 0,
@@ -306,8 +429,15 @@ function buildDraftFields(
   const buildingType = assertValidBuildingType(input.buildingType);
   const troopType = assertValidTroopType(input.troopType);
   const settlementId = normalizeNullableString(input.settlementId);
+  const territoryId = normalizeNullableString(input.territoryId);
+  const material = assertValidMaterial(normalizeNullableString(input.material));
+  const wallSize = assertValidBuildingSize(normalizeNullableString(input.wallSize));
+  const locationType = assertValidBuildingLocationType(normalizeNullableString(input.locationType))
+    ?? (territoryId ? 'territory' : 'settlement');
+  const buildingSize = assertValidBuildingSize(normalizeNullableString(input.buildingSize));
   const taxType = assertValidTaxType(input.taxType);
   assertSettlementOwnership(validSettlementIds, settlementId);
+  assertTerritoryOwnership(validTerritoryIds, territoryId);
 
   return {
     description,
@@ -316,11 +446,23 @@ function buildDraftFields(
     assignedNobleId: null,
     triggerCondition: null,
     financialType,
-    buildingType,
-    troopType,
-    settlementId,
-    taxType,
-    technicalKnowledgeKey: normalizeNullableString(input.technicalKnowledgeKey),
+    buildingType: financialType === 'build' ? buildingType : null,
+    troopType: financialType === 'recruit' ? troopType : null,
+    settlementId: financialType === 'build' || financialType === 'recruit' ? settlementId : null,
+    territoryId: financialType === 'build' ? territoryId : null,
+    material: financialType === 'build' ? material : null,
+    wallSize: financialType === 'build' ? wallSize : null,
+    isGuildOwned: financialType === 'build' ? normalizeNullableBoolean(input.isGuildOwned) : null,
+    guildId: financialType === 'build' ? normalizeNullableString(input.guildId) : null,
+    allottedGosId: financialType === 'build' ? normalizeNullableString(input.allottedGosId) : null,
+    locationType: financialType === 'build' ? locationType : null,
+    buildingSize: financialType === 'build' ? buildingSize : null,
+    takesBuildingSlot: financialType === 'build' ? normalizeNullableBoolean(input.takesBuildingSlot) : null,
+    constructionTurns: financialType === 'build' ? normalizeNullableInteger(input.constructionTurns) : null,
+    taxType: financialType === 'taxChange' ? taxType : null,
+    technicalKnowledgeKey: financialType === 'build' || financialType === 'recruit'
+      ? normalizeNullableString(input.technicalKnowledgeKey)
+      : null,
     cost: normalizeCost(input.cost),
   };
 }
@@ -375,7 +517,11 @@ function assertTurnAggregateRules(actions: TurnActionRow[]) {
   }
 }
 
-function assertSubmittableAction(action: TurnActionRow, validSettlementIds: Set<string>) {
+function assertSubmittableAction(
+  action: TurnActionRow,
+  validSettlementIds: Set<string>,
+  validTerritoryIds: Set<string>,
+) {
   if (action.kind === 'political') {
     if (parseJson<ActionWord[]>(action.actionWords, []).length === 0) {
       throw new TurnActionError('Political actions require at least one action word before submission.', 400, 'political_action_missing_words');
@@ -392,13 +538,24 @@ function assertSubmittableAction(action: TurnActionRow, validSettlementIds: Set<
   }
 
   assertSettlementOwnership(validSettlementIds, action.settlementId);
+  assertTerritoryOwnership(validTerritoryIds, action.territoryId);
 
   if (financialType === 'build') {
     if (!assertValidBuildingType(action.buildingType)) {
       throw new TurnActionError('Build actions require a valid building type.', 400, 'build_action_missing_building');
     }
+    const locationType = assertValidBuildingLocationType(action.locationType)
+      ?? (action.territoryId ? 'territory' : 'settlement');
+
+    if (locationType === 'territory') {
+      if (!action.territoryId) {
+        throw new TurnActionError('Territory build actions require a territory.', 400, 'build_action_missing_territory');
+      }
+      return;
+    }
+
     if (!action.settlementId) {
-      throw new TurnActionError('Build actions require a settlement.', 400, 'build_action_missing_settlement');
+      throw new TurnActionError('Settlement build actions require a settlement.', 400, 'build_action_missing_settlement');
     }
     return;
   }
@@ -610,7 +767,8 @@ export function createTurnActionService(database: DB = defaultDb) {
       const game = getGame(tx, gameId);
       const report = ensureCurrentTurnReport(tx, gameId, realmId, game.currentYear, game.currentSeason as Season);
       const validSettlementIds = getSettlementIdsForRealm(tx, realmId);
-      const fields = buildDraftFields(input.kind, input, validSettlementIds);
+      const validTerritoryIds = getTerritoryIdsForRealm(tx, realmId);
+      const fields = buildDraftFields(input.kind, input, validSettlementIds, validTerritoryIds);
       const existingActions = tx.select().from(turnActions).where(eq(turnActions.turnReportId, report.id)).all();
       const sortOrder = existingActions.length === 0
         ? 0
@@ -655,7 +813,8 @@ export function createTurnActionService(database: DB = defaultDb) {
       if (actor.role === 'player') {
         assertDraftEditable(action, game, realmId);
         const validSettlementIds = getSettlementIdsForRealm(tx, realmId);
-        const fields = buildDraftFields(action.kind as ActionKind, input, validSettlementIds);
+        const validTerritoryIds = getTerritoryIdsForRealm(tx, realmId);
+        const fields = buildDraftFields(action.kind as ActionKind, input, validSettlementIds, validTerritoryIds);
 
         tx.update(turnActions)
           .set({
@@ -764,11 +923,12 @@ export function createTurnActionService(database: DB = defaultDb) {
       const report = ensureCurrentTurnReport(tx, gameId, realmId, game.currentYear, game.currentSeason as Season);
       const actions = tx.select().from(turnActions).where(eq(turnActions.turnReportId, report.id)).all();
       const validSettlementIds = getSettlementIdsForRealm(tx, realmId);
+      const validTerritoryIds = getTerritoryIdsForRealm(tx, realmId);
 
       assertTurnAggregateRules(actions);
       for (const action of actions) {
         if (action.status === 'executed') continue;
-        assertSubmittableAction(action, validSettlementIds);
+        assertSubmittableAction(action, validSettlementIds, validTerritoryIds);
       }
 
       tx.update(turnActions)

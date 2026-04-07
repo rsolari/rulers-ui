@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -55,7 +56,6 @@ interface Territory {
   id: string;
   name: string;
   realmId: string | null;
-  climate: string | null;
   description: string | null;
   foodCapBase: number;
   foodCapBonus: number;
@@ -94,19 +94,6 @@ interface Troop {
   armyId: string | null;
   garrisonSettlementId: string | null;
 }
-
-const CLIMATE_OPTIONS = [
-  { value: 'Temperate', label: 'Temperate' },
-  { value: 'Arid', label: 'Arid' },
-  { value: 'Tropical', label: 'Tropical' },
-  { value: 'Arctic', label: 'Arctic' },
-  { value: 'Subarctic', label: 'Subarctic' },
-  { value: 'Mediterranean', label: 'Mediterranean' },
-  { value: 'Steppe', label: 'Steppe' },
-  { value: 'Desert', label: 'Desert' },
-  { value: 'Highland', label: 'Highland' },
-  { value: 'Oceanic', label: 'Oceanic' },
-];
 
 const SETTLEMENT_SIZE_OPTIONS = [
   { value: 'Village', label: 'Village' },
@@ -538,6 +525,16 @@ export default function GMDashboard() {
         </Button>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mb-6">
+        <Link href={`/game/${gameId}/map`}>
+          <Card className="cursor-pointer transition-colors hover:border-gold-500">
+            <CardContent>
+              <p className="font-heading font-bold pt-4">Map</p>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Player Slots</CardTitle>
@@ -725,7 +722,6 @@ export default function GMDashboard() {
                     <div className="flex items-center gap-2">
                       <span className={`inline-block text-xs transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
                       <span className="font-heading font-semibold">{territory.name}</span>
-                      {territory.climate && <Badge>{territory.climate}</Badge>}
                       {territory.realmId && <Badge variant="gold">{realmMap[territory.realmId] || 'Unknown'}</Badge>}
                       {!territory.realmId && <Badge variant="default">Unclaimed</Badge>}
                     </div>
@@ -757,14 +753,6 @@ export default function GMDashboard() {
                               value={territory.name}
                               onChange={(e) => {
                                 setTerritories((prev) => prev.map((t) => t.id === territory.id ? { ...t, name: e.target.value } : t));
-                              }}
-                            />
-                            <Select
-                              label="Climate"
-                              options={CLIMATE_OPTIONS}
-                              value={territory.climate || ''}
-                              onChange={(e) => {
-                                setTerritories((prev) => prev.map((t) => t.id === territory.id ? { ...t, climate: e.target.value } : t));
                               }}
                             />
                             <Input
@@ -809,7 +797,6 @@ export default function GMDashboard() {
                           <Button variant="accent" size="sm" onClick={() => {
                             void saveTerritory(territory.id, {
                               name: territory.name,
-                              climate: territory.climate,
                               foodCapBase: territory.foodCapBase,
                               foodCapBonus: territory.foodCapBonus,
                               hasRiverAccess: territory.hasRiverAccess,

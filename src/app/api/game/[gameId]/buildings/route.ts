@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { buildings, settlements, territories } from '@/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, or } from 'drizzle-orm';
 import { isAuthError, requireGM } from '@/lib/auth';
 import { createBuilding, isRuleValidationError } from '@/lib/rules-action-service';
 
@@ -34,11 +34,12 @@ export async function GET(
 
     const settList = await db.select().from(settlements).where(inArray(settlements.territoryId, territoryIds));
     const settIds = settList.map((s) => s.id);
-    if (settIds.length === 0) {
-      return NextResponse.json([]);
-    }
-
-    const list = await db.select().from(buildings).where(inArray(buildings.settlementId, settIds));
+    const list = settIds.length > 0
+      ? await db.select().from(buildings).where(or(
+        inArray(buildings.settlementId, settIds),
+        inArray(buildings.territoryId, territoryIds),
+      ))
+      : await db.select().from(buildings).where(inArray(buildings.territoryId, territoryIds));
     return NextResponse.json(list);
   } catch (error) {
     if (isAuthError(error)) {
@@ -66,6 +67,7 @@ export async function POST(
       locationType: created.row.locationType,
       settlementId: created.row.settlementId,
       territoryId: created.row.territoryId,
+      hexId: created.row.hexId,
       constructionTurns: created.constructionTurns,
       cost: created.cost,
       notes: created.notes,

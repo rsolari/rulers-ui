@@ -15,6 +15,7 @@ export interface RoleState {
   playerSetupState: PlayerSetupState | null;
   displayName: string | null;
   territoryId: string | null;
+  claimCode: string | null;
   loading: boolean;
   refresh: () => void;
 }
@@ -31,6 +32,7 @@ const initialState: SessionState = {
   playerSetupState: null,
   displayName: null,
   territoryId: null,
+  claimCode: null,
   loading: true,
 };
 
@@ -67,6 +69,7 @@ export function useRole(): RoleState {
           playerSetupState: session.playerSetupState ?? null,
           displayName: session.displayName ?? null,
           territoryId: session.territoryId ?? null,
+          claimCode: session.claimCode ?? null,
           loading: false,
         });
       } catch {

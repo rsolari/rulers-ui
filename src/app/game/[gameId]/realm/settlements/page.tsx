@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
@@ -40,6 +41,9 @@ export default function SettlementsPage() {
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
+      <nav className="mb-4 text-sm text-ink-300">
+        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+      </nav>
       <h1 className="text-3xl font-bold mb-2">Settlements</h1>
       <p className="text-ink-300 mb-6">Settlement management is GM-controlled. This page is read-only for players.</p>
 

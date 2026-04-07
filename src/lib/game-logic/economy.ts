@@ -185,6 +185,8 @@ export interface SettlementEconomyBreakdown {
   foodWealth: number;
   totalWealth: number;
   tradeBonusRate: number;
+  taxRate: number;
+  taxRevenue: number;
   foodProduced: number;
   foodNeeded: number;
   emptyBuildingSlots: number;
@@ -523,6 +525,7 @@ export function calculateRealmEconomy(
   );
   const availableProducts = [...new Set([...localProducts, ...importedProducts])];
   const hasMercantile = realm.traditions.includes('Mercantile');
+  const taxRate = TAX_RATES[taxResolution.appliedTaxType];
   const settlementBreakdown: SettlementEconomyBreakdown[] = [];
   const pendingBuildings: EconomyPendingBuilding[] = [];
   const pendingTroops: EconomyPendingTroop[] = [];
@@ -567,6 +570,7 @@ export function calculateRealmEconomy(
 
     const foodWealth = calculateFoodWealth(foodProduced);
     const totalWealth = calculateSettlementTotalWealth(resourceWealth, foodWealth, tradeBonusRate);
+    const taxRevenue = Math.floor(totalWealth * taxRate);
 
     settlementBreakdown.push({
       settlementId: settlement.id,
@@ -575,6 +579,8 @@ export function calculateRealmEconomy(
       foodWealth,
       totalWealth,
       tradeBonusRate,
+      taxRate,
+      taxRevenue,
       foodProduced,
       foodNeeded,
       emptyBuildingSlots,
@@ -582,7 +588,6 @@ export function calculateRealmEconomy(
     });
   }
 
-  const taxRate = TAX_RATES[taxResolution.appliedTaxType];
   const grossSettlementWealth = settlementBreakdown.reduce((sum, settlement) => sum + settlement.totalWealth, 0);
   const totalTaxRevenue = Math.floor(grossSettlementWealth * taxRate);
   let allocatedTaxRevenue = 0;
@@ -594,7 +599,7 @@ export function calculateRealmEconomy(
 
     ledgerEntries.push(createRevenueEntry({
       category: 'tax-revenue',
-      label: `${settlement.settlementName} tax revenue`,
+      label: `${settlement.settlementName} tribute & tax revenue`,
       amount: settlementTaxRevenue,
       settlementId: settlement.settlementId,
       metadata: {

@@ -75,9 +75,10 @@ export default function RealmDashboard() {
   const params = useParams();
   const router = useRouter();
   const gameId = params.gameId as string;
-  const { role, realmId, initState, loading } = useRole();
+  const { role, realmId, initState, claimCode, loading } = useRole();
   const [game, setGame] = useState<Game | null>(null);
   const [realm, setRealm] = useState<Realm | null>(null);
+  const [allRealms, setAllRealms] = useState<Realm[]>([]);
   const [territories, setTerritories] = useState<Territory[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [ruler, setRuler] = useState<Ruler | null>(null);
@@ -129,16 +130,16 @@ export default function RealmDashboard() {
       ]);
 
       const gameData = await gameResponse.json();
-      const realmList = await realmsResponse.json();
+      const realmList: Realm[] = await realmsResponse.json();
       const realmData = realmList.find((entry: Realm) => entry.id === realmId) || null;
       const allTerritories: Territory[] = await territoriesResponse.json();
-      const realmTerritories = allTerritories.filter((t) => t.realmId === realmId);
       const settlementsList = await settlementsResponse.json();
       const rulerData = await rulerResponse.json();
 
       setGame(gameData);
       setRealm(realmData);
-      setTerritories(realmTerritories);
+      setAllRealms(realmList);
+      setTerritories(allTerritories);
       setSettlements(settlementsList);
       setRuler(rulerData);
       setResources(await resourcesResponse.json());
@@ -274,6 +275,15 @@ export default function RealmDashboard() {
           <Badge>{game.turnPhase}</Badge>
         </div>
       </div>
+
+      {claimCode && (
+        <Card className="mb-6">
+          <CardContent>
+            <p className="text-sm text-ink-300 pt-4">Your Claim Code</p>
+            <p className="font-mono text-2xl">{claimCode}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {ruler ? (
         <Card variant="gold" className="mb-6">
@@ -445,30 +455,65 @@ export default function RealmDashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {territories.map((territory) => {
-              const territorySettlements = settlements.filter((s) => s.territoryId === territory.id);
-              return (
-                <div key={territory.id} className="p-3 medieval-border rounded space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-heading font-semibold">{territory.name}</span>
-                    {territory.climate && <Badge>{territory.climate}</Badge>}
-                  </div>
-                  {territorySettlements.length > 0 && (
-                    <div className="space-y-1 ml-4">
-                      {territorySettlements.map((settlement) => (
-                        <div key={settlement.id} className="flex items-center justify-between p-2 rounded bg-parchment-100/50">
-                          <div className="flex items-center gap-3">
-                            <span>{settlement.name}</span>
-                            <Badge>{settlement.size}</Badge>
-                          </div>
-                          <span className="text-sm text-ink-300">{settlement.buildings?.length || 0} buildings</span>
-                        </div>
-                      ))}
+            {(() => {
+              const realmMap = Object.fromEntries(allRealms.map((r) => [r.id, r.name]));
+              const ownTerritories = territories.filter((t) => t.realmId === realmId);
+              const otherTerritories = territories.filter((t) => t.realmId && t.realmId !== realmId);
+              const unclaimedTerritories = territories.filter((t) => !t.realmId);
+
+              function renderTerritory(territory: Territory, isOwn: boolean) {
+                const territorySettlements = isOwn ? settlements.filter((s) => s.territoryId === territory.id) : [];
+                return (
+                  <div key={territory.id} className={`p-3 medieval-border rounded space-y-2 ${isOwn ? 'border-gold-500/50' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-heading font-semibold">{territory.name}</span>
+                        {isOwn && <Badge variant="gold">Yours</Badge>}
+                        {!isOwn && territory.realmId && <Badge>{realmMap[territory.realmId] || 'Unknown'}</Badge>}
+                        {!territory.realmId && <Badge variant="default">Unclaimed</Badge>}
+                      </div>
+                      {territory.climate && <Badge>{territory.climate}</Badge>}
                     </div>
+                    {territorySettlements.length > 0 && (
+                      <div className="space-y-1 ml-4">
+                        {territorySettlements.map((settlement) => (
+                          <div key={settlement.id} className="flex items-center justify-between p-2 rounded bg-parchment-100/50">
+                            <div className="flex items-center gap-3">
+                              <span>{settlement.name}</span>
+                              <Badge>{settlement.size}</Badge>
+                            </div>
+                            <span className="text-sm text-ink-300">{settlement.buildings?.length || 0} buildings</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <>
+                  {ownTerritories.length > 0 && (
+                    <>
+                      <p className="text-sm font-heading font-semibold text-ink-500">Your Territories</p>
+                      {ownTerritories.map((t) => renderTerritory(t, true))}
+                    </>
                   )}
-                </div>
+                  {otherTerritories.length > 0 && (
+                    <>
+                      <p className="text-sm font-heading font-semibold text-ink-500 mt-4">Other Realms</p>
+                      {otherTerritories.map((t) => renderTerritory(t, false))}
+                    </>
+                  )}
+                  {unclaimedTerritories.length > 0 && (
+                    <>
+                      <p className="text-sm font-heading font-semibold text-ink-500 mt-4">Unclaimed</p>
+                      {unclaimedTerritories.map((t) => renderTerritory(t, false))}
+                    </>
+                  )}
+                </>
               );
-            })}
+            })()}
             {territories.length === 0 && <p className="text-ink-300 text-sm">No territories yet.</p>}
           </div>
         </CardContent>

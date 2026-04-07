@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { gameMaps, mapHexFeatures, mapHexes, settlements } from '@/db/schema';
 import { WORLD_V1_MAP_DEFINITION } from '@/lib/maps/definitions/world-v1';
+import { buildCuratedTerritoryMapData, getTerritoryMapHexKey } from '@/lib/maps/territory-map';
 import type {
   CuratedMapDefinition,
   CuratedMapHexDefinition,
@@ -31,6 +32,7 @@ type MapReadDatabase = typeof db;
 export interface ImportedCuratedGameMap {
   gameMapId: string;
   territoryHexIds: Map<string, string[]>;
+  hexIdsByCoordKey: Map<string, string>;
 }
 
 function getHexIssues(definition: CuratedMapDefinition) {
@@ -126,6 +128,11 @@ export function listCuratedMapDefinitions() {
     name: definition.name,
     version: definition.version,
     territories: definition.territories,
+    territoryMaps: definition.territories.map((territory) => buildCuratedTerritoryMapData(
+      definition,
+      territory.key,
+      territory.name
+    )),
     territoryCount: definition.territories.length,
   }));
 }
@@ -185,6 +192,7 @@ export function importCuratedGameMap(
   }).run();
 
   const territoryHexIds = new Map<string, string[]>();
+  const hexIdsByCoordKey = new Map<string, string>();
 
   for (const hex of definition.hexes) {
     if (hex.kind === 'land' && !activeTerritoryKeys.has(hex.territoryKey)) {
@@ -204,6 +212,7 @@ export function importCuratedGameMap(
       terrainType: hex.kind === 'land' ? hex.terrainType : null,
       territoryId,
     }).run();
+    hexIdsByCoordKey.set(getTerritoryMapHexKey(hex.q, hex.r), hexId);
 
     if (hex.kind === 'land') {
       const hexIds = territoryHexIds.get(hex.territoryKey) ?? [];
@@ -222,7 +231,7 @@ export function importCuratedGameMap(
     }
   }
 
-  return { gameMapId, territoryHexIds };
+  return { gameMapId, territoryHexIds, hexIdsByCoordKey };
 }
 
 export async function getTerritoryLandHexes(database: MapReadDatabase, territoryId: string) {
@@ -273,6 +282,25 @@ export async function getAvailableSettlementHexId(database: MapReadDatabase, ter
   );
 
   return landHexes.find((hex) => !occupiedHexIds.has(hex.id))?.id ?? null;
+}
+
+export async function isSettlementHexAvailable(
+  database: MapReadDatabase,
+  territoryId: string,
+  hexId: string
+) {
+  const [hex, existingSettlement] = await Promise.all([
+    getLandHexById(database, hexId),
+    database.select({ id: settlements.id })
+      .from(settlements)
+      .where(and(
+        eq(settlements.territoryId, territoryId),
+        eq(settlements.hexId, hexId),
+      ))
+      .get(),
+  ]);
+
+  return Boolean(hex && hex.territoryId === territoryId && !existingSettlement);
 }
 
 export async function getDefaultArmyHexId(

@@ -62,6 +62,11 @@ const mapMocks = vi.hoisted(() => ({
   importCuratedGameMap: vi.fn(() => ({
     gameMapId: 'game-map-1',
     territoryHexIds: new Map([['kingdom-1', ['hex-1', 'hex-2', 'hex-3']]]),
+    hexIdsByCoordKey: new Map([
+      ['0:0', 'hex-1'],
+      ['1:0', 'hex-2'],
+      ['2:0', 'hex-3'],
+    ]),
   })),
 }));
 
@@ -125,7 +130,7 @@ describe('POST /api/game/[gameId]/setup', () => {
           resources: [{
             resourceType: 'Ore',
             rarity: 'Common',
-            settlement: { name: 'S1', size: 'Village' },
+            settlement: { name: 'S1', size: 'Village', hexKey: '0:0' },
           }],
         }],
       }),
@@ -239,7 +244,7 @@ describe('POST /api/game/[gameId]/setup', () => {
           resources: [{
             resourceType: 'Ore',
             rarity: 'Common',
-            settlement: { name: 'S1', size: 'Village' },
+            settlement: { name: 'S1', size: 'Village', hexKey: '0:0' },
           }],
         }],
       }),
@@ -342,11 +347,11 @@ describe('POST /api/game/[gameId]/setup', () => {
           resources: [{
             resourceType: 'Ore',
             rarity: 'Common',
-            settlement: { name: 'Market Town', size: 'Town' },
+            settlement: { name: 'Market Town', size: 'Town', hexKey: '0:0' },
           }, {
             resourceType: 'Gold',
             rarity: 'Luxury',
-            settlement: { name: 'Old Capital', size: 'City' },
+            settlement: { name: 'Old Capital', size: 'City', hexKey: '1:0' },
           }],
         }],
       }),
@@ -429,6 +434,38 @@ describe('POST /api/game/[gameId]/setup', () => {
       claimCodes: [],
       mapKey: 'world-v1',
       success: true,
+    });
+  });
+
+  it('rejects duplicate settlement placements inside the same territory', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+    authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'gm_world_setup' });
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        territories: [{
+          name: 'T1',
+          type: 'Realm',
+          resources: [{
+            resourceType: 'Ore',
+            rarity: 'Common',
+            settlement: { name: 'S1', size: 'Village', hexKey: '0:0' },
+          }, {
+            resourceType: 'Stone',
+            rarity: 'Common',
+            settlement: { name: 'S2', size: 'Village', hexKey: '0:0' },
+          }],
+        }],
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Starting settlements in T1 cannot share the same hex.',
     });
   });
 });

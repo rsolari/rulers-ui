@@ -1,6 +1,6 @@
 # Creating Noble Families
 
-Roll 1d4 — this is how many Noble Families there are in your Realm, including the Ruler's own family. For every family, roll 1d6. This determines how many leading members the family has. One of them must be the Head of the family, while the others may be Aunts, Uncles, Siblings or Grandparents.
+Roll 1d4 — this is how many Noble Families there are in your Realm, including the [Ruler's](12-creating-your-ruler.md) own family. For every family, roll 1d6. This determines how many leading members the family has. One of them must be the Head of the family, while the others may be Aunts, Uncles, Siblings or Grandparents.
 
 For each leading family member, roll 1d10: on a 1–5 they are male, on a 6–10 they are female.
 
@@ -19,7 +19,7 @@ Fill in the gaps as you see fit. These results are to give you a starting point.
 
 ## Personality Creation
 
-Each NPC Noble or significant Character has their own personality. Perhaps you have a personality in mind, and that's fine, but you probably have a lot of NPCs to create, so here are tables to randomly give them a complete personality.
+Each NPC [Noble](16-nobles.md) or significant Character has their own personality. Perhaps you have a personality in mind, and that's fine, but you probably have a lot of NPCs to create, so here are tables to randomly give them a complete personality.
 
 **Personality**
 

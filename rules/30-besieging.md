@@ -1,10 +1,10 @@
 # Besieging
 
-Assaulting a Settlement is no simple task. It has walls, and gates. They may have even locked them! It's most troublesome.
+Assaulting a [Settlement](19-settlements.md) is no simple task. It has walls, and gates. They may have even locked them! It's most troublesome.
 
 ## Automatic
 
-The N.O. should be careful when allowing a Settlement to be captured automatically. In the example we used for Automatic combat, the army is attacking a settlement. This is Automatic because of the completely overwhelming force that is attacking. Even the Player would concede there is no way they could possibly win, and so the handful of defenders simply lay down their arms.
+The N.O. should be careful when allowing a Settlement to be captured automatically. In the example we used for [Automatic combat](29-warfare.md#battles--automatic), the army is attacking a settlement. This is Automatic because of the completely overwhelming force that is attacking. Even the Player would concede there is no way they could possibly win, and so the handful of defenders simply lay down their arms.
 
 However, if a Settlement is being taken automatically, it is important for the N.O. to have the Player's consent, as automatically losing a Settlement could really sour their day. Simply giving them the chance for a heroic last stand may be enough to satisfy them.
 
@@ -12,32 +12,32 @@ At the same time though, it is important for Players to recognise that Rulers is
 
 ## In Quick Combat
 
-When laying siege to a Settlement in Quick Combat, the Defender's total dice pool is increased by the Defence Rating of the Settlement and any other Fortifications that are present. The attacking army still receives bonuses according to its Siege Weapons, as well as any other bonus dice it may be awarded.
+When laying siege to a Settlement in [Quick Combat](29-warfare.md#battles--quick-combat), the Defender's total dice pool is increased by the Defence Rating of the Settlement and any other [Fortifications](26-buildings.md#fortifications) that are present. The attacking army still receives bonuses according to its [Siege Weapons](28-siege-units.md), as well as any other bonus dice it may be awarded.
 
 | Settlement | Defence Rating |
 |---|---|
 | Village | 0 |
 | Town | 2 |
 | City | 4 |
-| Walls | +1 |
-| Fort | +2 |
-| Castle | +4 |
+| [Walls](26-buildings.md#walls) | +1 |
+| [Fort](26-buildings.md#fort) | +2 |
+| [Castle](26-buildings.md#castle) | +4 |
 
 Roll the Attacker's Dice Pool against the Defender's Dice Pool as per Quick Combat rules.
 
 ## In Full Combat
 
-In Full Combat, the Settlement's defences add an extra dimension to the story-telling of the siege. First establish how the defending army is distributed. Which Troops are on the walls? Are there also Troops behind the Walls, or in front of them?
+In [Full Combat](29-warfare.md#battles--full-combat), the Settlement's defences add an extra dimension to the story-telling of the siege. First establish how the defending army is distributed. Which [Troops](27-armies.md) are on the walls? Are there also Troops behind the Walls, or in front of them?
 
-Ranged Troops on the Settlement Walls or in Watchtowers are treated as having extended Range.
+Ranged Troops on the Settlement Walls or in [Watchtowers](26-buildings.md#watchtower) are treated as having extended Range.
 
-Basic and Elite Troops cannot damage a Settlement's Fortifications unless otherwise specified. Siege weapons make a Combat Roll, plus their Damage bonus. This is rolled against the Fortification's Dice pool + its Defence value. Combat rolls may be modified by bonuses and weaknesses of both the Siege weapons and the Fortifications.
+Basic and Elite Troops cannot damage a Settlement's Fortifications unless otherwise specified. [Siege weapons](28-siege-units.md) make a Combat Roll, plus their Damage bonus. This is rolled against the Fortification's Dice pool + its Defence value. Combat rolls may be modified by bonuses and weaknesses of both the Siege weapons and the Fortifications.
 
 For each success the Attacker has over the Fortification, remove one dice from the Fortification's Defence pool. When the Fortification is at half its dice pool, it is considered **Damaged**. Once it is out of dice, it is **Destroyed**. Any Troops standing on a Fortification when it is Destroyed are considered Defeated.
 
 Siege weapons take one Action to load and one to launch their attack as they have to be prepared and aimed. Some Siege Weapons may move, and others may be moved and loaded. **No Siege Weapon can Move and Act.**
 
-If the Fortification's Defence roll is successful, it may simply deflect the attack, and it lands somewhere else. If you launch a boulder from a Trebuchet or Catapult, or fire a Cannonball, it will definitely hit *something*. If there are Troops nearby, roll on the location table below to see if they are hit. Otherwise, it is up to the N.O. to describe where the shot lands.
+If the Fortification's Defence roll is successful, it may simply deflect the attack, and it lands somewhere else. If you launch a boulder from a [Trebuchet](28-siege-units.md#trebuchets) or [Catapult](28-siege-units.md#catapults), or fire a [Cannonball](28-siege-units.md#cannon), it will definitely hit *something*. If there are Troops nearby, roll on the location table below to see if they are hit. Otherwise, it is up to the N.O. to describe where the shot lands.
 
 | Roll (1d10) | Where does it land? |
 |---|---|
@@ -56,22 +56,22 @@ Beyond that, the Players and the N.O. are free to describe the battle and how th
 
 An attacking army does not necessarily have to break through a Settlement's defences if they don't want to, or simply can't. In this case, they may decide to Blockade the Settlement instead.
 
-A Blockade stops all Trade routes to the Settlement,[^38] as well as preventing Food and Resources from reaching the Settlement. All the effects this would normally have on a Settlement take effect, including Industries being unable to operate and starvation. The Blockade lasts until the blockading army decides to leave, or is defeated.
+A Blockade stops all [Trade routes](25-trade.md) to the Settlement,[^38] as well as preventing [Food](20-food-for-the-people.md) and [Resources](08-territories-and-resources.md) from reaching the Settlement. All the effects this would normally have on a Settlement take effect, including [Industries](24-resources-and-industries.md) being unable to operate and starvation. The Blockade lasts until the blockading army decides to leave, or is defeated.
 
 ## Capturing Settlements
 
-Individual Settlements may be captured by Armies in Rulers. To do this, the Army must have been instructed to do so. Once combat has been resolved as is appropriate, the Settlement is now considered part of the Attackers' Realm. This will increase Turmoil depending on the nature of the Attackers' invasion, and how much the conquered actually liked their new situation.
+Individual Settlements may be captured by Armies in Rulers. To do this, the Army must have been instructed to do so. Once combat has been resolved as is appropriate, the Settlement is now considered part of the Attackers' Realm. This will increase [Turmoil](21-turmoil.md) depending on the nature of the Attackers' invasion, and how much the conquered actually liked their new situation.
 
 ## Taking Prisoners
 
-Once a Battle is over, or a Settlement has been captured, there may be some survivors who have surrendered, or just didn't have the time to flee. The Prisoners will be all the Troops who have been Defeated, but are still alive. A victorious Army may also choose to try and capture the enemy General — this is done by making an appropriate Combat Roll after a defeated army flees.
+Once a Battle is over, or a Settlement has been captured, there may be some survivors who have surrendered, or just didn't have the time to flee. The Prisoners will be all the Troops who have been [Defeated](29-warfare.md#wounding-troops), but are still alive. A victorious Army may also choose to try and capture the enemy General — this is done by making an appropriate Combat Roll after a defeated army flees.
 
-In the case of a Captured Settlement, the population are not considered Prisoners. Only the Troops who have not fled, and any Nobles in the Settlement, are Prisoners.
+In the case of a Captured Settlement, the population are not considered Prisoners. Only the Troops who have not fled, and any [Nobles](16-nobles.md) in the Settlement, are Prisoners.
 
-Upon taking Prisoners, their captors may release them, execute them, or continue to hold them captive. A captive costs 1/4 of that Troop or Noble's Upkeep to keep them fed. For a Noble this will be the lowest estate Upkeep. However, a Ruler may decide to increase the amount spent on their Prisoners, to win their favour.
+Upon taking Prisoners, their captors may release them, execute them, or continue to hold them captive. A captive costs 1/4 of that Troop or Noble's Upkeep to keep them fed. For a Noble this will be the lowest [estate](16-nobles.md#estates) Upkeep. However, a Ruler may decide to increase the amount spent on their Prisoners, to win their favour.
 
-Whatever is decided, word immediately gets out about the captives. It always does. Great care must be taken if a Ruler does not want the world at large to know how cruelly Prisoners were treated, or if they executed unlawfully.
+Whatever is decided, word immediately gets out about the captives. It always does. Great care must be taken if a [Ruler](12-creating-your-ruler.md) does not want the world at large to know how cruelly Prisoners were treated, or if they executed unlawfully.
 
-[^36]: Players, build some Walls and Garrison some Troops! Don't be surprised if your completely undefended Village gets overrun!
-[^37]: It is not necessary to draw every street in the Settlement. Just detail where the Fortifications (if any) are, and where staircases onto the Walls may be.
+[^36]: Players, build some [Walls](26-buildings.md#walls) and Garrison some Troops! Don't be surprised if your completely undefended Village gets overrun!
+[^37]: It is not necessary to draw every street in the Settlement. Just detail where the [Fortifications](26-buildings.md#fortifications) (if any) are, and where staircases onto the Walls may be.
 [^38]: If the blockade is initiated by a land Army, they stop overland trade routes.

@@ -1,14 +1,14 @@
 # Resources & Industries
 
-There are two types of Resources in Rulers: **Common** and **Luxury**. These are used by Industries to make Products like tools, clothes, pots, weapons, furniture etc. Each Resource Site is located in the appropriate terrain of the Realm (e.g. Stone and Ore would be situated near mountains or canyons). Industries are located in the Settlements at their respective Resource Sites. You can imagine them as whole streets bustling with artisans, or small communities built around the Resource itself.
+There are two types of Resources in Rulers: **Common** and **Luxury**. These are used by Industries to make Products like tools, clothes, pots, weapons, furniture etc. Each Resource Site is located in the appropriate terrain of the Realm (e.g. Stone and Ore would be situated near mountains or canyons). Industries are located in the [Settlements](19-settlements.md) at their respective Resource Sites. You can imagine them as whole streets bustling with artisans, or small communities built around the Resource itself.
 
-Common Resources come in greater abundance, allowing them to support more Industries, but they are less valuable than the rarer Luxury Resources. Resources and their respective Industries generate Wealth for their Settlement, which can be Taxed by the Ruler.
+Common Resources come in greater abundance, allowing them to support more Industries, but they are less valuable than the rarer Luxury Resources. Resources and their respective Industries generate Wealth for their Settlement, which can be [Taxed](23-making-money.md) by the [Ruler](12-creating-your-ruler.md).
 
 | Type | Wealth Generated |
 |---|---|
 | Common Resource | 10,000g |
 | Luxury Resource | 15,000g |
-| Food | 2,000g per Food Produced |
+| [Food](20-food-for-the-people.md) | 2,000g per Food Produced |
 
 ## Common Resources
 
@@ -16,8 +16,8 @@ Common Resources include: **Ore**, **Timber**, **Clay** and **Stone**.
 
 - **Ore** is used by a Blacksmith to produce metal goods, tools, weapons and armour.
 - **Clay** is used by a Potter to produce ceramic goods and pottery.
-- **Timber** is used by a Carpenter to produce wooden crafts, furnishings and Buildings.
-- **Stone** is used by a Stone Mason to produce cut stone blocks for larger Buildings and defensive fortifications.
+- **Timber** is used by a Carpenter to produce wooden crafts, furnishings and [Buildings](26-buildings.md).
+- **Stone** is used by a Stone Mason to produce cut stone blocks for larger Buildings and defensive [fortifications](26-buildings.md#fortifications).
 
 | Common Resource | Industry |
 |---|---|
@@ -50,7 +50,7 @@ Some Luxury Resources support industries themselves, but others require other co
 
 ## Combining Resources
 
-Luxury Resources can be added to Common Resources, or other Luxury Resources, to increase their value, thus increasing the Wealth they generate. Artisans and craftsmen will do this themselves if it will increase their Wealth, or win over Traders. The Resources simply need to be under the control of the Realm, or available to them via Trade.
+Luxury Resources can be added to Common Resources, or other Luxury Resources, to increase their value, thus increasing the Wealth they generate. Artisans and craftsmen will do this themselves if it will increase their Wealth, or win over Traders. The Resources simply need to be under the control of the Realm, or available to them via [Trade](25-trade.md).
 
 | Common Wealth Generated | Luxury Wealth Generated | Additional Luxury Resources Used |
 |---|---|---|

@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/db';
-import { buildings } from '@/db/schema';
-import { v4 as uuid } from 'uuid';
-import { BUILDING_DEFS, BUILDING_SIZE_DATA } from '@/lib/game-logic/constants';
-import type { BuildingType } from '@/types/game';
 import { isAuthError, requireGM } from '@/lib/auth';
+import { createBuilding, isRuleValidationError } from '@/lib/rules-action-service';
 
 export async function POST(
   request: Request,
@@ -14,30 +10,30 @@ export async function POST(
     const { gameId } = await params;
     await requireGM(gameId);
     const body = await request.json();
-    const def = BUILDING_DEFS[body.type as BuildingType];
+    const created = await createBuilding(gameId, body);
 
-    if (!def) {
-      return NextResponse.json({ error: 'Unknown building type' }, { status: 400 });
-    }
-
-    const sizeData = BUILDING_SIZE_DATA[def.size];
-    const id = uuid();
-    await db.insert(buildings).values({
-      id,
-      settlementId: body.settlementId,
-      type: body.type,
-      category: def.category,
-      size: def.size,
-      material: body.material || null,
-      constructionTurnsRemaining: body.instant ? 0 : sizeData.buildTime,
-      isGuildOwned: body.isGuildOwned || false,
-      guildId: body.guildId || null,
-    });
-
-    return NextResponse.json({ id, type: body.type, constructionTurns: sizeData.buildTime });
+    return NextResponse.json({
+      id: created.row.id,
+      type: created.row.type,
+      size: created.effectiveSize,
+      locationType: created.row.locationType,
+      settlementId: created.row.settlementId,
+      territoryId: created.row.territoryId,
+      constructionTurns: created.constructionTurns,
+      cost: created.cost,
+      notes: created.notes,
+    }, { status: 201 });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isRuleValidationError(error)) {
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        details: error.details ?? null,
+      }, { status: error.status });
     }
 
     throw error;

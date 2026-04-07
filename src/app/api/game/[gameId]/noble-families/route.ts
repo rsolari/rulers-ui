@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { nobleFamilies } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 
 export async function GET(
   _request: Request
@@ -25,18 +25,18 @@ export async function POST(
 ) {
   try {
     const { gameId } = await params;
-    await requireGM(gameId);
     const body = await request.json();
+    const { realmId } = await requireOwnedRealmAccess(gameId, body.realmId);
 
     const id = uuid();
     await db.insert(nobleFamilies).values({
       id,
-      realmId: body.realmId,
+      realmId,
       name: body.name,
       isRulingFamily: body.isRulingFamily || false,
     });
 
-    return NextResponse.json({ id, ...body });
+    return NextResponse.json({ id, ...body, realmId });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

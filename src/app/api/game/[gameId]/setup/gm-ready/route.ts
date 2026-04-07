@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isAuthError, requireGM, requireInitState } from '@/lib/auth';
-import { setGMSetupState, toLegacyGamePhase } from '@/lib/game-init-state';
+import { getGameSetupReadiness, setGMSetupState, toLegacyGamePhase } from '@/lib/game-init-state';
 
 export async function POST(
   _request: Request,
@@ -21,6 +21,14 @@ export async function POST(
       initState: game.initState,
       gmSetupState: game.gmSetupState,
       gamePhase: toLegacyGamePhase(game.initState),
+      blockers: game.initState === 'ready_to_start'
+        ? []
+        : (await getGameSetupReadiness(gameId))?.blockers.map((blocker) => ({
+          id: blocker.slotId,
+          displayName: blocker.displayName,
+          setupState: blocker.setupState,
+          missingRequirements: blocker.missingRequirements,
+        })) ?? [],
     });
   } catch (error) {
     if (isAuthError(error)) {

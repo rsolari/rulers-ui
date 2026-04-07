@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   canRecruitTroop,
+  getBuildCostForSize,
   getRecruitmentUpkeep,
   getSettlementTroopCap,
   getRecruitPerSeason,
@@ -103,16 +104,26 @@ describe('getRecruitPerSeason', () => {
   });
 });
 
-// NOTE: getBuildingCost ignores the building type parameter and always uses Medium cost (1500)
 describe('getBuildingCost', () => {
-  it('returns Medium build cost (1500) regardless of input type', () => {
+  it('uses the canonical building size cost for known building types', () => {
     expect(getBuildingCost('Fort', false)).toBe(1500);
-    expect(getBuildingCost('Castle', false)).toBe(1500);
-    expect(getBuildingCost('Chapel', false)).toBe(1500);
+    expect(getBuildingCost('Castle', false)).toBe(3000);
+    expect(getBuildingCost('Chapel', false)).toBe(750);
   });
 
   it('applies 25% traded surcharge (floored)', () => {
     // floor(1500 * 1.25) = 1875
     expect(getBuildingCost('Fort', true)).toBe(1875);
+  });
+
+  it('supports overriding the effective build size', () => {
+    expect(getBuildingCost('Walls', false, 'Large')).toBe(3000);
+  });
+});
+
+describe('getBuildCostForSize', () => {
+  it('returns the canonical size cost directly', () => {
+    expect(getBuildCostForSize('Small', false)).toBe(750);
+    expect(getBuildCostForSize('Large', false)).toBe(3000);
   });
 });

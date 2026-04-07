@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/db';
-import { tradeRoutes } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { v4 as uuid } from 'uuid';
 import { isAuthError, requireGM } from '@/lib/auth';
+import { createTradeRoute, isRuleValidationError } from '@/lib/rules-action-service';
+import { getTradeRouteOverview } from '@/lib/economy-service';
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ gameId: string }> }
 ) {
   const { gameId } = await params;
-  const list = await db.select().from(tradeRoutes).where(eq(tradeRoutes.gameId, gameId));
+  const list = getTradeRouteOverview(gameId) ?? [];
   return NextResponse.json(list);
 }
 
@@ -22,25 +20,31 @@ export async function POST(
     const { gameId } = await params;
     await requireGM(gameId);
     const body = await request.json();
+    const created = await createTradeRoute(gameId, body);
 
-    const id = uuid();
-    await db.insert(tradeRoutes).values({
-      id,
-      gameId,
-      realm1Id: body.realm1Id,
-      realm2Id: body.realm2Id,
-      settlement1Id: body.settlement1Id,
-      settlement2Id: body.settlement2Id,
-      isActive: true,
-      productsExported1to2: JSON.stringify(body.productsExported1to2 || []),
-      productsExported2to1: JSON.stringify(body.productsExported2to1 || []),
-      protectedProducts: JSON.stringify(body.protectedProducts || []),
-    });
-
-    return NextResponse.json({ id, ...body });
+    return NextResponse.json({
+      id: created.row.id,
+      realm1Id: created.row.realm1Id,
+      realm2Id: created.row.realm2Id,
+      settlement1Id: created.row.settlement1Id,
+      settlement2Id: created.row.settlement2Id,
+      pathMode: created.row.pathMode,
+      isActive: created.row.isActive,
+      productsExported1to2: created.exports.productsExported1to2,
+      productsExported2to1: created.exports.productsExported2to1,
+      protectedProducts: [],
+    }, { status: 201 });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isRuleValidationError(error)) {
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        details: error.details ?? null,
+      }, { status: error.status });
     }
 
     throw error;

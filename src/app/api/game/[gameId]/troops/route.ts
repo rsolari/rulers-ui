@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/db';
-import { troops } from '@/db/schema';
-import { v4 as uuid } from 'uuid';
-import { TROOP_DEFS } from '@/lib/game-logic/constants';
-import type { TroopType } from '@/types/game';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { recomputeGameInitState } from '@/lib/game-init-state';
+import { createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
 
 export async function POST(
   request: Request,
@@ -12,31 +9,33 @@ export async function POST(
 ) {
   try {
     const { gameId } = await params;
-    await requireGM(gameId);
     const body = await request.json();
-    const def = TROOP_DEFS[body.type as TroopType];
-
-    if (!def) {
-      return NextResponse.json({ error: 'Unknown troop type' }, { status: 400 });
-    }
-
-    const id = uuid();
-    await db.insert(troops).values({
-      id,
-      realmId: body.realmId,
-      type: body.type,
-      class: def.class,
-      armourType: body.armourType || def.armourTypes[0],
-      condition: 'Healthy',
-      armyId: body.armyId || null,
-      garrisonSettlementId: body.garrisonSettlementId || null,
-      recruitmentTurnsRemaining: body.instant ? 0 : 1,
+    const { realmId } = await requireOwnedRealmAccess(gameId, body.realmId);
+    const created = await createTroopRecruitment(gameId, {
+      ...body,
+      realmId,
     });
 
-    return NextResponse.json({ id, type: body.type, class: def.class });
+    await recomputeGameInitState(gameId);
+
+    return NextResponse.json({
+      id: created.row.id,
+      realmId: created.row.realmId,
+      type: created.row.type,
+      class: created.row.class,
+      cost: created.cost,
+    }, { status: 201 });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isRuleValidationError(error)) {
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        details: error.details ?? null,
+      }, { status: error.status });
     }
 
     throw error;

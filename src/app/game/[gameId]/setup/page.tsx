@@ -104,30 +104,6 @@ interface AssignmentDraft {
   traditions: Tradition[];
 }
 
-function getRealmTownIndex(resources: GeneratedResource[]): number {
-  const townIndex = resources.findIndex((resource) => resource.settlement.size === 'Town');
-  return townIndex >= 0 ? townIndex : 0;
-}
-
-function normalizeRealmSettlementSizes(
-  resources: GeneratedResource[],
-  townIndex: number
-): GeneratedResource[] {
-  if (resources.length === 0) {
-    return resources;
-  }
-
-  const normalizedTownIndex = Math.min(Math.max(townIndex, 0), resources.length - 1);
-
-  return resources.map((resource, index) => ({
-    ...resource,
-    settlement: {
-      ...resource.settlement,
-      size: index === normalizedTownIndex ? 'Town' : 'Village',
-    },
-  }));
-}
-
 export default function SetupWizard() {
   const params = useParams();
   const router = useRouter();
@@ -235,25 +211,9 @@ export default function SetupWizard() {
     const updated = [...generatedMap];
     const entry = updated.find((e) => e.territoryIndex === territoryIdx);
     if (entry) {
-      const nextResources = generateTerritoryResources(territory.type);
-      entry.resources = territory.type === 'Realm'
-        ? normalizeRealmSettlementSizes(nextResources, getRealmTownIndex(entry.resources))
-        : nextResources;
+      entry.resources = generateTerritoryResources(territory.type);
       setGeneratedMap(updated);
     }
-  }
-
-  function setRealmTownSettlement(territoryIdx: number, resourceIdx: number) {
-    setGeneratedMap((currentMap) => currentMap.map((entry) => {
-      if (entry.territoryIndex !== territoryIdx) {
-        return entry;
-      }
-
-      return {
-        ...entry,
-        resources: normalizeRealmSettlementSizes(entry.resources, resourceIdx),
-      };
-    }));
   }
 
   function updateMapResource(
@@ -262,17 +222,9 @@ export default function SetupWizard() {
     field: 'resourceType' | 'settlementName' | 'settlementSize',
     value: string,
   ) {
-    const territory = territories[territoryIndex];
     const updated = generatedMap.map((entry) => {
       if (entry.territoryIndex !== territoryIndex) {
         return entry;
-      }
-
-      if (territory?.type === 'Realm' && field === 'settlementSize') {
-        return {
-          ...entry,
-          resources: normalizeRealmSettlementSizes(entry.resources, resourceIndex),
-        };
       }
 
       const resources = entry.resources.map((resource, currentResourceIndex) => {
@@ -298,7 +250,6 @@ export default function SetupWizard() {
   }
 
   function addResourceToTerritory(territoryIndex: number) {
-    const territory = territories[territoryIndex];
     const updated = generatedMap.map((entry) => {
       if (entry.territoryIndex !== territoryIndex) return entry;
       const resources = [
@@ -309,36 +260,16 @@ export default function SetupWizard() {
           settlement: { name: `Settlement ${entry.resources.length + 1}`, size: 'Village' as SettlementSize, type: 'Realm Settlement' },
         },
       ];
-
-      return {
-        ...entry,
-        resources: territory?.type === 'Realm'
-          ? normalizeRealmSettlementSizes(resources, getRealmTownIndex(entry.resources))
-          : resources,
-      };
+      return { ...entry, resources };
     });
     setGeneratedMap(updated);
   }
 
   function removeResourceFromTerritory(territoryIndex: number, resourceIndex: number) {
-    const territory = territories[territoryIndex];
     const updated = generatedMap.map((entry) => {
       if (entry.territoryIndex !== territoryIndex) return entry;
-      const townIndex = getRealmTownIndex(entry.resources);
       const resources = entry.resources.filter((_, i) => i !== resourceIndex);
-      const nextTownIndex =
-        townIndex === resourceIndex
-          ? 0
-          : townIndex > resourceIndex
-            ? townIndex - 1
-            : townIndex;
-
-      return {
-        ...entry,
-        resources: territory?.type === 'Realm'
-          ? normalizeRealmSettlementSizes(resources, nextTownIndex)
-          : resources,
-      };
+      return { ...entry, resources };
     });
     setGeneratedMap(updated);
   }
@@ -469,7 +400,7 @@ export default function SetupWizard() {
           <h2 className="text-2xl mb-4">Generated Map</h2>
           <p className="text-ink-300 text-sm mb-4">
             Resources and settlements have been generated for each territory based on the rules.
-            Realm territories have one selectable town and villages for the rest. Neutral territories keep the fully random settlement logic.
+            Realm territories start with villages on every resource site. Neutral territories keep the fully random settlement logic.
           </p>
           {generatedMap.map((entry) => {
             const territory = territories[entry.territoryIndex];
@@ -492,7 +423,7 @@ export default function SetupWizard() {
                 <CardContent>
                   {territory.type === 'Realm' && (
                     <p className="mb-3 text-sm text-ink-400">
-                      Choose which settlement is the town for this realm territory. All others stay villages.
+                      Realm resource settlements start as villages during setup.
                     </p>
                   )}
                   <div className="space-y-3">
@@ -509,29 +440,12 @@ export default function SetupWizard() {
                           value={resource.settlement.name}
                           onChange={(event) => updateMapResource(entry.territoryIndex, resourceIndex, 'settlementName', event.target.value)}
                         />
-                        {territory.type === 'Realm' ? (
-                          <div className="flex flex-col gap-1.5">
-                            {resourceIndex === 0 && (
-                              <span className="font-heading text-sm font-medium text-ink-500">
-                                Town
-                              </span>
-                            )}
-                            <Button
-                              variant={resource.settlement.size === 'Town' ? 'accent' : 'outline'}
-                              size="sm"
-                              onClick={() => setRealmTownSettlement(entry.territoryIndex, resourceIndex)}
-                            >
-                              {resource.settlement.size === 'Town' ? 'Town' : 'Make Town'}
-                            </Button>
-                          </div>
-                        ) : (
-                          <Select
-                            label={resourceIndex === 0 ? 'Size' : undefined}
-                            options={SETTLEMENT_SIZE_OPTIONS}
-                            value={resource.settlement.size}
-                            onChange={(event) => updateMapResource(entry.territoryIndex, resourceIndex, 'settlementSize', event.target.value)}
-                          />
-                        )}
+                        <Select
+                          label={resourceIndex === 0 ? 'Size' : undefined}
+                          options={SETTLEMENT_SIZE_OPTIONS}
+                          value={resource.settlement.size}
+                          onChange={(event) => updateMapResource(entry.territoryIndex, resourceIndex, 'settlementSize', event.target.value)}
+                        />
                         <Button variant="ghost" size="sm" onClick={() => removeResourceFromTerritory(entry.territoryIndex, resourceIndex)}>
                           Remove
                         </Button>

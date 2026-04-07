@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { resourceSites, territories } from '@/db/schema';
 import { eq, inArray } from 'drizzle-orm';
-import { v4 as uuid } from 'uuid';
 import { isAuthError, requireGM } from '@/lib/auth';
+import { createResourceSite, isRuleValidationError } from '@/lib/rules-action-service';
 
 export async function GET(
   _request: Request,
@@ -27,20 +27,20 @@ export async function POST(
     const { gameId } = await params;
     await requireGM(gameId);
     const body = await request.json();
+    const created = await createResourceSite(gameId, body);
 
-    const id = uuid();
-    await db.insert(resourceSites).values({
-      id,
-      territoryId: body.territoryId,
-      settlementId: body.settlementId || null,
-      resourceType: body.resourceType,
-      rarity: body.rarity || 'Common',
-    });
-
-    return NextResponse.json({ id, ...body });
+    return NextResponse.json(created.row, { status: 201 });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isRuleValidationError(error)) {
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        details: error.details ?? null,
+      }, { status: error.status });
     }
 
     throw error;

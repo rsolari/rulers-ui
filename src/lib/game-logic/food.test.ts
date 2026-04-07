@@ -129,4 +129,26 @@ describe('calculateRealmFoodBalance', () => {
     expect(result.needed).toBe(5);    // 1+1+2 + 1(fort)
     expect(result.surplus).toBe(1);
   });
+
+  it('includes settlement and realm-level food modifiers', () => {
+    const result = calculateRealmFoodBalance({
+      settlements: [
+        {
+          size: 'Village',
+          occupiedSlots: 2,
+          totalSlots: 4,
+          foodProducedModifier: 1,
+          fortificationFoodNeeded: 1,
+        },
+      ],
+      standaloneForts: 0,
+      standaloneCastles: 0,
+      foodProducedModifier: 2,
+      foodNeededModifier: 1,
+    });
+
+    expect(result.produced).toBe(5);
+    expect(result.needed).toBe(3);
+    expect(result.surplus).toBe(2);
+  });
 });

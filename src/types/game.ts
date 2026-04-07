@@ -36,6 +36,8 @@ export type BuildingType =
   | 'Walls' | 'Watchtower' | 'Weaponsmith';
 
 export type FortificationMaterial = 'Timber' | 'Stone';
+export type BuildingLocationType = 'settlement' | 'territory';
+export type BuildingMaintenanceState = 'active' | 'suspended-unpaid';
 
 // Resource Types
 export type ResourceType =
@@ -73,6 +75,8 @@ export type ReportStatus = 'Draft' | 'Submitted' | 'Resolved';
 
 // Industry Quality
 export type IndustryQuality = 'Basic' | 'HighQuality';
+export type TradeRoutePathMode = 'land' | 'river' | 'sea' | 'mixed';
+export type TechnicalKnowledgeKey = string;
 
 // Action Words (all 35)
 export const ACTION_WORDS = [
@@ -94,6 +98,16 @@ export interface TurmoilSource {
   seasonsRemaining?: number;
 }
 
+export interface EconomicModifierInput {
+  id?: string;
+  description?: string;
+  treasuryDelta?: number;
+  foodProducedDelta?: number;
+  foodNeededDelta?: number;
+  grantedTechnicalKnowledge?: TechnicalKnowledgeKey[];
+  turmoilSources?: TurmoilSource[];
+}
+
 // Political Action in Turn Report
 export interface PoliticalAction {
   actionWords: ActionWord[];
@@ -110,6 +124,7 @@ export interface FinancialAction {
   troopType?: TroopType;
   settlementId?: string;
   taxType?: TaxType;
+  technicalKnowledgeKey?: TechnicalKnowledgeKey;
   description?: string;
   cost: number;
 }
@@ -117,6 +132,14 @@ export interface FinancialAction {
 // Protected Product in Trade
 export interface ProtectedProduct {
   resourceType: ResourceType;
+  expirySeason: Season;
+  expiryYear: number;
+}
+
+export interface TradeImportSelection {
+  importingRealmId: string;
+  resourceType: ResourceType;
+  chosenExporterRealmId: string;
   expirySeason: Season;
   expiryYear: number;
 }

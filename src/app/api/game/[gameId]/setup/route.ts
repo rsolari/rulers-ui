@@ -101,29 +101,10 @@ export async function POST(
 
     db.transaction((tx) => {
       for (const [territoryIndex, territory] of territoryInputs.entries()) {
-        const territoryId = uuid();
-        territoryIds.push(territoryId);
+        const ownership = ownershipByIndex.get(territoryIndex);
 
-        tx.insert(territories).values({
-          id: territoryId,
-          gameId,
-          name: territory.name,
-          climate: territory.climate || null,
-          description: territory.description || null,
-          realmId: ownershipByIndex.get(territoryIndex)?.realmId ?? null,
-        }).run();
-
-        const pendingSlot = playerSlotRows.find((slot) => slot.territoryId === '');
-        if (ownershipByIndex.get(territoryIndex)?.kind === 'player' && pendingSlot) {
-          pendingSlot.territoryId = territoryId;
-        }
-      }
-
-    for (const [territoryIndex, territory] of territoryInputs.entries()) {
-      const ownership = ownershipByIndex.get(territoryIndex);
-
-      if (ownership?.kind === 'npc' && ownership.realmId) {
-        tx.insert(realms).values({
+        if (ownership?.kind === 'npc' && ownership.realmId) {
+          tx.insert(realms).values({
             id: ownership.realmId,
             gameId,
             name: territory.owner?.realmName?.trim() || `${territory.name} NPC Realm`,
@@ -143,6 +124,25 @@ export async function POST(
         }
       }
 
+      for (const [territoryIndex, territory] of territoryInputs.entries()) {
+        const territoryId = uuid();
+        territoryIds.push(territoryId);
+
+        tx.insert(territories).values({
+          id: territoryId,
+          gameId,
+          name: territory.name,
+          climate: territory.climate || null,
+          description: territory.description || null,
+          realmId: ownershipByIndex.get(territoryIndex)?.realmId ?? null,
+        }).run();
+
+        const pendingSlot = playerSlotRows.find((slot) => slot.territoryId === '');
+        if (ownershipByIndex.get(territoryIndex)?.kind === 'player' && pendingSlot) {
+          pendingSlot.territoryId = territoryId;
+        }
+      }
+
       for (const slot of playerSlotRows) {
         tx.insert(playerSlots).values(slot).run();
       }
@@ -155,12 +155,20 @@ export async function POST(
           const settlementId = uuid();
           const resourceSiteId = uuid();
 
+          // Realm territory resource settlements are always Villages per
+          // the starting-package rules; neutral territories use whatever
+          // size the map generator rolled.
+          const ownerKind = ownershipByIndex.get(territoryIndex)?.kind;
+          const settlementSize = ownerKind === 'neutral'
+            ? (resource.settlement.size || 'Village')
+            : 'Village';
+
           tx.insert(settlements).values({
             id: settlementId,
             territoryId,
             realmId,
             name: resource.settlement.name,
-            size: resource.settlement.size || 'Village',
+            size: settlementSize,
           }).run();
 
           tx.insert(resourceSites).values({

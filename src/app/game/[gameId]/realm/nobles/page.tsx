@@ -158,7 +158,7 @@ export default function NoblesPage() {
                 <p><strong>Gender:</strong> {selectedNoble.gender}</p>
                 <p><strong>Age:</strong> {selectedNoble.age}</p>
                 <p><strong>Race:</strong> {selectedNoble.race || 'Unknown'}</p>
-                <p><strong>Estate:</strong> {selectedNoble.estateLevel} ({ESTATE_COSTS[selectedNoble.estateLevel as keyof typeof ESTATE_COSTS]?.toLocaleString()} /season)</p>
+                <p><strong>Estate:</strong> {selectedNoble.estateLevel} ({ESTATE_COSTS[selectedNoble.estateLevel as keyof typeof ESTATE_COSTS]?.toLocaleString()}gc /season)</p>
                 <p><strong>Reason:</strong> {selectedNoble.reasonSkill}</p>
                 <p><strong>Cunning:</strong> {selectedNoble.cunningSkill}</p>
               </div>

@@ -1,16 +1,19 @@
 import type {
+  BuildingMaintenanceState,
   BuildingType,
   EstateLevel,
   FinancialAction,
   IndustryQuality,
-  ProtectedProduct,
   ResourceRarity,
   ResourceType,
   Season,
   SiegeUnitType,
   TaxType,
+  TechnicalKnowledgeKey,
+  TradeImportSelection,
   Tradition,
   TroopType,
+  TurmoilSource,
 } from '@/types/game';
 import {
   BUILDING_DEFS,
@@ -20,10 +23,11 @@ import {
   SETTLEMENT_DATA,
   SIEGE_UNIT_DEFS,
   TAX_RATES,
+  TRADED_RESOURCE_SURCHARGE,
   TROOP_DEFS,
 } from './constants';
-import { calculateFoodNeeded, calculateFoodProduced, calculateFortificationFoodNeed } from './food';
-import { calculateTradeWealthBonus } from './trade';
+import { calculateFoodNeeded, calculateFoodProduced, calculateFortificationFoodNeed, calculateRealmFoodBalance } from './food';
+import { calculateTradeWealthBonus, type RealmTradeState } from './trade';
 import {
   calculateBuildingUpkeep,
   calculateNobleUpkeep,
@@ -33,10 +37,11 @@ import {
 } from './upkeep';
 import {
   calculateFoodWealth,
-  calculateResourceWealth,
   calculateSettlementTotalWealth,
-  hasLuxuryDependencies,
 } from './wealth';
+import { resolveIndustryProduct } from './products';
+import { advanceTurmoilSources, calculateTotalTurmoil } from './turmoil';
+import type { EconomySeasonalModifierInput } from './economic-modifiers';
 
 export type EconomyMode = 'projection' | 'resolution';
 export type EconomyEntryKind = 'revenue' | 'cost' | 'adjustment';
@@ -45,6 +50,7 @@ export interface EconomyIndustryInput {
   id: string;
   quality: IndustryQuality;
   ingredients: ResourceType[];
+  outputProduct?: ResourceType;
 }
 
 export interface EconomyResourceSiteInput {
@@ -59,9 +65,21 @@ export interface EconomyBuildingInput {
   type: string;
   size: keyof typeof BUILDING_SIZE_DATA;
   constructionTurnsRemaining: number;
+  takesBuildingSlot?: boolean;
+  isOperational?: boolean;
+  maintenanceState?: BuildingMaintenanceState;
   isGuildOwned?: boolean;
   guildId?: string | null;
   material?: string | null;
+}
+
+export interface EconomyStandaloneBuildingInput {
+  id: string;
+  type: string;
+  size: keyof typeof BUILDING_SIZE_DATA;
+  constructionTurnsRemaining: number;
+  territoryId: string;
+  territoryName: string;
 }
 
 export interface EconomyTroopInput {
@@ -99,9 +117,14 @@ export interface EconomyTradeRouteInput {
   realm2Id: string;
   settlement1Id: string;
   settlement2Id: string;
-  productsExported1to2: ResourceType[];
-  productsExported2to1: ResourceType[];
-  protectedProducts?: ProtectedProduct[];
+  productsExported1to2?: ResourceType[];
+  productsExported2to1?: ResourceType[];
+  protectedProducts?: Array<{
+    resourceType: ResourceType;
+    expirySeason: Season;
+    expiryYear: number;
+  }>;
+  importSelectionState?: TradeImportSelection[];
 }
 
 export interface EconomyGOSInput {
@@ -126,13 +149,18 @@ export interface EconomyRealmInput {
   foodBalance?: number;
   consecutiveFoodShortageSeasons?: number;
   consecutiveFoodRecoverySeasons?: number;
+  technicalKnowledge: TechnicalKnowledgeKey[];
+  turmoil: number;
+  turmoilSources: TurmoilSource[];
   traditions: Tradition[];
   settlements: EconomySettlementInput[];
+  standaloneBuildings: EconomyStandaloneBuildingInput[];
   troops: EconomyTroopInput[];
   siegeUnits: EconomySiegeUnitInput[];
   nobles: EconomyNobleInput[];
   tradeRoutes: EconomyTradeRouteInput[];
   guildsOrdersSocieties: EconomyGOSInput[];
+  seasonalModifiers?: EconomySeasonalModifierInput[];
   report?: EconomyReportInput | null;
 }
 
@@ -188,6 +216,23 @@ export interface EconomyFoodSummary {
   consecutiveRecoverySeasons: number;
 }
 
+export interface EconomyBuildingState {
+  buildingId: string;
+  settlementId: string | null;
+  type: string;
+  upkeepPaid: boolean;
+  isOperational: boolean;
+  maintenanceState: BuildingMaintenanceState;
+}
+
+export interface EconomyTurmoilSummary {
+  opening: number;
+  closing: number;
+  buildingReduction: number;
+  sources: TurmoilSource[];
+  foodShortageIncrement: number;
+}
+
 export interface EconomyResult {
   realmId: string;
   realmName: string;
@@ -203,6 +248,9 @@ export interface EconomyResult {
   levyExpiresSeason: Season | null;
   settlementBreakdown: SettlementEconomyBreakdown[];
   food: EconomyFoodSummary;
+  turmoil: EconomyTurmoilSummary;
+  technicalKnowledge: TechnicalKnowledgeKey[];
+  buildingStates: EconomyBuildingState[];
   warnings: string[];
   ledgerEntries: EconomyLedgerEntry[];
   pendingBuildings: EconomyPendingBuilding[];
@@ -241,54 +289,6 @@ function createRevenueEntry(entry: Omit<EconomyLedgerEntry, 'kind'>): EconomyLed
 
 function createCostEntry(entry: Omit<EconomyLedgerEntry, 'kind'>): EconomyLedgerEntry {
   return { kind: 'cost', ...entry };
-}
-
-function getExportedProductsForSettlement(
-  realmId: string,
-  settlementId: string,
-  tradeRoutes: EconomyTradeRouteInput[],
-) {
-  const exportedProducts = new Set<ResourceType>();
-
-  for (const route of tradeRoutes) {
-    if (!route.isActive) continue;
-
-    if (route.realm1Id === realmId && route.settlement1Id === settlementId) {
-      for (const product of route.productsExported1to2) {
-        exportedProducts.add(product);
-      }
-    }
-
-    if (route.realm2Id === realmId && route.settlement2Id === settlementId) {
-      for (const product of route.productsExported2to1) {
-        exportedProducts.add(product);
-      }
-    }
-  }
-
-  return [...exportedProducts];
-}
-
-function getImportedProductsForRealm(realmId: string, tradeRoutes: EconomyTradeRouteInput[]) {
-  const importedProducts = new Set<ResourceType>();
-
-  for (const route of tradeRoutes) {
-    if (!route.isActive) continue;
-
-    if (route.realm1Id === realmId) {
-      for (const product of route.productsExported2to1) {
-        importedProducts.add(product);
-      }
-    }
-
-    if (route.realm2Id === realmId) {
-      for (const product of route.productsExported1to2) {
-        importedProducts.add(product);
-      }
-    }
-  }
-
-  return [...importedProducts];
 }
 
 function resolveTaxState(
@@ -389,6 +389,98 @@ function resolveFoodState(realm: EconomyRealmInput, foodSurplus: number) {
   };
 }
 
+const FOOD_SHORTAGE_SOURCE_PREFIX = 'food-shortage';
+
+function createAdjustmentEntry(entry: Omit<EconomyLedgerEntry, 'kind'>): EconomyLedgerEntry {
+  return { kind: 'adjustment', ...entry };
+}
+
+function getFoodShortageSourceId(realmId: string) {
+  return `${FOOD_SHORTAGE_SOURCE_PREFIX}:${realmId}`;
+}
+
+function isFoodShortageSource(realmId: string, source: TurmoilSource) {
+  return source.id === getFoodShortageSourceId(realmId);
+}
+
+function replaceFoodShortageSource(
+  realmId: string,
+  sources: TurmoilSource[],
+  amount: number,
+) {
+  const preserved = sources.filter((source) => !isFoodShortageSource(realmId, source));
+  if (amount <= 0) return preserved;
+
+  return [
+    ...preserved,
+    {
+      id: getFoodShortageSourceId(realmId),
+      description: 'Food shortage unrest',
+      amount,
+      durationType: 'permanent' as const,
+    },
+  ];
+}
+
+function getBuildingTurmoilReduction(buildings: EconomyBuildingState[]) {
+  return buildings.reduce((sum, building) => {
+    if (!building.isOperational) return sum;
+    const effect = BUILDING_DEFS[building.type as BuildingType]?.turmoilEffect ?? 0;
+    return effect < 0 ? sum + Math.abs(effect) : sum;
+  }, 0);
+}
+
+function resolveTechnicalKnowledgeKey(
+  action: FinancialAction,
+  required: boolean,
+) {
+  if (!required) return null;
+  if (action.technicalKnowledgeKey) return action.technicalKnowledgeKey;
+  if (action.buildingType) return action.buildingType;
+  if (action.troopType) return action.troopType;
+  return null;
+}
+
+function hasTechnicalKnowledgePrerequisite(action: FinancialAction) {
+  if (action.type === 'build' && action.buildingType) {
+    return BUILDING_DEFS[action.buildingType]?.prerequisites.includes('TechnicalKnowledge') ?? false;
+  }
+
+  if (action.type === 'recruit' && action.troopType) {
+    return TROOP_DEFS[action.troopType]?.requires.some(
+      (buildingType) => BUILDING_DEFS[buildingType]?.prerequisites.includes('TechnicalKnowledge'),
+    ) ?? false;
+  }
+
+  return false;
+}
+
+function calculateTechnicalKnowledgeSurcharge(baseCost: number) {
+  return Math.ceil(baseCost * TRADED_RESOURCE_SURCHARGE);
+}
+
+function calculateActionCost(
+  action: FinancialAction,
+  availableTechnicalKnowledge: Set<TechnicalKnowledgeKey>,
+) {
+  const baseCost = Math.max(action.cost, 0);
+  const requiresTechnicalKnowledge = hasTechnicalKnowledgePrerequisite(action);
+  const knowledgeKey = resolveTechnicalKnowledgeKey(action, requiresTechnicalKnowledge);
+  const usesForeignTechnicalKnowledge =
+    Boolean(knowledgeKey) && !availableTechnicalKnowledge.has(knowledgeKey!);
+  const technicalKnowledgeSurcharge = usesForeignTechnicalKnowledge
+    ? calculateTechnicalKnowledgeSurcharge(baseCost)
+    : 0;
+
+  return {
+    baseCost,
+    knowledgeKey,
+    usesForeignTechnicalKnowledge,
+    technicalKnowledgeSurcharge,
+    totalCost: baseCost + technicalKnowledgeSurcharge,
+  };
+}
+
 function createGOSRevenueEntries(goses: EconomyGOSInput[]) {
   const entries: EconomyLedgerEntry[] = [];
   let total = 0;
@@ -413,12 +505,19 @@ export function calculateRealmEconomy(
   currentYear: number,
   currentSeason: Season,
   mode: EconomyMode,
+  options: { tradeState?: RealmTradeState } = {},
 ): EconomyResult {
   const warnings: string[] = [];
   const ledgerEntries: EconomyLedgerEntry[] = [];
   const financialActions = realm.report?.financialActions ?? [];
+  const seasonalModifiers = realm.seasonalModifiers ?? [];
   const taxResolution = resolveTaxState(realm, financialActions, currentYear, currentSeason, warnings);
-  const importedProducts = getImportedProductsForRealm(realm.id, realm.tradeRoutes);
+  const availableTechnicalKnowledge = new Set<TechnicalKnowledgeKey>([
+    ...realm.technicalKnowledge,
+    ...seasonalModifiers.flatMap((modifier) => modifier.grantedTechnicalKnowledge),
+  ]);
+  const tradeState = options.tradeState;
+  const importedProducts = tradeState?.importedProducts ?? [];
   const localProducts = realm.settlements.flatMap((settlement) =>
     settlement.resourceSites.map((resourceSite) => resourceSite.resourceType),
   );
@@ -428,10 +527,16 @@ export function calculateRealmEconomy(
   const pendingBuildings: EconomyPendingBuilding[] = [];
   const pendingTroops: EconomyPendingTroop[] = [];
   const validSettlementIds = new Set(realm.settlements.map((settlement) => settlement.id));
+  const standaloneFortCounts = realm.standaloneBuildings.reduce((counts, building) => {
+    if (building.constructionTurnsRemaining > 0) return counts;
+    if (building.type === 'Fort') counts.forts += 1;
+    if (building.type === 'Castle') counts.castles += 1;
+    return counts;
+  }, { forts: 0, castles: 0 });
 
   for (const settlement of realm.settlements) {
     const totalSlots = SETTLEMENT_DATA[settlement.size].buildingSlots;
-    const occupiedSlots = settlement.buildings.length;
+    const occupiedSlots = settlement.buildings.filter((building) => building.takesBuildingSlot !== false).length;
     const emptyBuildingSlots = Math.max(totalSlots - occupiedSlots, 0);
     const foodProduced = calculateFoodProduced(emptyBuildingSlots);
     const completedFortificationNeed = settlement.buildings.reduce((sum, building) => {
@@ -439,19 +544,25 @@ export function calculateRealmEconomy(
       return sum + calculateFortificationFoodNeed(building.type);
     }, 0);
     const foodNeeded = calculateFoodNeeded(settlement.size) + completedFortificationNeed;
-    const exportedProducts = getExportedProductsForSettlement(realm.id, settlement.id, realm.tradeRoutes);
+    const exportedProducts = tradeState?.exportedProductsBySettlement[settlement.id] ?? [];
     const tradeBonusRate = calculateTradeWealthBonus(exportedProducts.length, hasMercantile);
 
     let resourceWealth = 0;
     for (const resourceSite of settlement.resourceSites) {
-      const industry = resourceSite.industry ?? null;
-      const ingredientCount = industry?.ingredients.length ?? 0;
-      resourceWealth += calculateResourceWealth(
-        resourceSite.rarity,
-        industry?.quality ?? 'Basic',
-        ingredientCount,
-        hasLuxuryDependencies(resourceSite.resourceType, availableProducts),
-      );
+      const product = resolveIndustryProduct({
+        baseResourceType: resourceSite.resourceType,
+        quality: resourceSite.industry?.quality ?? 'Basic',
+        ingredients: resourceSite.industry?.ingredients ?? [],
+        outputProduct: resourceSite.industry?.outputProduct,
+      }, availableProducts);
+
+      resourceWealth += product.wealth;
+
+      if (!product.isLegal) {
+        warnings.push(
+          `${settlement.name}: ${resourceSite.resourceType} industry fell back to a base product because ${product.issues.map((issue) => issue.message).join(' ')}`,
+        );
+      }
     }
 
     const foodWealth = calculateFoodWealth(foodProduced);
@@ -506,13 +617,48 @@ export function calculateRealmEconomy(
   const gosRevenue = createGOSRevenueEntries(realm.guildsOrdersSocieties);
   ledgerEntries.push(...gosRevenue.entries);
 
+  const modifierRevenue = seasonalModifiers
+    .filter((modifier) => modifier.treasuryDelta > 0)
+    .reduce((sum, modifier) => sum + modifier.treasuryDelta, 0);
+  const modifierCosts = seasonalModifiers
+    .filter((modifier) => modifier.treasuryDelta < 0)
+    .reduce((sum, modifier) => sum + Math.abs(modifier.treasuryDelta), 0);
+
+  for (const modifier of seasonalModifiers) {
+    if (modifier.treasuryDelta === 0) continue;
+
+    const amount = Math.abs(modifier.treasuryDelta);
+    const entry = {
+      category: 'gm-event-modifier',
+      label: modifier.description,
+      amount,
+      metadata: { modifierId: modifier.id, source: modifier.source },
+    };
+
+    ledgerEntries.push(
+      modifier.treasuryDelta > 0 ? createAdjustmentEntry(entry) : createCostEntry(entry),
+    );
+  }
+
   const completeBuildings = realm.settlements.flatMap((settlement) =>
-    settlement.buildings.map((building) => ({ ...building, settlementId: settlement.id, settlementName: settlement.name })),
+    settlement.buildings.map((building) => ({
+      ...building,
+      settlementId: settlement.id,
+      settlementName: settlement.name,
+    })),
   );
+  const standaloneBuildings = realm.standaloneBuildings.map((building) => ({
+    ...building,
+    settlementId: null,
+    settlementName: building.territoryName,
+    isGuildOwned: false,
+    guildId: null,
+  }));
+  const allBuildings = [...completeBuildings, ...standaloneBuildings];
 
   const chargeableGuildBuildingIds = new Set<string>();
   const seenGuildIds = new Set<string>();
-  for (const building of completeBuildings) {
+  for (const building of allBuildings) {
     if (building.constructionTurnsRemaining > 0) continue;
     if (!building.isGuildOwned || !building.guildId) {
       chargeableGuildBuildingIds.add(building.id);
@@ -525,35 +671,6 @@ export function calculateRealmEconomy(
     }
 
     seenGuildIds.add(building.guildId);
-  }
-
-  const buildingUpkeep = calculateBuildingUpkeep(
-    completeBuildings.map((building) => ({
-      size: building.size,
-      isComplete: building.constructionTurnsRemaining <= 0,
-      gosFirstFree: Boolean(
-        building.isGuildOwned &&
-        building.guildId &&
-        !chargeableGuildBuildingIds.has(building.id),
-      ),
-    })),
-  );
-
-  for (const building of completeBuildings) {
-    if (building.constructionTurnsRemaining > 0) continue;
-    const isChargeable =
-      !building.isGuildOwned ||
-      !building.guildId ||
-      chargeableGuildBuildingIds.has(building.id);
-    if (!isChargeable) continue;
-
-    ledgerEntries.push(createCostEntry({
-      category: 'building-upkeep',
-      label: `${building.settlementName}: ${building.type} maintenance`,
-      amount: BUILDING_SIZE_DATA[building.size].maintenance,
-      settlementId: building.settlementId,
-      buildingId: building.id,
-    }));
   }
 
   const troopUpkeep = calculateTroopUpkeep(
@@ -615,6 +732,11 @@ export function calculateRealmEconomy(
     }));
   }
 
+  const actionCosts = financialActions.map((action) => ({
+    action,
+    cost: calculateActionCost(action, availableTechnicalKnowledge),
+  }));
+
   for (const action of financialActions) {
     if (action.type === 'build') {
       if (
@@ -652,8 +774,10 @@ export function calculateRealmEconomy(
         warnings.push('A recruit action was recorded as a cost only because the troop type was missing.');
       }
     }
+  }
 
-    if (action.cost > 0) {
+  for (const { action, cost } of actionCosts) {
+    if (cost.baseCost > 0) {
       const label =
         action.description ||
         (action.type === 'build' && action.buildingType ? `Construction: ${action.buildingType}` : null) ||
@@ -664,23 +788,168 @@ export function calculateRealmEconomy(
       ledgerEntries.push(createCostEntry({
         category: `report-${action.type}`,
         label,
-        amount: action.cost,
+        amount: cost.baseCost,
         settlementId: action.settlementId ?? null,
         reportId: realm.report?.id ?? null,
       }));
     }
+
+    if (cost.technicalKnowledgeSurcharge > 0) {
+      ledgerEntries.push(createAdjustmentEntry({
+        category: `technical-knowledge-surcharge`,
+        label: `Foreign technical knowledge: ${cost.knowledgeKey}`,
+        amount: cost.technicalKnowledgeSurcharge,
+        settlementId: action.settlementId ?? null,
+        reportId: realm.report?.id ?? null,
+        metadata: {
+          actionType: action.type,
+          knowledgeKey: cost.knowledgeKey,
+        },
+      }));
+      warnings.push(
+        `${cost.knowledgeKey} was supplied via foreign technical knowledge, so a 25% surcharge was applied.`,
+      );
+    }
   }
 
-  const totalRevenue = totalTaxRevenue + gosRevenue.total;
-  const totalCosts = buildingUpkeep + troopUpkeep + siegeUpkeep + nobleUpkeep + prisonerUpkeep +
-    financialActions.reduce((sum, action) => sum + Math.max(action.cost, 0), 0);
+  const nonBuildingCosts = troopUpkeep + siegeUpkeep + nobleUpkeep + prisonerUpkeep +
+    actionCosts.reduce((sum, entry) => sum + entry.cost.totalCost, 0) +
+    modifierCosts;
+
+  const totalRevenueBeforeBuildings = totalTaxRevenue + gosRevenue.total + modifierRevenue;
+  let availableTreasuryForBuildings = realm.treasury + totalRevenueBeforeBuildings - nonBuildingCosts;
+  const buildingStates: EconomyBuildingState[] = [];
+  const sortedCompleteBuildings = allBuildings
+    .filter((building) => building.constructionTurnsRemaining <= 0)
+    .sort((left, right) =>
+      left.settlementName.localeCompare(right.settlementName) || left.id.localeCompare(right.id),
+    );
+
+  let buildingUpkeepPaid = 0;
+  let unpaidBuildingCount = 0;
+
+  for (const building of sortedCompleteBuildings) {
+    const isChargeable =
+      !building.isGuildOwned ||
+      !building.guildId ||
+      chargeableGuildBuildingIds.has(building.id);
+    const upkeepCost = isChargeable ? BUILDING_SIZE_DATA[building.size].maintenance : 0;
+    const upkeepPaid = upkeepCost === 0 || availableTreasuryForBuildings >= upkeepCost;
+
+    if (upkeepPaid && upkeepCost > 0) {
+      availableTreasuryForBuildings -= upkeepCost;
+      buildingUpkeepPaid += upkeepCost;
+      ledgerEntries.push(createCostEntry({
+        category: 'building-upkeep',
+        label: `${building.settlementName}: ${building.type} maintenance`,
+        amount: upkeepCost,
+        settlementId: building.settlementId,
+        buildingId: building.id,
+      }));
+    }
+
+    if (!upkeepPaid && upkeepCost > 0) {
+      unpaidBuildingCount += 1;
+      warnings.push(`${building.settlementName}: ${building.type} is inactive because upkeep was unpaid.`);
+    }
+
+    buildingStates.push({
+      buildingId: building.id,
+      settlementId: building.settlementId,
+      type: building.type,
+      upkeepPaid,
+      isOperational: upkeepPaid,
+      maintenanceState: upkeepPaid ? 'active' : 'suspended-unpaid',
+    });
+  }
+
+  if (unpaidBuildingCount > 0) {
+    warnings.push(
+      'Building suspension priority follows settlement/building id order because the rulebook does not define how unpaid maintenance is allocated.',
+    );
+  }
+
+  const buildingUpkeep = calculateBuildingUpkeep(
+    allBuildings.map((building) => ({
+      size: building.size,
+      isComplete: building.constructionTurnsRemaining <= 0,
+      gosFirstFree: Boolean(
+        building.isGuildOwned &&
+        building.guildId &&
+        !chargeableGuildBuildingIds.has(building.id),
+      ),
+    })),
+  );
+
+  const buildingReduction = getBuildingTurmoilReduction(buildingStates);
+  const totalRevenue = totalRevenueBeforeBuildings;
+  const totalCosts = buildingUpkeepPaid + nonBuildingCosts;
   const netChange = totalRevenue - totalCosts;
   const closingTreasury = realm.treasury + netChange;
 
-  const totalFoodProduced = settlementBreakdown.reduce((sum, settlement) => sum + settlement.foodProduced, 0);
-  const totalFoodNeeded = settlementBreakdown.reduce((sum, settlement) => sum + settlement.foodNeeded, 0);
+  const foodSummary = calculateRealmFoodBalance({
+    settlements: settlementBreakdown.map((settlement) => ({
+      size: realm.settlements.find((candidate) => candidate.id === settlement.settlementId)!.size,
+      occupiedSlots: SETTLEMENT_DATA[realm.settlements.find((candidate) => candidate.id === settlement.settlementId)!.size].buildingSlots - settlement.emptyBuildingSlots,
+      totalSlots: SETTLEMENT_DATA[realm.settlements.find((candidate) => candidate.id === settlement.settlementId)!.size].buildingSlots,
+      fortificationFoodNeeded: settlement.foodNeeded - calculateFoodNeeded(
+        realm.settlements.find((candidate) => candidate.id === settlement.settlementId)!.size,
+      ),
+    })),
+    standaloneForts: standaloneFortCounts.forts,
+    standaloneCastles: standaloneFortCounts.castles,
+    foodProducedModifier: seasonalModifiers.reduce((sum, modifier) => sum + modifier.foodProducedDelta, 0),
+    foodNeededModifier: seasonalModifiers.reduce((sum, modifier) => sum + modifier.foodNeededDelta, 0),
+  });
+  const totalFoodProduced = foodSummary.produced;
+  const totalFoodNeeded = foodSummary.needed;
   const foodSurplus = totalFoodProduced - totalFoodNeeded;
   const foodState = resolveFoodState(realm, foodSurplus);
+  const baseTurmoilSources = [
+    ...realm.turmoilSources,
+    ...seasonalModifiers.flatMap((modifier) => modifier.turmoilSources),
+  ];
+  const currentTurmoilBeforeShortage = calculateTotalTurmoil(
+    taxResolution.appliedTaxType,
+    baseTurmoilSources,
+    buildingReduction,
+  );
+  const previousFoodShortageSource =
+    baseTurmoilSources.find((source) => isFoodShortageSource(realm.id, source))?.amount ?? 0;
+  let foodShortageIncrement = 0;
+  let resolvedTurmoilSources = baseTurmoilSources;
+
+  if (foodSurplus < 0 && foodState.consecutiveShortageSeasons >= 2) {
+    const rate = foodState.consecutiveShortageSeasons === 2 ? 0.25 : 0.5;
+    foodShortageIncrement = Math.ceil(currentTurmoilBeforeShortage * rate);
+    resolvedTurmoilSources = replaceFoodShortageSource(
+      realm.id,
+      baseTurmoilSources,
+      previousFoodShortageSource + foodShortageIncrement,
+    );
+    if (foodShortageIncrement > 0) {
+      warnings.push(`Food shortage raised turmoil by ${foodShortageIncrement}.`);
+    }
+  } else if (
+    foodSurplus >= 0 &&
+    (
+      foodState.consecutiveRecoverySeasons >= 2 ||
+      (
+        (realm.consecutiveFoodShortageSeasons ?? 0) > 0 &&
+        foodState.consecutiveShortageSeasons === 0 &&
+        foodState.consecutiveRecoverySeasons === 0
+      )
+    )
+  ) {
+    resolvedTurmoilSources = replaceFoodShortageSource(realm.id, baseTurmoilSources, 0);
+  }
+
+  const advancedTurmoilSources = advanceTurmoilSources(resolvedTurmoilSources);
+  const closingTurmoil = calculateTotalTurmoil(
+    taxResolution.nextTaxType,
+    advancedTurmoilSources,
+    buildingReduction,
+  );
 
   if (foodSurplus < 0) {
     warnings.push(`Realm is short ${Math.abs(foodSurplus)} food this turn.`);
@@ -692,16 +961,30 @@ export function calculateRealmEconomy(
     warnings.push('Levy expires after this turn and will revert to Tribute next turn.');
   }
 
+  for (const unresolvedTieBreak of tradeState?.unresolvedTieBreaks ?? []) {
+    warnings.push(
+      `Trade import for ${unresolvedTieBreak.resourceType} requires GM selection between ${unresolvedTieBreak.candidates.map((candidate) => candidate.realmId).join(', ')}.`,
+    );
+  }
+
   const summary = {
     grossSettlementWealth,
     gosRevenue: gosRevenue.total,
     foodProduced: totalFoodProduced,
     foodNeeded: totalFoodNeeded,
     foodSurplus,
+    modifierRevenue,
+    modifierCosts,
+    theoreticalBuildingUpkeep: buildingUpkeep,
+    paidBuildingUpkeep: buildingUpkeepPaid,
+    buildingReduction,
+    openingTurmoil: realm.turmoil,
+    closingTurmoil,
     consecutiveFoodShortageSeasons: foodState.consecutiveShortageSeasons,
     consecutiveFoodRecoverySeasons: foodState.consecutiveRecoverySeasons,
     pendingBuildings: pendingBuildings.length,
     pendingTroops: pendingTroops.length,
+    seasonalModifierCount: seasonalModifiers.length,
     warningCount: warnings.length,
   };
 
@@ -726,6 +1009,15 @@ export function calculateRealmEconomy(
       consecutiveShortageSeasons: foodState.consecutiveShortageSeasons,
       consecutiveRecoverySeasons: foodState.consecutiveRecoverySeasons,
     },
+    turmoil: {
+      opening: realm.turmoil,
+      closing: closingTurmoil,
+      buildingReduction,
+      sources: advancedTurmoilSources,
+      foodShortageIncrement,
+    },
+    technicalKnowledge: [...availableTechnicalKnowledge],
+    buildingStates,
     warnings,
     ledgerEntries,
     pendingBuildings,
@@ -738,14 +1030,16 @@ export function projectEconomyForRealm(
   realm: EconomyRealmInput,
   currentYear: number,
   currentSeason: Season,
+  options: { tradeState?: RealmTradeState } = {},
 ) {
-  return calculateRealmEconomy(realm, currentYear, currentSeason, 'projection');
+  return calculateRealmEconomy(realm, currentYear, currentSeason, 'projection', options);
 }
 
 export function resolveEconomyForRealm(
   realm: EconomyRealmInput,
   currentYear: number,
   currentSeason: Season,
+  options: { tradeState?: RealmTradeState } = {},
 ) {
-  return calculateRealmEconomy(realm, currentYear, currentSeason, 'resolution');
+  return calculateRealmEconomy(realm, currentYear, currentSeason, 'resolution', options);
 }

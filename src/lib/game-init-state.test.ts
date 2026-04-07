@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveGameInitState, toLegacyGamePhase } from './game-init-state';
+import { deriveGameInitState, derivePlayerSetupState, toLegacyGamePhase } from './game-init-state';
 
 describe('game init state helpers', () => {
   it('keeps world setup as a hard gate', () => {
@@ -24,6 +24,46 @@ describe('game init state helpers', () => {
       gmSetupState: 'ready',
       playerSetupStates: ['ready', 'ready'],
     })).toBe('ready_to_start');
+  });
+
+  it('keeps the game out of ready_to_start while any player is still mid-checklist', () => {
+    expect(deriveGameInitState({
+      currentInitState: 'parallel_final_setup',
+      gmSetupState: 'ready',
+      playerSetupStates: ['ready', 'ruler_created'],
+    })).toBe('parallel_final_setup');
+  });
+
+  it('uses ruler_created as the checkpoint after the ruler exists but before the full checklist is done', () => {
+    expect(derivePlayerSetupState({
+      currentSetupState: 'realm_created',
+      claimedAt: new Date(),
+      checklist: {
+        realmCreated: true,
+        rulerCreated: true,
+        nobleSetupCompleted: false,
+        guildOrderSocietySetupCompleted: true,
+        startingArmyPresent: true,
+        settlementsPlacedNamed: true,
+        economyInitialized: true,
+      },
+    })).toBe('ruler_created');
+  });
+
+  it('marks a player ready only when every setup artifact exists', () => {
+    expect(derivePlayerSetupState({
+      currentSetupState: 'ruler_created',
+      claimedAt: new Date(),
+      checklist: {
+        realmCreated: true,
+        rulerCreated: true,
+        nobleSetupCompleted: true,
+        guildOrderSocietySetupCompleted: true,
+        startingArmyPresent: true,
+        settlementsPlacedNamed: true,
+        economyInitialized: true,
+      },
+    })).toBe('ready');
   });
 
   it('maps init states back to the legacy phase compatibility enum', () => {

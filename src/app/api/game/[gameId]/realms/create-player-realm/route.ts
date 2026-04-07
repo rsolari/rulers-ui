@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { playerSlots, realms, settlements, territories } from '@/db/schema';
+import { playerSlots, realms, settlements, territories, troops } from '@/db/schema';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
+import { REALM_STARTING_TROOPS } from '@/lib/game-logic/map-generation';
 
 export async function POST(
   request: Request,
@@ -61,6 +62,26 @@ export async function POST(
         size: 'Town',
         governingNobleId: null,
       }).run();
+
+      // Create starting garrison: 5 Spearmen in the town
+      for (let i = 0; i < REALM_STARTING_TROOPS; i++) {
+        tx.insert(troops).values({
+          id: uuid(),
+          realmId,
+          type: 'Spearmen',
+          class: 'Basic',
+          armourType: 'Light',
+          condition: 'Healthy',
+          armyId: null,
+          garrisonSettlementId: townId,
+          recruitmentTurnsRemaining: 0,
+        }).run();
+      }
+
+      tx.update(settlements)
+        .set({ realmId })
+        .where(eq(settlements.territoryId, territory.id))
+        .run();
 
       tx.update(territories)
         .set({ realmId })

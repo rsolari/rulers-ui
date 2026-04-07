@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { games, playerSlots, resourceSites, settlements, territories } from '@/db/schema';
+import { games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
 
 const mocks = vi.hoisted(() => {
   const operations: Array<{
@@ -184,6 +184,120 @@ describe('POST /api/game/[gameId]/setup', () => {
       npcRealms: 0,
       playerSlots: 1,
       claimCodes: ['CLAIM1'],
+      success: true,
+    });
+  });
+
+  it('inserts npc realms before npc territories that reference them', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+    authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'gm_world_setup' });
+
+    uuidMock
+      .mockReturnValueOnce('realm-1')
+      .mockReturnValueOnce('territory-1')
+      .mockReturnValueOnce('settlement-1')
+      .mockReturnValueOnce('resource-1');
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        territories: [{
+          name: 'NPC Territory',
+          climate: 'Temperate',
+          description: '',
+          type: 'Realm',
+          owner: {
+            kind: 'npc',
+            realmName: 'NPC Realm',
+            governmentType: 'Monarch',
+            traditions: ['Academic'],
+          },
+          resources: [{
+            resourceType: 'Ore',
+            rarity: 'Common',
+            settlement: { name: 'S1', size: 'Village' },
+          }],
+        }],
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mocks.operations).toEqual([
+      {
+        kind: 'insert',
+        table: realms,
+        values: {
+          id: 'realm-1',
+          gameId: 'game-1',
+          name: 'NPC Realm',
+          governmentType: 'Monarch',
+          traditions: JSON.stringify(['Academic']),
+          isNPC: true,
+          treasury: 0,
+          taxType: 'Tribute',
+          levyExpiresYear: null,
+          levyExpiresSeason: null,
+          foodBalance: 0,
+          consecutiveFoodShortageSeasons: 0,
+          consecutiveFoodRecoverySeasons: 0,
+          turmoil: 0,
+          turmoilSources: '[]',
+        },
+      },
+      {
+        kind: 'insert',
+        table: territories,
+        values: {
+          id: 'territory-1',
+          gameId: 'game-1',
+          name: 'NPC Territory',
+          climate: 'Temperate',
+          description: null,
+          realmId: 'realm-1',
+        },
+      },
+      {
+        kind: 'insert',
+        table: settlements,
+        values: {
+          id: 'settlement-1',
+          territoryId: 'territory-1',
+          realmId: 'realm-1',
+          name: 'S1',
+          size: 'Village',
+        },
+      },
+      {
+        kind: 'insert',
+        table: resourceSites,
+        values: {
+          id: 'resource-1',
+          territoryId: 'territory-1',
+          settlementId: 'settlement-1',
+          resourceType: 'Ore',
+          rarity: 'Common',
+        },
+      },
+      {
+        kind: 'update',
+        table: games,
+        values: {
+          initState: 'player_invites_open',
+          gmSetupState: 'configuring',
+          gamePhase: 'RealmCreation',
+          turnPhase: 'Submission',
+        },
+      },
+    ]);
+
+    await expect(response.json()).resolves.toEqual({
+      territories: 1,
+      npcRealms: 1,
+      playerSlots: 0,
+      claimCodes: [],
       success: true,
     });
   });

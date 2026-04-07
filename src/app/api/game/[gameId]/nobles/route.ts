@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { nobles } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { nobleFamilies, nobles } from '@/db/schema';
+import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
+import { recomputeGameInitState } from '@/lib/game-init-state';
 import { generateNoblePersonality, generateNobleGender, generateNobleAge } from '@/lib/tables';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 
 export async function GET(
   _request: Request
@@ -26,8 +27,20 @@ export async function POST(
 ) {
   try {
     const { gameId } = await params;
-    await requireGM(gameId);
     const body = await request.json();
+    const { realmId } = await requireOwnedRealmAccess(gameId, body.realmId);
+
+    const family = await db.select({ id: nobleFamilies.id })
+      .from(nobleFamilies)
+      .where(and(
+        eq(nobleFamilies.id, body.familyId),
+        eq(nobleFamilies.realmId, realmId),
+      ))
+      .get();
+
+    if (!family) {
+      return NextResponse.json({ error: 'Noble family not found for this realm' }, { status: 404 });
+    }
 
     const hasManualPersonality = typeof body.personality === 'string';
     const generatedPersonality = hasManualPersonality ? null : generateNoblePersonality();
@@ -48,7 +61,7 @@ export async function POST(
     await db.insert(nobles).values({
       id,
       familyId: body.familyId,
-      realmId: body.realmId,
+      realmId,
       name: body.name,
       gender,
       age,
@@ -68,8 +81,12 @@ export async function POST(
       cunningSkill: body.cunningSkill || 0,
     });
 
+    await recomputeGameInitState(gameId);
+
     return NextResponse.json({
       id,
+      familyId: body.familyId,
+      realmId,
       name: body.name,
       gender,
       age,

@@ -1,0 +1,577 @@
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { eq } from 'drizzle-orm';
+import { describe, expect, it } from 'vitest';
+import { initializeDatabaseSchema } from '@/db/bootstrap';
+import * as schema from '@/db/schema';
+import { createEconomyService } from '@/lib/economy-service';
+
+function createTestDatabase() {
+  const sqlite = new Database(':memory:');
+  initializeDatabaseSchema(sqlite);
+  return {
+    sqlite,
+    db: drizzle(sqlite, { schema }),
+  };
+}
+
+describe('createEconomyService.advanceGameTurn', () => {
+  it('advances Winter into Spring of the next year through the canonical resolver', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-winter',
+      name: 'Winter Test',
+      gmCode: 'gm-winter',
+      playerCode: 'player-winter',
+      currentYear: 3,
+      currentSeason: 'Winter',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-winter',
+      gameId: 'game-winter',
+      name: 'Frosthold',
+      governmentType: 'Monarch',
+      treasury: 1000,
+      taxType: 'Tribute',
+      turmoil: 0,
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-winter',
+      gameId: 'game-winter',
+      name: 'Frost Vale',
+      realmId: 'realm-winter',
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-winter',
+      territoryId: 'territory-winter',
+      realmId: 'realm-winter',
+      name: 'Frosthold',
+      size: 'Village',
+    }).run();
+
+    const result = service.advanceGameTurn('game-winter', {
+      expectedYear: 3,
+      expectedSeason: 'Winter',
+      idempotencyKey: 'game-winter:3:Winter',
+    });
+
+    expect(result).toMatchObject({
+      resolvedYear: 3,
+      resolvedSeason: 'Winter',
+      year: 4,
+      season: 'Spring',
+      replayed: false,
+    });
+
+    sqlite.close();
+  });
+
+  it('resolves a full seasonal transition transactionally and replays idempotently', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-1',
+      name: 'Economy Test',
+      gmCode: 'gm-code',
+      playerCode: 'player-code',
+      currentYear: 2,
+      currentSeason: 'Spring',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values([
+      {
+        id: 'realm-a',
+        gameId: 'game-1',
+        name: 'Aster',
+        governmentType: 'Monarch',
+        treasury: 10000,
+        taxType: 'Tribute',
+        consecutiveFoodShortageSeasons: 1,
+        consecutiveFoodRecoverySeasons: 0,
+        turmoil: 0,
+        turmoilSources: JSON.stringify([
+          {
+            id: 'ts-seasonal',
+            description: 'Seasonal pressure',
+            amount: 2,
+            durationType: 'seasonal',
+            seasonsRemaining: 2,
+          },
+        ]),
+      },
+      {
+        id: 'realm-b',
+        gameId: 'game-1',
+        name: 'Bastion',
+        governmentType: 'Council',
+        treasury: 6000,
+        taxType: 'Tribute',
+        turmoil: 0,
+      },
+    ]).run();
+
+    db.insert(schema.territories).values([
+      {
+        id: 'territory-a',
+        gameId: 'game-1',
+        name: 'Aster Vale',
+        realmId: 'realm-a',
+      },
+      {
+        id: 'territory-b',
+        gameId: 'game-1',
+        name: 'Bastion Reach',
+        realmId: 'realm-b',
+      },
+    ]).run();
+
+    db.insert(schema.settlements).values([
+      {
+        id: 'settlement-a',
+        territoryId: 'territory-a',
+        realmId: 'realm-a',
+        name: 'Aster Keep',
+        size: 'Village',
+      },
+      {
+        id: 'settlement-b',
+        territoryId: 'territory-b',
+        realmId: 'realm-b',
+        name: 'Bastion Port',
+        size: 'Village',
+      },
+    ]).run();
+
+    db.insert(schema.buildings).values([
+      {
+        id: 'building-a-1',
+        settlementId: 'settlement-a',
+        locationType: 'settlement',
+        type: 'Theatre',
+        category: 'Civic',
+        size: 'Medium',
+        takesBuildingSlot: true,
+        isOperational: false,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 1,
+      },
+      {
+        id: 'building-a-2',
+        settlementId: 'settlement-a',
+        locationType: 'settlement',
+        type: 'Theatre',
+        category: 'Civic',
+        size: 'Medium',
+        takesBuildingSlot: true,
+        isOperational: false,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 2,
+      },
+      {
+        id: 'building-a-3',
+        settlementId: 'settlement-a',
+        locationType: 'settlement',
+        type: 'Theatre',
+        category: 'Civic',
+        size: 'Medium',
+        takesBuildingSlot: true,
+        isOperational: false,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 2,
+      },
+      {
+        id: 'building-a-4',
+        settlementId: 'settlement-a',
+        locationType: 'settlement',
+        type: 'Theatre',
+        category: 'Civic',
+        size: 'Medium',
+        takesBuildingSlot: true,
+        isOperational: false,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 2,
+      },
+    ]).run();
+
+    db.insert(schema.resourceSites).values([
+      {
+        id: 'resource-a',
+        territoryId: 'territory-a',
+        settlementId: 'settlement-a',
+        resourceType: 'Ore',
+        rarity: 'Common',
+      },
+      {
+        id: 'resource-b',
+        territoryId: 'territory-b',
+        settlementId: 'settlement-b',
+        resourceType: 'Gold',
+        rarity: 'Luxury',
+      },
+    ]).run();
+
+    db.insert(schema.troops).values({
+      id: 'troop-a-1',
+      realmId: 'realm-a',
+      type: 'Spearmen',
+      class: 'Basic',
+      armourType: 'Light',
+      condition: 'Healthy',
+      recruitmentTurnsRemaining: 1,
+      garrisonSettlementId: 'settlement-a',
+    }).run();
+
+    db.insert(schema.tradeRoutes).values({
+      id: 'route-1',
+      gameId: 'game-1',
+      realm1Id: 'realm-a',
+      realm2Id: 'realm-b',
+      settlement1Id: 'settlement-a',
+      settlement2Id: 'settlement-b',
+      isActive: true,
+      pathMode: 'land',
+      productsExported1to2: '[]',
+      productsExported2to1: '[]',
+      protectedProducts: '[]',
+      importSelectionState: '[]',
+    }).run();
+
+    db.insert(schema.turnReports).values({
+      id: 'report-a',
+      gameId: 'game-1',
+      realmId: 'realm-a',
+      year: 2,
+      season: 'Spring',
+      financialActions: JSON.stringify([
+        {
+          type: 'taxChange',
+          taxType: 'Levy',
+          cost: 0,
+        },
+        {
+          type: 'build',
+          buildingType: 'Fort',
+          settlementId: 'settlement-a',
+          description: 'Raise border fortifications',
+          cost: 1500,
+        },
+        {
+          type: 'recruit',
+          troopType: 'Archers',
+          settlementId: 'settlement-a',
+          description: 'Muster archers',
+          cost: 250,
+        },
+      ]),
+      status: 'Submitted',
+    }).run();
+
+    db.insert(schema.turnEvents).values({
+      id: 'event-1',
+      gameId: 'game-1',
+      year: 2,
+      season: 'Spring',
+      realmId: 'realm-a',
+      description: 'Harsh rationing',
+      mechanicalEffect: JSON.stringify([
+        {
+          treasuryDelta: 200,
+          foodNeededDelta: 1,
+        },
+      ]),
+    }).run();
+
+    const result = service.advanceGameTurn('game-1', {
+      expectedYear: 2,
+      expectedSeason: 'Spring',
+      idempotencyKey: 'game-1:2:Spring',
+    });
+
+    expect(result).toEqual({
+      resolvedYear: 2,
+      resolvedSeason: 'Spring',
+      year: 2,
+      season: 'Summer',
+      phase: 'Submission',
+      realmsResolved: 2,
+      idempotencyKey: 'game-1:2:Spring',
+      replayed: false,
+    });
+
+    const game = db.select().from(schema.games).where(eq(schema.games.id, 'game-1')).get();
+    expect(game).toMatchObject({
+      currentYear: 2,
+      currentSeason: 'Summer',
+      turnPhase: 'Submission',
+    });
+
+    const realmA = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-a')).get();
+    expect(realmA).toMatchObject({
+      treasury: 11600,
+      taxType: 'Levy',
+      foodBalance: -2,
+      consecutiveFoodShortageSeasons: 2,
+      consecutiveFoodRecoverySeasons: 0,
+      turmoil: 15,
+    });
+    expect(JSON.parse(realmA!.turmoilSources)).toEqual([
+      expect.objectContaining({
+        id: 'ts-seasonal',
+        amount: 2,
+        seasonsRemaining: 1,
+      }),
+      expect.objectContaining({
+        id: 'food-shortage:realm-a',
+        amount: 3,
+      }),
+    ]);
+
+    const existingCompletedBuilding = db.select().from(schema.buildings)
+      .where(eq(schema.buildings.id, 'building-a-1'))
+      .get();
+    expect(existingCompletedBuilding).toMatchObject({
+      constructionTurnsRemaining: 0,
+      isOperational: true,
+    });
+
+    const insertedFort = db.select().from(schema.buildings)
+      .where(eq(schema.buildings.type, 'Fort'))
+      .get();
+    expect(insertedFort).toMatchObject({
+      settlementId: 'settlement-a',
+      constructionTurnsRemaining: 2,
+      isOperational: false,
+    });
+
+    const insertedArchers = db.select().from(schema.troops)
+      .where(eq(schema.troops.type, 'Archers'))
+      .get();
+    expect(insertedArchers).toMatchObject({
+      realmId: 'realm-a',
+      recruitmentTurnsRemaining: 0,
+      garrisonSettlementId: 'settlement-a',
+    });
+
+    const existingTroop = db.select().from(schema.troops)
+      .where(eq(schema.troops.id, 'troop-a-1'))
+      .get();
+    expect(existingTroop).toMatchObject({
+      recruitmentTurnsRemaining: 0,
+    });
+
+    const report = db.select().from(schema.turnReports).where(eq(schema.turnReports.id, 'report-a')).get();
+    expect(report).toMatchObject({ status: 'Resolved' });
+
+    const snapshots = db.select().from(schema.economicSnapshots).all();
+    expect(snapshots).toHaveLength(2);
+    const realmASnapshot = snapshots.find((snapshot) => snapshot.realmId === 'realm-a');
+    expect(realmASnapshot).toMatchObject({
+      year: 2,
+      season: 'Spring',
+      openingTreasury: 10000,
+      totalRevenue: 3350,
+      totalCosts: 1750,
+      closingTreasury: 11600,
+      taxTypeApplied: 'Levy',
+    });
+    expect(parseJson(realmASnapshot!.summary, {} as Record<string, unknown>)).toMatchObject({
+      foodSurplus: -2,
+      closingTurmoil: 15,
+      pendingBuildings: 1,
+      pendingTroops: 1,
+    });
+
+    const ledgerEntries = db.select().from(schema.economicEntries).where(eq(schema.economicEntries.realmId, 'realm-a')).all();
+    expect(ledgerEntries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        category: 'tax-revenue',
+        amount: 3150,
+      }),
+      expect.objectContaining({
+        category: 'gm-event-modifier',
+        amount: 200,
+      }),
+      expect.objectContaining({
+        category: 'report-build',
+        amount: 1500,
+      }),
+      expect.objectContaining({
+        category: 'report-recruit',
+        amount: 250,
+      }),
+    ]));
+
+    const route = db.select().from(schema.tradeRoutes).where(eq(schema.tradeRoutes.id, 'route-1')).get();
+    expect(JSON.parse(route!.productsExported1to2)).toEqual(['Ore']);
+    expect(JSON.parse(route!.productsExported2to1)).toEqual(['Gold']);
+
+    const resolutionRows = db.select().from(schema.turnResolutions).all();
+    expect(resolutionRows).toHaveLength(1);
+
+    const replay = service.advanceGameTurn('game-1', {
+      expectedYear: 2,
+      expectedSeason: 'Spring',
+      idempotencyKey: 'game-1:2:Spring',
+    });
+
+    expect(replay).toEqual({
+      ...result!,
+      replayed: true,
+    });
+    expect(db.select().from(schema.turnResolutions).all()).toHaveLength(1);
+    expect(db.select().from(schema.economicSnapshots).all()).toHaveLength(2);
+
+    sqlite.close();
+  });
+
+  it('persists food-shortage recovery by clearing the stored turmoil source on the second recovery turn', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-recovery',
+      name: 'Recovery Test',
+      gmCode: 'gm-recovery',
+      playerCode: 'player-recovery',
+      currentYear: 5,
+      currentSeason: 'Autumn',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-recovery',
+      gameId: 'game-recovery',
+      name: 'Granary',
+      governmentType: 'Monarch',
+      treasury: 4000,
+      taxType: 'Tribute',
+      consecutiveFoodShortageSeasons: 3,
+      consecutiveFoodRecoverySeasons: 1,
+      turmoil: 5,
+      turmoilSources: JSON.stringify([
+        {
+          id: 'food-shortage:realm-recovery',
+          description: 'Food shortage unrest',
+          amount: 2,
+          durationType: 'permanent',
+        },
+      ]),
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-recovery',
+      gameId: 'game-recovery',
+      name: 'Granary Vale',
+      realmId: 'realm-recovery',
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-recovery',
+      territoryId: 'territory-recovery',
+      realmId: 'realm-recovery',
+      name: 'Granary',
+      size: 'Village',
+    }).run();
+
+    const result = service.advanceGameTurn('game-recovery', {
+      expectedYear: 5,
+      expectedSeason: 'Autumn',
+      idempotencyKey: 'game-recovery:5:Autumn',
+    });
+
+    expect(result).toMatchObject({
+      year: 5,
+      season: 'Winter',
+      replayed: false,
+    });
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-recovery')).get();
+    expect(realm).toMatchObject({
+      foodBalance: 3,
+      consecutiveFoodShortageSeasons: 0,
+      consecutiveFoodRecoverySeasons: 0,
+      turmoil: 4,
+    });
+    expect(JSON.parse(realm!.turmoilSources)).toEqual([]);
+
+    sqlite.close();
+  });
+
+  it('rejects untyped GM event effects instead of bypassing the engine', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-2',
+      name: 'Economy Test',
+      gmCode: 'gm-code-2',
+      playerCode: 'player-code-2',
+      currentYear: 1,
+      currentSeason: 'Autumn',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-2',
+      gameId: 'game-2',
+      name: 'Legacy',
+      governmentType: 'Monarch',
+      treasury: 1000,
+      taxType: 'Tribute',
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-2',
+      gameId: 'game-2',
+      name: 'Legacy Lands',
+      realmId: 'realm-2',
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-2',
+      territoryId: 'territory-2',
+      realmId: 'realm-2',
+      name: 'Legacy Hold',
+      size: 'Village',
+    }).run();
+
+    db.insert(schema.turnEvents).values({
+      id: 'event-legacy',
+      gameId: 'game-2',
+      year: 1,
+      season: 'Autumn',
+      description: 'Legacy free-form modifier',
+      mechanicalEffect: 'add 500 gold somehow',
+    }).run();
+
+    try {
+      service.advanceGameTurn('game-2', {
+        expectedYear: 1,
+        expectedSeason: 'Autumn',
+      });
+      throw new Error('Expected resolution to fail');
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: 'invalid_economy_inputs',
+        status: 400,
+      });
+    }
+
+    sqlite.close();
+  });
+});
+
+function parseJson<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}

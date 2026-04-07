@@ -10,13 +10,9 @@ export function DevTools() {
       return;
     }
 
-    const importer = new Function('specifier', 'return import(specifier);') as (
-      specifier: string
-    ) => Promise<{ Agentation?: ComponentType }>;
-
-    importer('agentation')
+    import('agentation')
       .then((module) => {
-        setAgentation(() => module.Agentation ?? null);
+        setAgentation(() => module.PageFeedbackToolbarCSS ?? null);
       })
       .catch(() => {
         setAgentation(null);

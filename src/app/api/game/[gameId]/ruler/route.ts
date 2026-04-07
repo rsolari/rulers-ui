@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { nobleFamilies, nobles, playerSlots } from '@/db/schema';
+import { nobleFamilies, nobles } from '@/db/schema';
+import { isAuthError, requireInitState, requireRealmOwner, resolveSessionFromCookies } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 
 type RulerRecord = {
@@ -63,31 +64,47 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ gameId: string }> }
 ) {
-  const { gameId } = await params;
-  const body = await request.json();
-
-  if (!body.realmId || !body.name || !body.gender || !body.age || !body.personality) {
-    return NextResponse.json(
-      { error: 'realmId, name, gender, age, and personality are required' },
-      { status: 400 }
-    );
-  }
-
-  const hasExistingFamily = typeof body.familyId === 'string' && body.familyId.length > 0;
-  const hasNewFamily = typeof body.newFamilyName === 'string' && body.newFamilyName.trim().length > 0;
-
-  if (hasExistingFamily === hasNewFamily) {
-    return NextResponse.json(
-      { error: 'Provide exactly one of familyId or newFamilyName' },
-      { status: 400 }
-    );
-  }
-
   try {
+    const { gameId } = await params;
+    const body = await request.json();
+
+    if (!body.name || !body.gender || !body.age || !body.personality) {
+      return NextResponse.json(
+        { error: 'name, gender, age, and personality are required' },
+        { status: 400 }
+      );
+    }
+
+    const hasExistingFamily = typeof body.familyId === 'string' && body.familyId.length > 0;
+    const hasNewFamily = typeof body.newFamilyName === 'string' && body.newFamilyName.trim().length > 0;
+
+    if (hasExistingFamily === hasNewFamily) {
+      return NextResponse.json(
+        { error: 'Provide exactly one of familyId or newFamilyName' },
+        { status: 400 }
+      );
+    }
+
+    const session = await resolveSessionFromCookies();
+    const effectiveRealmId = session.gameId === gameId && session.role === 'player'
+      ? session.realmId
+      : body.realmId;
+
+    if (session.gameId === gameId && session.role === 'player' && !effectiveRealmId) {
+      return NextResponse.json({ error: 'Realm access required' }, { status: 403 });
+    }
+
+    if (!effectiveRealmId) {
+      return NextResponse.json({ error: 'realmId required' }, { status: 400 });
+    }
+
+    await requireRealmOwner(gameId, effectiveRealmId);
+    await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
+
     const created = db.transaction((tx) => {
       const existingRuler = tx.select({ id: nobles.id })
         .from(nobles)
-        .where(and(eq(nobles.realmId, body.realmId), eq(nobles.isRuler, true)))
+        .where(and(eq(nobles.realmId, effectiveRealmId), eq(nobles.isRuler, true)))
         .get();
 
       if (existingRuler) {
@@ -96,7 +113,7 @@ export async function POST(
 
       tx.update(nobleFamilies)
         .set({ isRulingFamily: false })
-        .where(eq(nobleFamilies.realmId, body.realmId))
+        .where(eq(nobleFamilies.realmId, effectiveRealmId))
         .run();
 
       let familyId = body.familyId as string | undefined;
@@ -108,7 +125,7 @@ export async function POST(
 
         tx.insert(nobleFamilies).values({
           id: familyId,
-          realmId: body.realmId,
+          realmId: effectiveRealmId,
           name: familyName,
           isRulingFamily: true,
         }).run();
@@ -118,7 +135,7 @@ export async function POST(
           name: nobleFamilies.name,
         })
           .from(nobleFamilies)
-          .where(and(eq(nobleFamilies.id, familyId), eq(nobleFamilies.realmId, body.realmId)))
+          .where(and(eq(nobleFamilies.id, familyId), eq(nobleFamilies.realmId, effectiveRealmId)))
           .get();
 
         if (!family) {
@@ -138,7 +155,7 @@ export async function POST(
       tx.insert(nobles).values({
         id: rulerId,
         familyId: familyId!,
-        realmId: body.realmId,
+        realmId: effectiveRealmId,
         name: body.name,
         gender: body.gender,
         age: body.age,
@@ -163,7 +180,7 @@ export async function POST(
         ruler: {
           id: rulerId,
           familyId: familyId!,
-          realmId: body.realmId,
+          realmId: effectiveRealmId,
           name: body.name,
           gender: body.gender,
           age: body.age,
@@ -184,23 +201,14 @@ export async function POST(
       return NextResponse.json({ error: created.error }, { status: created.status });
     }
 
-    const slot = await db.select({ id: playerSlots.id })
-      .from(playerSlots)
-      .where(and(
-        eq(playerSlots.gameId, gameId),
-        eq(playerSlots.realmId, body.realmId),
-      ))
-      .get();
-
-    if (slot) {
-      await db.update(playerSlots)
-        .set({ setupState: 'ready' })
-        .where(eq(playerSlots.id, slot.id));
-      await recomputeGameInitState(gameId);
-    }
+    await recomputeGameInitState(gameId);
 
     return NextResponse.json(created.ruler, { status: created.status });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : 'Failed to create ruler';
     return NextResponse.json({ error: message }, { status: 500 });
   }

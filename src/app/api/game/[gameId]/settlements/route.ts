@@ -4,6 +4,7 @@ import { buildings, games, settlements, territories } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { getGmCode, isAuthError, requireInitState, requireRealmOwner } from '@/lib/auth';
+import { recomputeGameInitState } from '@/lib/game-init-state';
 
 export async function GET(
   request: Request,
@@ -107,6 +108,8 @@ export async function POST(
       size: body.size || 'Village',
       governingNobleId: body.governingNobleId || null,
     });
+
+    await recomputeGameInitState(gameId);
 
     return NextResponse.json({ id, ...body });
   } catch (error) {

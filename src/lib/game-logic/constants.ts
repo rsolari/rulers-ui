@@ -29,6 +29,7 @@ export interface BuildingDef {
   category: BuildingCategory;
   size: BuildingSize;
   prerequisites: string[];
+  takesBuildingSlot?: boolean;
   turmoilEffect?: number;
   description: string;
 }
@@ -47,15 +48,15 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDef> = {
   Coliseum:      { type: 'Coliseum',      category: 'Civic',         size: 'Large',  prerequisites: [],                  turmoilEffect: -4, description: 'Allows hosting sporting events. Turmoil -4.' },
   College:       { type: 'College',       category: 'Civic',         size: 'Medium', prerequisites: ['Society'],                          description: 'Increases income of Society. Allows advanced study.' },
   Fort:          { type: 'Fort',          category: 'Fortification', size: 'Medium', prerequisites: ['Timber'],                           description: 'Wooden defensive fortification.' },
-  Gatehouse:     { type: 'Gatehouse',     category: 'Fortification', size: 'Small',  prerequisites: ['Timber|Stone'],                    description: 'Fortified gateway for walls.' },
+  Gatehouse:     { type: 'Gatehouse',     category: 'Fortification', size: 'Small',  prerequisites: ['Timber|Stone'], takesBuildingSlot: false, description: 'Fortified gateway for walls.' },
   Gunsmith:      { type: 'Gunsmith',      category: 'Military',      size: 'Small',  prerequisites: ['Ore', 'TechnicalKnowledge'],       description: 'Allows recruitment of Harquebusiers.' },
   Port:          { type: 'Port',          category: 'Civic',         size: 'Medium', prerequisites: [],                                  description: 'Allows Trade Routes over water.' },
   SiegeWorkshop: { type: 'SiegeWorkshop', category: 'Military',      size: 'Large',  prerequisites: ['Timber'],                          description: 'Allows construction of Siege Weapons.' },
-  Stables:       { type: 'Stables',       category: 'Military',      size: 'Medium', prerequisites: [],                                  description: 'Allows recruitment of Cavalry.' },
+  Stables:       { type: 'Stables',       category: 'Military',      size: 'Medium', prerequisites: ['Food'],                            description: 'Allows recruitment of Cavalry.' },
   Theatre:       { type: 'Theatre',       category: 'Civic',         size: 'Medium', prerequisites: [],                  turmoilEffect: -2, description: 'Entertainment. Turmoil -2.' },
   University:    { type: 'University',    category: 'Civic',         size: 'Medium', prerequisites: ['Society'],                          description: 'Powerful academic building.' },
-  Walls:         { type: 'Walls',         category: 'Fortification', size: 'Small',  prerequisites: ['Timber|Stone'],                    description: 'Defensive walls around a Settlement.' },
-  Watchtower:    { type: 'Watchtower',    category: 'Fortification', size: 'Small',  prerequisites: ['Timber|Stone'],                    description: 'Observation and signaling tower.' },
+  Walls:         { type: 'Walls',         category: 'Fortification', size: 'Small',  prerequisites: ['Timber|Stone'], takesBuildingSlot: false, description: 'Defensive walls around a Settlement.' },
+  Watchtower:    { type: 'Watchtower',    category: 'Fortification', size: 'Small',  prerequisites: ['Timber|Stone'], takesBuildingSlot: false, description: 'Observation and signaling tower.' },
   Weaponsmith:   { type: 'Weaponsmith',   category: 'Military',      size: 'Medium', prerequisites: ['Ore'],                              description: 'Allows recruitment of certain Troops.' },
 };
 
@@ -144,10 +145,11 @@ export const RESOURCE_BASE_WEALTH: Record<ResourceRarity, number> = {
   Luxury: 15000,
 };
 
-// Combination wealth table
-export const COMBINATION_WEALTH = {
-  Common: [10000, 15000, 20000],  // +0, +1, +2 luxury ingredients
-  Luxury: [15000, 25000, 35000],  // +0, +1, +2 luxury ingredients
+export const MAX_PRODUCT_INGREDIENTS = 3;
+
+export const LUXURY_INGREDIENT_WEALTH_BONUS: Record<ResourceRarity, number> = {
+  Common: 5000,
+  Luxury: 10000,
 };
 
 // Common resources that can combine with luxuries
@@ -156,6 +158,15 @@ export const COMMON_LUXURY_COMBINATIONS: Record<string, ResourceType[]> = {
   Timber: ['Gold', 'Lacquer', 'Jewels'],
   Clay:   ['Gold', 'Jewels'],
   Stone:  ['Gold', 'Jewels'],
+};
+
+export const LUXURY_RESOURCE_CAN_BE_BASE_MATERIAL: Partial<Record<ResourceType, boolean>> = {
+  Gold: true,
+  Lacquer: false,
+  Porcelain: true,
+  Jewels: false,
+  Marble: true,
+  Silk: true,
 };
 
 // Luxury resource dependencies (need these for full value)

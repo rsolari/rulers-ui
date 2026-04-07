@@ -2,6 +2,7 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB } from '@/db';
 import {
+  armies,
   buildings,
   economicEntries,
   economicSnapshots,
@@ -101,6 +102,7 @@ interface InvalidModifierEvent {
 interface LoadedEconomyState {
   game: typeof games.$inferSelect;
   realmRows: Array<typeof realms.$inferSelect>;
+  armyRows: Array<typeof armies.$inferSelect>;
   buildingRows: Array<typeof buildings.$inferSelect>;
   troopRows: Array<typeof troops.$inferSelect>;
   siegeUnitRows: Array<typeof siegeUnits.$inferSelect>;
@@ -356,6 +358,10 @@ function loadGameEconomyState(
 
   const troopRows = realmIds.length > 0
     ? database.select().from(troops).where(inArray(troops.realmId, realmIds)).all()
+    : [];
+
+  const armyRows = realmIds.length > 0
+    ? database.select().from(armies).where(inArray(armies.realmId, realmIds)).all()
     : [];
 
   const siegeUnitRows = realmIds.length > 0
@@ -701,6 +707,7 @@ function loadGameEconomyState(
   return {
     game,
     realmRows,
+    armyRows,
     buildingRows,
     troopRows,
     siegeUnitRows,
@@ -1274,6 +1281,24 @@ export function createEconomyService(database: DB = defaultDb) {
         tx.update(troops)
           .set({ recruitmentTurnsRemaining: Math.max(troop.recruitmentTurnsRemaining - 1, 0) })
           .where(eq(troops.id, troop.id))
+          .run();
+      }
+
+      for (const army of state.armyRows) {
+        if (army.movementTurnsRemaining <= 0) continue;
+
+        const nextTurnsRemaining = Math.max(army.movementTurnsRemaining - 1, 0);
+        const arrivesThisTurn = nextTurnsRemaining === 0 && army.destinationTerritoryId;
+
+        tx.update(armies)
+          .set({
+            movementTurnsRemaining: nextTurnsRemaining,
+            locationTerritoryId: arrivesThisTurn ? army.destinationTerritoryId! : army.locationTerritoryId,
+            locationHexId: arrivesThisTurn ? army.destinationHexId : army.locationHexId,
+            destinationTerritoryId: arrivesThisTurn ? null : army.destinationTerritoryId,
+            destinationHexId: arrivesThisTurn ? null : army.destinationHexId,
+          })
+          .where(eq(armies.id, army.id))
           .run();
       }
 

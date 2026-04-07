@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { troops } from '@/db/schema';
+import { realms, troops } from '@/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { isAuthError, requireGM, requireOwnedRealmAccess } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
@@ -90,6 +90,28 @@ export async function PATCH(
       return NextResponse.json({ error: 'troopIds or troopId required' }, { status: 400 });
     }
 
+    if (body.setAsImmortals !== undefined) {
+      if (troopIds.length !== 1) {
+        return NextResponse.json({ error: 'setAsImmortals requires exactly one troopId' }, { status: 400 });
+      }
+
+      const troop = await db.select({
+        id: troops.id,
+        realmId: troops.realmId,
+      })
+        .from(troops)
+        .where(eq(troops.id, troopIds[0]))
+        .get();
+
+      if (!troop) {
+        return NextResponse.json({ error: 'Troop not found' }, { status: 404 });
+      }
+
+      await db.update(realms)
+        .set({ immortalsTroopId: body.setAsImmortals ? troop.id : null })
+        .where(eq(realms.id, troop.realmId));
+    }
+
     const updates: Record<string, unknown> = {};
     if (body.garrisonSettlementId !== undefined) {
       updates.garrisonSettlementId = body.garrisonSettlementId;
@@ -102,11 +124,20 @@ export async function PATCH(
     if (body.realmId !== undefined) updates.realmId = body.realmId;
     if (body.condition !== undefined) updates.condition = body.condition;
 
-    await db.update(troops)
-      .set(updates)
-      .where(inArray(troops.id, troopIds));
+    if (Object.keys(updates).length > 0) {
+      await db.update(troops)
+        .set(updates)
+        .where(inArray(troops.id, troopIds));
+    }
 
-    return NextResponse.json({ updated: troopIds.length });
+    return NextResponse.json({
+      updated: troopIds.length,
+      immortalsTroopId: body.setAsImmortals
+        ? troopIds[0]
+        : body.setAsImmortals === false
+          ? null
+          : undefined,
+    });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

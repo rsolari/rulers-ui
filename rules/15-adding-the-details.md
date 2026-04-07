@@ -1,6 +1,6 @@
 # Adding the Details
 
-Rulers is a game of politics, economy and warfare, but more than that, it is a storytelling game about your civilisations. Once the mechanics of your Realm are in place (Resources, Traditions, Government etc.) it's time to start giving it depth.
+Rulers is a game of politics, economy and [warfare](29-warfare.md), but more than that, it is a storytelling game about your civilisations. Once the mechanics of your Realm are in place ([Resources](08-territories-and-resources.md), [Traditions](13-traditions.md), [Government](11-choosing-a-form-of-government.md) etc.) it's time to start giving it depth.
 
 - Who lives in your Realm?
 - What is their anatomy like?
@@ -8,7 +8,7 @@ Rulers is a game of politics, economy and warfare, but more than that, it is a s
 - How does their language sound?
 - What do they eat and drink?
 - What does their clothing look like?
-- What is the architectural style of the buildings?
+- What is the architectural style of the [buildings](26-buildings.md)?
 - What is a common saying for your people?
 
 Answering these questions, and any more you can think of, is what will allow your game of Rulers to be a rich and memorable storytelling experience.
@@ -31,7 +31,7 @@ In Rulers we use "Faith" to refer to any system of belief that binds a society t
 
 ## Language
 
-The hardest part of Rulers is coming up with names: there's all the settlements, your Ruler, every Noble, their family members, individual characters, gods, poets and inventors — there are a lot of names. That's why establishing a language is so important. You don't want to make it up as you go, because as epic as names like "Ascernon the Thirteenth of the Elgorar Elven Kings of Monsomera" may sound, no one is going to ever remember their name — including you.
+The hardest part of Rulers is coming up with names: there's all the [settlements](19-settlements.md), your [Ruler](12-creating-your-ruler.md), every [Noble](16-nobles.md), their family members, individual characters, gods, poets and inventors — there are a lot of names. That's why establishing a language is so important. You don't want to make it up as you go, because as epic as names like "Ascernon the Thirteenth of the Elgorar Elven Kings of Monsomera" may sound, no one is going to ever remember their name — including you.
 
 Your language does not need to have a complete syntax, with every aspect of the grammar calculated. Simply begin by establishing what your language sounds like. Take one from the real world you like, and pair it with another, to avoid simply making direct translations all the time.[^20] Then, establish a naming system so that naming new Characters and Settlements follows a set of rules.
 

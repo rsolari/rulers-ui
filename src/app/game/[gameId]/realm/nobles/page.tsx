@@ -86,6 +86,9 @@ export default function NoblesPage() {
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
+      <nav className="mb-4 text-sm text-ink-300">
+        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+      </nav>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Noble Families</h1>
         <div className="flex items-center gap-3">

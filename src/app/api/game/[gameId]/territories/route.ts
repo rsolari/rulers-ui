@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { territories } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { territories, settlements, troops, siegeUnits } from '@/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireGM } from '@/lib/auth';
 
@@ -59,6 +59,10 @@ export async function PATCH(
     if (body.realmId !== undefined) updates.realmId = body.realmId;
     if (body.name !== undefined) updates.name = body.name;
     if (body.description !== undefined) updates.description = body.description;
+    if (body.foodCapBase !== undefined) updates.foodCapBase = body.foodCapBase;
+    if (body.foodCapBonus !== undefined) updates.foodCapBonus = body.foodCapBonus;
+    if (body.hasRiverAccess !== undefined) updates.hasRiverAccess = body.hasRiverAccess;
+    if (body.hasSeaAccess !== undefined) updates.hasSeaAccess = body.hasSeaAccess;
 
     await db.update(territories)
       .set(updates)
@@ -66,6 +70,25 @@ export async function PATCH(
         eq(territories.id, body.territoryId),
         eq(territories.gameId, gameId),
       ));
+
+    if (body.realmId !== undefined) {
+      const territorySettlements = await db.select().from(settlements)
+        .where(eq(settlements.territoryId, body.territoryId));
+
+      await db.update(settlements)
+        .set({ realmId: body.realmId })
+        .where(eq(settlements.territoryId, body.territoryId));
+
+      const settIds = territorySettlements.map((s) => s.id);
+      if (settIds.length > 0) {
+        await db.update(troops)
+          .set({ realmId: body.realmId })
+          .where(inArray(troops.garrisonSettlementId, settIds));
+        await db.update(siegeUnits)
+          .set({ realmId: body.realmId })
+          .where(inArray(siegeUnits.garrisonSettlementId, settIds));
+      }
+    }
 
     return NextResponse.json({ updated: true });
   } catch (error) {

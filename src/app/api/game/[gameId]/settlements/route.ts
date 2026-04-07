@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { buildings, games, settlements, territories } from '@/db/schema';
+import { buildings, games, settlements, territories, troops, siegeUnits } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { getGmCode, isAuthError, requireInitState, requireRealmOwner } from '@/lib/auth';
+import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
 import { getAvailableSettlementHexId, getLandHexById } from '@/lib/game-logic/maps';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 
@@ -42,7 +42,15 @@ export async function GET(
   }
 
   const settList = await db.select().from(settlements).where(inArray(settlements.territoryId, territoryIds));
-  return NextResponse.json(settList);
+  const settIds = settList.map((settlement) => settlement.id);
+  const buildingList = settIds.length > 0
+    ? await db.select().from(buildings).where(inArray(buildings.settlementId, settIds))
+    : [];
+
+  return NextResponse.json(settList.map((settlement) => ({
+    ...settlement,
+    buildings: buildingList.filter((building) => building.settlementId === settlement.id),
+  })));
 }
 
 export async function POST(
@@ -128,6 +136,84 @@ export async function POST(
     await recomputeGameInitState(gameId);
 
     return NextResponse.json({ id, ...body });
+  } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
+) {
+  try {
+    const { gameId } = await params;
+    await requireGM(gameId);
+    const body = await request.json();
+
+    if (!body.settlementId) {
+      return NextResponse.json({ error: 'settlementId required' }, { status: 400 });
+    }
+
+    const settlement = await db.select().from(settlements)
+      .where(eq(settlements.id, body.settlementId))
+      .get();
+
+    if (!settlement) {
+      return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (body.name !== undefined) updates.name = body.name;
+    if (body.size !== undefined) updates.size = body.size;
+    if (body.realmId !== undefined) updates.realmId = body.realmId;
+    if (body.governingNobleId !== undefined) updates.governingNobleId = body.governingNobleId;
+
+    await db.update(settlements)
+      .set(updates)
+      .where(eq(settlements.id, body.settlementId));
+
+    if (body.realmId !== undefined && body.realmId !== settlement.realmId) {
+      await db.update(troops)
+        .set({ realmId: body.realmId })
+        .where(eq(troops.garrisonSettlementId, body.settlementId));
+      await db.update(siegeUnits)
+        .set({ realmId: body.realmId })
+        .where(eq(siegeUnits.garrisonSettlementId, body.settlementId));
+    }
+
+    return NextResponse.json({ updated: true });
+  } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
+) {
+  try {
+    const { gameId } = await params;
+    await requireGM(gameId);
+    const body = await request.json();
+
+    if (!body.settlementId) {
+      return NextResponse.json({ error: 'settlementId required' }, { status: 400 });
+    }
+
+    await db.delete(buildings).where(eq(buildings.settlementId, body.settlementId));
+    await db.delete(troops).where(eq(troops.garrisonSettlementId, body.settlementId));
+    await db.delete(siegeUnits).where(eq(siegeUnits.garrisonSettlementId, body.settlementId));
+    await db.delete(settlements).where(eq(settlements.id, body.settlementId));
+
+    return NextResponse.json({ deleted: true });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -185,7 +185,7 @@ export default function CreateRealmPage() {
                 {townName.trim() && (
                   <div className="flex items-center justify-between p-2 medieval-border rounded border-gold-500 bg-gold-500/5">
                     <span>{townName}</span>
-                    <Badge variant="gold">Town</Badge>
+                    <Badge variant="gold">Capital</Badge>
                   </div>
                 )}
               </div>
@@ -209,6 +209,9 @@ export default function CreateRealmPage() {
             <CardTitle>Realm Identity</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-sm text-ink-300">
+              Your territory already has its own name. Choose your realm&apos;s name and the name of its capital town.
+            </p>
             <Input label="Realm Name" value={name} onChange={(event) => setName(event.target.value)} />
             <Select
               label="Government"
@@ -216,7 +219,11 @@ export default function CreateRealmPage() {
               value={governmentType}
               onChange={(event) => setGovernmentType(event.target.value as GovernmentType)}
             />
-            <Input label="Town Name" value={townName} onChange={(event) => setTownName(event.target.value)} />
+            <Input
+              label="Capital Town Name"
+              value={townName}
+              onChange={(event) => setTownName(event.target.value)}
+            />
 
             <div>
               <p className="font-heading text-sm font-medium text-ink-500 mb-2">Traditions ({traditions.length}/3)</p>

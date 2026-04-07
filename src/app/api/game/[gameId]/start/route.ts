@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { games } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { isAuthError, requireGM, requireInitState } from '@/lib/auth';
-import { getGameSetupReadiness } from '@/lib/game-init-state';
+import { isAuthError, requireGM } from '@/lib/auth';
+import { getGameSetupReadiness, recomputeGameInitState } from '@/lib/game-init-state';
 
 export async function POST(
   _request: Request,
@@ -12,14 +12,22 @@ export async function POST(
   try {
     const { gameId } = await params;
     await requireGM(gameId);
-    await requireInitState(gameId, 'ready_to_start');
+
+    const game = await recomputeGameInitState(gameId);
+    if (!game) {
+      return NextResponse.json({ error: 'Game not found' }, { status: 404 });
+    }
+
+    if (game.initState === 'active' || game.initState === 'completed') {
+      return NextResponse.json({ error: 'Game has already started' }, { status: 409 });
+    }
 
     const readiness = await getGameSetupReadiness(gameId);
     if (!readiness) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
-    if (!readiness.canStart) {
+    if (game.initState !== 'ready_to_start' || !readiness.canStart) {
       return NextResponse.json({
         error: 'Game setup is incomplete',
         gmSetupState: readiness.game.gmSetupState,

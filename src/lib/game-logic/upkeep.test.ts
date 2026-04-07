@@ -96,32 +96,32 @@ describe('calculateSiegeUpkeep', () => {
 });
 
 describe('calculateNobleUpkeep', () => {
-  it('sums estate costs for non-ruler nobles', () => {
+  it('sums estate costs for all nobles actually being paid', () => {
     expect(calculateNobleUpkeep([
-      { estateLevel: 'Meagre', isRuler: false },
-      { estateLevel: 'Comfortable', isRuler: false },
+      { estateLevel: 'Meagre' },
+      { estateLevel: 'Comfortable' },
     ])).toBe(375); // 125 + 250
   });
 
-  it('skips rulers', () => {
+  it('includes rulers when their estates are paid explicitly', () => {
     expect(calculateNobleUpkeep([
-      { estateLevel: 'Luxurious', isRuler: true },
-      { estateLevel: 'Meagre', isRuler: false },
-    ])).toBe(125);
+      { estateLevel: 'Luxurious' },
+      { estateLevel: 'Meagre' },
+    ])).toBe(2125);
   });
 
-  it('returns 0 when all nobles are rulers', () => {
+  it('returns estate cost even for a single ruler', () => {
     expect(calculateNobleUpkeep([
-      { estateLevel: 'Luxurious', isRuler: true },
-    ])).toBe(0);
+      { estateLevel: 'Luxurious' },
+    ])).toBe(2000);
   });
 
   it('uses correct estate costs', () => {
-    expect(calculateNobleUpkeep([{ estateLevel: 'Meagre', isRuler: false }])).toBe(125);
-    expect(calculateNobleUpkeep([{ estateLevel: 'Comfortable', isRuler: false }])).toBe(250);
-    expect(calculateNobleUpkeep([{ estateLevel: 'Ample', isRuler: false }])).toBe(500);
-    expect(calculateNobleUpkeep([{ estateLevel: 'Substantial', isRuler: false }])).toBe(1000);
-    expect(calculateNobleUpkeep([{ estateLevel: 'Luxurious', isRuler: false }])).toBe(2000);
+    expect(calculateNobleUpkeep([{ estateLevel: 'Meagre' }])).toBe(125);
+    expect(calculateNobleUpkeep([{ estateLevel: 'Comfortable' }])).toBe(250);
+    expect(calculateNobleUpkeep([{ estateLevel: 'Ample' }])).toBe(500);
+    expect(calculateNobleUpkeep([{ estateLevel: 'Substantial' }])).toBe(1000);
+    expect(calculateNobleUpkeep([{ estateLevel: 'Luxurious' }])).toBe(2000);
   });
 
   it('returns 0 for empty array', () => {

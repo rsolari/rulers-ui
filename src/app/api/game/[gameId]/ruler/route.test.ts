@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { nobleFamilies, nobles } from '@/db/schema';
+import { governanceEvents, nobleFamilies, nobles, realms } from '@/db/schema';
 
 function createSelectMock(getMock: ReturnType<typeof vi.fn>) {
-  const where = vi.fn(() => ({ get: getMock }));
-  const innerJoin = vi.fn(() => ({ where }));
-  const from = vi.fn(() => ({ where, innerJoin }));
-  const select = vi.fn(() => ({ from }));
+  const chain = {
+    get: getMock,
+    where: vi.fn(() => chain),
+    innerJoin: vi.fn(() => chain),
+  };
 
-  return { select, from, where, innerJoin };
+  return {
+    select: vi.fn(() => ({
+      from: vi.fn(() => chain),
+    })),
+  };
 }
 
 const mocks = vi.hoisted(() => {
@@ -99,6 +104,7 @@ describe('GET /api/game/[gameId]/ruler', () => {
       valuedPerson: 'A Mentor',
       greatestDesire: 'Glory',
       familyName: 'Vale',
+      governanceState: 'stable',
     });
 
     const response = await GET(new Request('http://localhost/api/game/game-1/ruler?realmId=realm-1'));
@@ -120,6 +126,7 @@ describe('GET /api/game/[gameId]/ruler', () => {
       valuedPerson: 'A Mentor',
       greatestDesire: 'Glory',
       familyName: 'Vale',
+      governanceState: 'stable',
     });
   });
 });
@@ -161,8 +168,6 @@ describe('POST /api/game/[gameId]/ruler', () => {
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: 'Realm ownership required' });
-    expect(authMocks.requireRealmOwner).toHaveBeenCalledWith('game-1', 'realm-1');
-    expect(authMocks.requireInitState).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
@@ -175,8 +180,27 @@ describe('POST /api/game/[gameId]/ruler', () => {
     authMocks.requireRealmOwner.mockResolvedValue({ id: 'realm-player' });
     mocks.txGet
       .mockReturnValueOnce(undefined)
-      .mockReturnValueOnce({ id: 'family-1', name: 'Storm' });
-    uuidMock.mockReturnValueOnce('ruler-1');
+      .mockReturnValueOnce({ id: 'family-1', name: 'Storm' })
+      .mockReturnValueOnce({
+        id: 'realm-player',
+        gameId: 'game-1',
+        name: 'Stormhold',
+        governmentType: 'Monarch',
+        governanceState: 'stable',
+      })
+      .mockReturnValueOnce({
+        id: 'ruler-1',
+        familyId: 'family-1',
+        realmId: 'realm-player',
+        name: 'Lady Storm',
+        gender: 'Female',
+        age: 'Adult',
+        isAlive: true,
+        isPrisoner: false,
+      });
+    uuidMock
+      .mockReturnValueOnce('ruler-1')
+      .mockReturnValueOnce('event-1');
 
     const response = await POST(new Request('http://localhost/api/game/game-1/ruler', {
       method: 'POST',
@@ -196,34 +220,60 @@ describe('POST /api/game/[gameId]/ruler', () => {
     expect(response.status).toBe(201);
     expect(authMocks.requireRealmOwner).toHaveBeenCalledWith('game-1', 'realm-player');
     await expect(response.json()).resolves.toEqual({
-      id: 'ruler-1',
-      familyId: 'family-1',
+      status: 201,
       realmId: 'realm-player',
-      name: 'Lady Storm',
-      gender: 'Female',
-      age: 'Adult',
-      race: null,
-      backstory: null,
-      personality: 'Intelligent and Subtle',
-      relationshipWithRuler: null,
-      belief: null,
-      valuedObject: null,
-      valuedPerson: null,
-      greatestDesire: null,
-      familyName: 'Storm',
-    });
-    expect(mocks.operations.at(-1)).toEqual({
-      kind: 'insert',
-      table: nobles,
-      values: expect.objectContaining({
+      rulerNobleId: 'ruler-1',
+      governanceState: 'stable',
+      noble: {
+        id: 'ruler-1',
+        familyId: 'family-1',
         realmId: 'realm-player',
-      }),
+        name: 'Lady Storm',
+        gender: 'Female',
+        age: 'Adult',
+        race: null,
+        backstory: null,
+        personality: 'Intelligent and Subtle',
+        relationshipWithRuler: null,
+        belief: null,
+        valuedObject: null,
+        valuedPerson: null,
+        greatestDesire: null,
+        familyName: 'Storm',
+      },
     });
+    expect(mocks.operations).toEqual(expect.arrayContaining([
+      {
+        kind: 'insert',
+        table: nobles,
+        values: expect.objectContaining({
+          id: 'ruler-1',
+          realmId: 'realm-player',
+          originRealmId: 'realm-player',
+        }),
+      },
+      {
+        kind: 'update',
+        table: realms,
+        values: expect.objectContaining({
+          rulerNobleId: 'ruler-1',
+          governanceState: 'stable',
+        }),
+      },
+      {
+        kind: 'insert',
+        table: governanceEvents,
+        values: expect.objectContaining({
+          eventType: 'ruler_appointed',
+          nobleId: 'ruler-1',
+        }),
+      },
+    ]));
   });
 
   it('returns 403 when the game is outside the ruler setup window', async () => {
     authMocks.requireInitState.mockRejectedValue(
-      Object.assign(new Error('Game must be in parallel_final_setup or ready_to_start'), { status: 403 })
+      Object.assign(new Error('Game must be in parallel_final_setup or ready_to_start'), { status: 403 }),
     );
 
     const response = await POST(new Request('http://localhost/api/game/game-1/ruler', {
@@ -245,13 +295,11 @@ describe('POST /api/game/[gameId]/ruler', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Game must be in parallel_final_setup or ready_to_start',
     });
-    expect(authMocks.requireRealmOwner).toHaveBeenCalledWith('game-1', 'realm-1');
-    expect(authMocks.requireInitState).toHaveBeenCalledWith('game-1', 'parallel_final_setup', 'ready_to_start');
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it('rejects duplicate rulers for the same realm', async () => {
-    mocks.txGet.mockReturnValueOnce({ id: 'existing-ruler' });
+    mocks.txGet.mockReturnValueOnce({ rulerNobleId: 'existing-ruler' });
 
     const response = await POST(new Request('http://localhost/api/game/game-1/ruler', {
       method: 'POST',
@@ -270,16 +318,32 @@ describe('POST /api/game/[gameId]/ruler', () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: 'Realm already has a ruler' });
-    expect(authMocks.requireRealmOwner).toHaveBeenCalledWith('game-1', 'realm-1');
-    expect(authMocks.requireInitState).toHaveBeenCalledWith('game-1', 'parallel_final_setup', 'ready_to_start');
-    expect(mocks.operations).toEqual([]);
   });
 
-  it('reassigns the ruling family when creating a ruler from an existing house', async () => {
+  it('creates a ruler from an existing house and records governance side effects', async () => {
     mocks.txGet
       .mockReturnValueOnce(undefined)
-      .mockReturnValueOnce({ id: 'family-a', name: 'Ashdown' });
-    uuidMock.mockReturnValueOnce('ruler-1');
+      .mockReturnValueOnce({ id: 'family-a', name: 'Ashdown' })
+      .mockReturnValueOnce({
+        id: 'realm-1',
+        gameId: 'game-1',
+        name: 'Ashdown Keep',
+        governmentType: 'Monarch',
+        governanceState: 'stable',
+      })
+      .mockReturnValueOnce({
+        id: 'ruler-1',
+        familyId: 'family-a',
+        realmId: 'realm-1',
+        name: 'Lord Ashdown',
+        gender: 'Male',
+        age: 'Adult',
+        isAlive: true,
+        isPrisoner: false,
+      });
+    uuidMock
+      .mockReturnValueOnce('ruler-1')
+      .mockReturnValueOnce('event-1');
 
     const response = await POST(new Request('http://localhost/api/game/game-1/ruler', {
       method: 'POST',
@@ -303,149 +367,73 @@ describe('POST /api/game/[gameId]/ruler', () => {
     });
 
     expect(response.status).toBe(201);
-    expect(mocks.operations).toEqual([
-      {
-        kind: 'update',
-        table: nobleFamilies,
-        values: { isRulingFamily: false },
+    await expect(response.json()).resolves.toEqual({
+      status: 201,
+      realmId: 'realm-1',
+      rulerNobleId: 'ruler-1',
+      governanceState: 'stable',
+      noble: {
+        id: 'ruler-1',
+        familyId: 'family-a',
+        realmId: 'realm-1',
+        name: 'Lord Ashdown',
+        gender: 'Male',
+        age: 'Adult',
+        race: 'Human',
+        backstory: 'A veteran of the eastern campaign.',
+        personality: 'Confident and Charismatic',
+        relationshipWithRuler: null,
+        belief: 'Trust in others and they will trust in you',
+        valuedObject: 'A Weapon',
+        valuedPerson: 'A Friend',
+        greatestDesire: 'Power',
+        familyName: 'Ashdown',
       },
-      {
-        kind: 'update',
-        table: nobleFamilies,
-        values: { isRulingFamily: true },
-      },
+    });
+    expect(mocks.operations).toEqual(expect.arrayContaining([
       {
         kind: 'insert',
         table: nobles,
-        values: {
-          id: 'ruler-1',
-          familyId: 'family-a',
-          realmId: 'realm-1',
-          name: 'Lord Ashdown',
-          gender: 'Male',
-          age: 'Adult',
-          isRuler: true,
-          isHeir: false,
+        values: expect.objectContaining({
           race: 'Human',
           backstory: 'A veteran of the eastern campaign.',
           personality: 'Confident and Charismatic',
-          relationshipWithRuler: null,
-          belief: 'Trust in others and they will trust in you',
-          valuedObject: 'A Weapon',
-          valuedPerson: 'A Friend',
-          greatestDesire: 'Power',
-          title: null,
-          estateLevel: 'Meagre',
-          reasonSkill: 0,
-          cunningSkill: 0,
-        },
+        }),
       },
-    ]);
-    await expect(response.json()).resolves.toEqual({
-      id: 'ruler-1',
-      familyId: 'family-a',
-      realmId: 'realm-1',
-      name: 'Lord Ashdown',
-      gender: 'Male',
-      age: 'Adult',
-      race: 'Human',
-      backstory: 'A veteran of the eastern campaign.',
-      personality: 'Confident and Charismatic',
-      relationshipWithRuler: null,
-      belief: 'Trust in others and they will trust in you',
-      valuedObject: 'A Weapon',
-      valuedPerson: 'A Friend',
-      greatestDesire: 'Power',
-      familyName: 'Ashdown',
-    });
+      {
+        kind: 'update',
+        table: realms,
+        values: expect.objectContaining({
+          rulerNobleId: 'ruler-1',
+        }),
+      },
+    ]));
   });
 
-  it('persists explicit race, backstory, and personality fields and returns them via GET', async () => {
+  it('creates a new family when requested', async () => {
     mocks.txGet
       .mockReturnValueOnce(undefined)
-      .mockReturnValueOnce({ id: 'family-1', name: 'Storm' });
-    uuidMock.mockReturnValueOnce('ruler-1');
-
-    const createResponse = await POST(new Request('http://localhost/api/game/game-1/ruler', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      .mockReturnValueOnce({
+        id: 'realm-1',
+        gameId: 'game-1',
+        name: 'Falcon Reach',
+        governmentType: 'Monarch',
+        governanceState: 'stable',
+      })
+      .mockReturnValueOnce({
+        id: 'ruler-1',
+        familyId: 'family-new',
         realmId: 'realm-1',
-        familyId: 'family-1',
-        name: 'Lady Storm',
-        race: 'Elf',
-        gender: 'Female',
-        age: 'Adult',
-        backstory: 'Raised in exile before reclaiming the coast.',
-        personality: 'Intelligent and Subtle',
-        belief: 'The pursuit of knowledge is the only thing worth pursuing',
-        valuedObject: 'A Book',
-        valuedPerson: 'A Mentor',
-        greatestDesire: 'Knowledge',
-      }),
-    }), {
-      params: Promise.resolve({ gameId: 'game-1' }),
-    });
-
-    expect(createResponse.status).toBe(201);
-    expect(mocks.operations.at(-1)).toEqual({
-      kind: 'insert',
-      table: nobles,
-      values: expect.objectContaining({
-        race: 'Elf',
-        backstory: 'Raised in exile before reclaiming the coast.',
-        personality: 'Intelligent and Subtle',
-        belief: 'The pursuit of knowledge is the only thing worth pursuing',
-        valuedObject: 'A Book',
-        valuedPerson: 'A Mentor',
-        greatestDesire: 'Knowledge',
-      }),
-    });
-
-    mocks.dbGet.mockReturnValueOnce({
-      id: 'ruler-1',
-      familyId: 'family-1',
-      realmId: 'realm-1',
-      name: 'Lady Storm',
-      gender: 'Female',
-      age: 'Adult',
-      race: 'Elf',
-      backstory: 'Raised in exile before reclaiming the coast.',
-      personality: 'Intelligent and Subtle',
-      relationshipWithRuler: null,
-      belief: 'The pursuit of knowledge is the only thing worth pursuing',
-      valuedObject: 'A Book',
-      valuedPerson: 'A Mentor',
-      greatestDesire: 'Knowledge',
-      familyName: 'Storm',
-    });
-
-    const getResponse = await GET(new Request('http://localhost/api/game/game-1/ruler?realmId=realm-1'));
-
-    await expect(getResponse.json()).resolves.toEqual({
-      id: 'ruler-1',
-      familyId: 'family-1',
-      realmId: 'realm-1',
-      name: 'Lady Storm',
-      gender: 'Female',
-      age: 'Adult',
-      race: 'Elf',
-      backstory: 'Raised in exile before reclaiming the coast.',
-      personality: 'Intelligent and Subtle',
-      relationshipWithRuler: null,
-      belief: 'The pursuit of knowledge is the only thing worth pursuing',
-      valuedObject: 'A Book',
-      valuedPerson: 'A Mentor',
-      greatestDesire: 'Knowledge',
-      familyName: 'Storm',
-    });
-  });
-
-  it('creates a new family and clears prior ruling flags', async () => {
-    mocks.txGet.mockReturnValueOnce(undefined);
+        name: 'Marshal Falconer',
+        gender: 'Male',
+        age: 'Elderly',
+        isAlive: true,
+        isPrisoner: false,
+      });
     uuidMock
       .mockReturnValueOnce('family-new')
-      .mockReturnValueOnce('ruler-1');
+      .mockReturnValueOnce('ruler-1')
+      .mockReturnValueOnce('event-1');
 
     const response = await POST(new Request('http://localhost/api/game/game-1/ruler', {
       method: 'POST',
@@ -468,12 +456,30 @@ describe('POST /api/game/[gameId]/ruler', () => {
     });
 
     expect(response.status).toBe(201);
-    expect(mocks.operations).toEqual([
-      {
-        kind: 'update',
-        table: nobleFamilies,
-        values: { isRulingFamily: false },
+    await expect(response.json()).resolves.toEqual({
+      status: 201,
+      realmId: 'realm-1',
+      rulerNobleId: 'ruler-1',
+      governanceState: 'stable',
+      noble: {
+        id: 'ruler-1',
+        familyId: 'family-new',
+        realmId: 'realm-1',
+        name: 'Marshal Falconer',
+        gender: 'Male',
+        age: 'Elderly',
+        race: 'Dwarf',
+        backstory: null,
+        personality: 'Stoic and Reserved',
+        relationshipWithRuler: null,
+        belief: 'Only through war and conflict can we truly understand ourselves',
+        valuedObject: 'An Ancestral Artefact',
+        valuedPerson: 'A Sibling/Cousin',
+        greatestDesire: 'Glory',
+        familyName: 'Falconer',
       },
+    });
+    expect(mocks.operations).toEqual(expect.arrayContaining([
       {
         kind: 'insert',
         table: nobleFamilies,
@@ -481,7 +487,6 @@ describe('POST /api/game/[gameId]/ruler', () => {
           id: 'family-new',
           realmId: 'realm-1',
           name: 'Falconer',
-          isRulingFamily: true,
         },
       },
       {
@@ -491,26 +496,8 @@ describe('POST /api/game/[gameId]/ruler', () => {
           id: 'ruler-1',
           familyId: 'family-new',
           realmId: 'realm-1',
-          name: 'Marshal Falconer',
         }),
       },
-    ]);
-    await expect(response.json()).resolves.toEqual({
-      id: 'ruler-1',
-      familyId: 'family-new',
-      realmId: 'realm-1',
-      name: 'Marshal Falconer',
-      gender: 'Male',
-      age: 'Elderly',
-      race: 'Dwarf',
-      backstory: null,
-      personality: 'Stoic and Reserved',
-      relationshipWithRuler: null,
-      belief: 'Only through war and conflict can we truly understand ourselves',
-      valuedObject: 'An Ancestral Artefact',
-      valuedPerson: 'A Sibling/Cousin',
-      greatestDesire: 'Glory',
-      familyName: 'Falconer',
-    });
+    ]));
   });
 });

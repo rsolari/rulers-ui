@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { guildsOrdersSocieties } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { guildsOrdersSocieties, nobles } from '@/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireGM } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
@@ -17,7 +17,26 @@ export async function GET(
   }
 
   const list = await db.select().from(guildsOrdersSocieties).where(eq(guildsOrdersSocieties.realmId, realmId));
-  return NextResponse.json(list);
+  const leaderIds = [...new Set(
+    list
+      .map((gos) => gos.leaderId)
+      .filter((leaderId): leaderId is string => Boolean(leaderId)),
+  )];
+  const leaders = leaderIds.length > 0
+    ? await db.select({
+      id: nobles.id,
+      name: nobles.name,
+      gmStatusText: nobles.gmStatusText,
+    })
+      .from(nobles)
+      .where(inArray(nobles.id, leaderIds))
+    : [];
+  const leaderById = new Map(leaders.map((leader) => [leader.id, leader]));
+
+  return NextResponse.json(list.map((gos) => ({
+    ...gos,
+    leader: gos.leaderId ? leaderById.get(gos.leaderId) ?? null : null,
+  })));
 }
 
 export async function POST(

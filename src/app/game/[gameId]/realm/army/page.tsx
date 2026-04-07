@@ -13,10 +13,16 @@ import { useRole } from '@/hooks/use-role';
 import { TROOP_DEFS } from '@/lib/game-logic/constants';
 import type { TroopType } from '@/types/game';
 
+interface ArmyGeneral {
+  id: string;
+  name: string;
+}
+
 interface Army {
   id: string;
   name: string;
   generalId: string | null;
+  general: ArmyGeneral | null;
   locationTerritoryId: string;
   movementTurnsRemaining: number;
 }
@@ -183,7 +189,12 @@ export default function ArmyPage() {
             <Card key={army.id} variant="gold">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>{army.name}</CardTitle>
+                  <div>
+                    <CardTitle>{army.name}</CardTitle>
+                    <p className="text-sm text-ink-300 mt-1">
+                      General: {army.general ? army.general.name : <span className="italic">None</span>}
+                    </p>
+                  </div>
                   <div className="flex items-center gap-2">
                     {army.movementTurnsRemaining > 0 && (
                       <Badge variant="gold">Moving ({army.movementTurnsRemaining} turns)</Badge>

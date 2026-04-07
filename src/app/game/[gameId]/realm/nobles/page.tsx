@@ -8,8 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { NobleActivityBadge } from '@/components/governance/NobleActivityBadge';
 import { useRole } from '@/hooks/use-role';
 import { ESTATE_COSTS } from '@/lib/game-logic/constants';
+import { deriveNobleActivity } from '@/lib/noble-activity';
 
 interface NobleFamily {
   id: string;
@@ -27,6 +29,7 @@ interface Noble {
   backstory: string | null;
   isRuler: boolean;
   isHeir: boolean;
+  isActingRuler?: boolean;
   personality: string | null;
   relationshipWithRuler: string | null;
   belief: string | null;
@@ -38,6 +41,8 @@ interface Noble {
   reasonSkill: number;
   cunningSkill: number;
   isPrisoner: boolean;
+  isAlive?: boolean;
+  gmStatusText: string | null;
 }
 
 export default function NoblesPage() {
@@ -128,14 +133,11 @@ export default function NoblesPage() {
                     >
                       <div className="flex items-center gap-3">
                         <span className="font-heading font-bold">{noble.name}</span>
-                        {noble.isRuler && <Badge variant="gold">Ruler</Badge>}
-                        {noble.isHeir && <Badge variant="gold">Heir</Badge>}
-                        {noble.title && <Badge>{noble.title}</Badge>}
+                        <NobleActivityBadge noble={noble} />
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-ink-300">{noble.gender}, {noble.age}</span>
                         <Badge>{noble.estateLevel}</Badge>
-                        {noble.isPrisoner && <Badge variant="red">Prisoner</Badge>}
                       </div>
                     </div>
                   ))}
@@ -157,6 +159,14 @@ export default function NoblesPage() {
           <DialogTitle>{selectedNoble.name}</DialogTitle>
           <DialogContent>
             <div className="space-y-3">
+              {/* Current Activity */}
+              <div className="medieval-border rounded p-3">
+                <p className="font-heading font-semibold mb-2">Current Activity</p>
+                {deriveNobleActivity(selectedNoble).lines.map((line, i) => (
+                  <p key={i} className="text-sm">{line.label}</p>
+                ))}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <p><strong>Gender:</strong> {selectedNoble.gender}</p>
                 <p><strong>Age:</strong> {selectedNoble.age}</p>

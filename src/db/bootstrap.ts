@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 
 type TableInfoRow = {
   name: string;
+  notnull: number;
 };
 
 const APP_TABLES = [
@@ -55,6 +56,35 @@ function columnExists(database: Database.Database, tableName: string, columnName
   return getTableInfo(database, tableName).some((column) => column.name === columnName);
 }
 
+function createBuildingsTable(database: Database.Database, tableName: string) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS ${tableName} (
+      id text PRIMARY KEY NOT NULL,
+      settlement_id text,
+      territory_id text,
+      hex_id text,
+      location_type text NOT NULL DEFAULT 'settlement',
+      type text NOT NULL,
+      category text NOT NULL,
+      size text NOT NULL,
+      material text,
+      takes_building_slot integer NOT NULL DEFAULT true,
+      is_operational integer NOT NULL DEFAULT true,
+      maintenance_state text NOT NULL DEFAULT 'active',
+      construction_turns_remaining integer NOT NULL DEFAULT 0,
+      is_guild_owned integer NOT NULL DEFAULT false,
+      guild_id text,
+      allotted_gos_id text,
+      custom_definition_id text,
+      FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (guild_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (allotted_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
+    );
+  `);
+}
+
 function needsFullRebuild(database: Database.Database) {
   if (!tableExists(database, 'games')) {
     return false;
@@ -97,7 +127,12 @@ function createBaseSchema(database: Database.Database) {
       game_id text NOT NULL,
       name text NOT NULL,
       government_type text NOT NULL,
+      governance_state text NOT NULL DEFAULT 'stable',
+      ruler_noble_id text,
+      heir_noble_id text,
+      acting_ruler_noble_id text,
       traditions text NOT NULL DEFAULT '[]',
+      immortals_troop_id text,
       is_npc integer NOT NULL DEFAULT false,
       treasury integer NOT NULL DEFAULT 0,
       tax_type text NOT NULL DEFAULT 'Tribute',
@@ -110,9 +145,13 @@ function createBaseSchema(database: Database.Database) {
       borrowed_amount integer NOT NULL DEFAULT 0,
       loan_repayment_per_season integer NOT NULL DEFAULT 0,
       loan_repayment_seasons_remaining integer NOT NULL DEFAULT 0,
+      turmoil integer NOT NULL DEFAULT 0,
       turmoil_sources text NOT NULL DEFAULT '[]',
       capital_settlement_id text,
-      FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (ruler_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (heir_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (acting_ruler_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS territories (
@@ -193,10 +232,12 @@ function createBaseSchema(database: Database.Database) {
       realm_id text,
       name text NOT NULL,
       size text NOT NULL,
+      is_capital integer NOT NULL DEFAULT false,
       governing_noble_id text,
       FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (governing_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS resource_sites (
@@ -214,7 +255,6 @@ function createBaseSchema(database: Database.Database) {
       id text PRIMARY KEY NOT NULL,
       realm_id text NOT NULL,
       name text NOT NULL,
-      is_ruling_family integer NOT NULL DEFAULT false,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
     );
 
@@ -222,11 +262,11 @@ function createBaseSchema(database: Database.Database) {
       id text PRIMARY KEY NOT NULL,
       family_id text NOT NULL,
       realm_id text NOT NULL,
+      origin_realm_id text NOT NULL,
+      displaced_from_realm_id text,
       name text NOT NULL,
       gender text NOT NULL,
       age text NOT NULL,
-      is_ruler integer NOT NULL DEFAULT false,
-      is_heir integer NOT NULL DEFAULT false,
       backstory text,
       race text,
       personality text,
@@ -235,19 +275,28 @@ function createBaseSchema(database: Database.Database) {
       valued_object text,
       valued_person text,
       greatest_desire text,
-      title text,
-      assigned_settlement_id text,
-      assigned_army_id text,
-      assigned_guild_id text,
       estate_level text NOT NULL DEFAULT 'Meagre',
       reason_skill integer NOT NULL DEFAULT 0,
       cunning_skill integer NOT NULL DEFAULT 0,
+      is_alive integer NOT NULL DEFAULT true,
+      death_year integer,
+      death_season text,
+      death_cause text,
       is_prisoner integer NOT NULL DEFAULT false,
-      prisoner_of_realm_id text,
+      captor_realm_id text,
+      captured_year integer,
+      captured_season text,
+      released_year integer,
+      released_season text,
+      gm_status_text text,
       location_territory_id text,
       location_hex_id text,
       FOREIGN KEY (family_id) REFERENCES noble_families(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (origin_realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (displaced_from_realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (captor_realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (location_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (location_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
     );
 
@@ -262,7 +311,9 @@ function createBaseSchema(database: Database.Database) {
       destination_hex_id text,
       movement_turns_remaining integer NOT NULL DEFAULT 0,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (general_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (location_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (destination_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (location_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (destination_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
     );
@@ -351,7 +402,57 @@ function createBaseSchema(database: Database.Database) {
       focus text,
       leader_id text,
       income integer NOT NULL DEFAULT 0,
-      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (leader_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS noble_titles (
+      id text PRIMARY KEY NOT NULL,
+      game_id text NOT NULL,
+      realm_id text NOT NULL,
+      noble_id text NOT NULL,
+      type text NOT NULL,
+      label text NOT NULL,
+      settlement_id text,
+      army_id text,
+      gos_id text,
+      is_active integer NOT NULL DEFAULT true,
+      granted_year integer NOT NULL,
+      granted_season text NOT NULL,
+      revoked_year integer,
+      revoked_season text,
+      notes text,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS governance_events (
+      id text PRIMARY KEY NOT NULL,
+      game_id text NOT NULL,
+      realm_id text NOT NULL,
+      year integer NOT NULL,
+      season text NOT NULL,
+      event_type text NOT NULL,
+      noble_id text,
+      related_noble_id text,
+      settlement_id text,
+      army_id text,
+      gos_id text,
+      payload text NOT NULL DEFAULT '{}',
+      description text NOT NULL,
+      created_by_role text NOT NULL,
+      created_at integer,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (related_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS industries (
@@ -556,6 +657,601 @@ function migrateSchema(database: Database.Database) {
   }
 }
 
+function settlementsRealmIdIsNotNull(database: Database.Database) {
+  if (!tableExists(database, 'settlements')) {
+    return false;
+  }
+
+  const columns = getTableInfo(database, 'settlements');
+  const realmIdColumn = columns.find((column) => column.name === 'realm_id');
+  return realmIdColumn?.notnull === 1;
+}
+
+function buildingsSettlementIdIsNotNull(database: Database.Database) {
+  if (!tableExists(database, 'buildings')) {
+    return false;
+  }
+
+  const columns = getTableInfo(database, 'buildings');
+  const settlementIdColumn = columns.find((column) => column.name === 'settlement_id');
+  return settlementIdColumn?.notnull === 1;
+}
+
+function ensureGovernanceSchema(database: Database.Database) {
+  addColumnIfMissing(database, 'realms', "governance_state text DEFAULT 'stable' NOT NULL", 'governance_state');
+  addColumnIfMissing(database, 'realms', 'ruler_noble_id text REFERENCES nobles(id)', 'ruler_noble_id');
+  addColumnIfMissing(database, 'realms', 'heir_noble_id text REFERENCES nobles(id)', 'heir_noble_id');
+  addColumnIfMissing(
+    database,
+    'realms',
+    'acting_ruler_noble_id text REFERENCES nobles(id)',
+    'acting_ruler_noble_id',
+  );
+
+  addColumnIfMissing(database, 'settlements', 'is_capital integer DEFAULT 0 NOT NULL', 'is_capital');
+
+  addColumnIfMissing(database, 'nobles', 'backstory text', 'backstory');
+  addColumnIfMissing(database, 'nobles', 'race text', 'race');
+  addColumnIfMissing(database, 'nobles', 'origin_realm_id text', 'origin_realm_id');
+  addColumnIfMissing(database, 'nobles', 'displaced_from_realm_id text', 'displaced_from_realm_id');
+  addColumnIfMissing(database, 'nobles', 'is_alive integer DEFAULT 1 NOT NULL', 'is_alive');
+  addColumnIfMissing(database, 'nobles', 'death_year integer', 'death_year');
+  addColumnIfMissing(database, 'nobles', 'death_season text', 'death_season');
+  addColumnIfMissing(database, 'nobles', 'death_cause text', 'death_cause');
+  addColumnIfMissing(database, 'nobles', 'captor_realm_id text', 'captor_realm_id');
+  addColumnIfMissing(database, 'nobles', 'captured_year integer', 'captured_year');
+  addColumnIfMissing(database, 'nobles', 'captured_season text', 'captured_season');
+  addColumnIfMissing(database, 'nobles', 'released_year integer', 'released_year');
+  addColumnIfMissing(database, 'nobles', 'released_season text', 'released_season');
+  addColumnIfMissing(database, 'nobles', 'gm_status_text text', 'gm_status_text');
+
+  database.exec(`
+    UPDATE nobles
+    SET origin_realm_id = COALESCE(origin_realm_id, realm_id)
+    WHERE origin_realm_id IS NULL;
+  `);
+
+  if (!tableExists(database, 'noble_titles')) {
+    database.exec(`
+      CREATE TABLE noble_titles (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        realm_id text NOT NULL,
+        noble_id text NOT NULL,
+        type text NOT NULL,
+        label text NOT NULL,
+        settlement_id text,
+        army_id text,
+        gos_id text,
+        is_active integer NOT NULL DEFAULT true,
+        granted_year integer NOT NULL,
+        granted_season text NOT NULL,
+        revoked_year integer,
+        revoked_season text,
+        notes text,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'governance_events')) {
+    database.exec(`
+      CREATE TABLE governance_events (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        realm_id text NOT NULL,
+        year integer NOT NULL,
+        season text NOT NULL,
+        event_type text NOT NULL,
+        noble_id text,
+        related_noble_id text,
+        settlement_id text,
+        army_id text,
+        gos_id text,
+        payload text NOT NULL DEFAULT '{}',
+        description text NOT NULL,
+        created_by_role text NOT NULL,
+        created_at integer,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (related_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS realms_ruler_noble_unique
+      ON realms (ruler_noble_id)
+      WHERE ruler_noble_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS realms_heir_noble_unique
+      ON realms (heir_noble_id)
+      WHERE heir_noble_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS settlements_one_capital_per_realm
+      ON settlements (realm_id)
+      WHERE is_capital = 1;
+    CREATE INDEX IF NOT EXISTS settlements_governing_noble_idx
+      ON settlements (governing_noble_id);
+    CREATE INDEX IF NOT EXISTS armies_general_idx
+      ON armies (general_id);
+    CREATE INDEX IF NOT EXISTS gos_leader_idx
+      ON guilds_orders_societies (leader_id);
+    CREATE INDEX IF NOT EXISTS governance_events_realm_turn_idx
+      ON governance_events (game_id, realm_id, year, season);
+  `);
+}
+
+function backfillInitStateFromLegacyGamePhase(database: Database.Database) {
+  if (!tableExists(database, 'games')) {
+    return;
+  }
+
+  database.exec(`
+    UPDATE games
+    SET init_state = CASE game_phase
+      WHEN 'Setup' THEN 'gm_world_setup'
+      WHEN 'RealmCreation' THEN 'parallel_final_setup'
+      WHEN 'Active' THEN 'active'
+      WHEN 'Completed' THEN 'completed'
+      ELSE COALESCE(init_state, 'gm_world_setup')
+    END
+    WHERE init_state IS NULL
+      OR init_state = ''
+      OR init_state = 'gm_world_setup';
+  `);
+}
+
+function backfillPlayerSlotSetupState(database: Database.Database) {
+  if (!tableExists(database, 'player_slots') || !columnExists(database, 'player_slots', 'setup_state')) {
+    return;
+  }
+
+  database.exec(`
+    UPDATE player_slots
+    SET setup_state = CASE
+      WHEN realm_id IS NOT NULL THEN 'realm_created'
+      WHEN claimed_at IS NOT NULL THEN 'claimed'
+      ELSE 'unclaimed'
+    END
+    WHERE setup_state IS NULL
+      OR setup_state = '';
+  `);
+}
+
+function migrateSettlementsRealmIdToNullable(database: Database.Database) {
+  const migrate = database.transaction(() => {
+    database.exec(`
+      CREATE TABLE settlements__new (
+        id text PRIMARY KEY NOT NULL,
+        territory_id text NOT NULL,
+        hex_id text,
+        realm_id text,
+        name text NOT NULL,
+        size text NOT NULL,
+        is_capital integer NOT NULL DEFAULT false,
+        governing_noble_id text,
+        FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (governing_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+    database.exec(`
+      INSERT INTO settlements__new (id, territory_id, hex_id, realm_id, name, size, is_capital, governing_noble_id)
+      SELECT id, territory_id, NULL, realm_id, name, size, COALESCE(is_capital, 0), governing_noble_id
+      FROM settlements;
+    `);
+    database.exec('DROP TABLE settlements;');
+    database.exec('ALTER TABLE settlements__new RENAME TO settlements;');
+  });
+
+  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF');
+  }
+
+  try {
+    migrate();
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON');
+    }
+  }
+
+  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
+  if (foreignKeyViolations.length > 0) {
+    throw new Error('SQLite schema migration left foreign key violations in settlements.');
+  }
+}
+
+function migrateBuildingsToSupportStandaloneLocations(database: Database.Database) {
+  const migrate = database.transaction(() => {
+    createBuildingsTable(database, 'buildings__new');
+    database.exec(`
+      INSERT INTO buildings__new (
+        id,
+        settlement_id,
+        territory_id,
+        hex_id,
+        location_type,
+        type,
+        category,
+        size,
+        material,
+        takes_building_slot,
+        is_operational,
+        maintenance_state,
+        construction_turns_remaining,
+        is_guild_owned,
+        guild_id,
+        allotted_gos_id,
+        custom_definition_id
+      )
+      SELECT
+        id,
+        settlement_id,
+        NULL,
+        NULL,
+        'settlement',
+        type,
+        category,
+        size,
+        material,
+        CASE
+          WHEN type IN ('Gatehouse', 'Walls', 'Watchtower') THEN 0
+          ELSE 1
+        END,
+        1,
+        'active',
+        construction_turns_remaining,
+        is_guild_owned,
+        guild_id,
+        guild_id,
+        NULL
+      FROM buildings;
+    `);
+    database.exec('DROP TABLE buildings;');
+    database.exec('ALTER TABLE buildings__new RENAME TO buildings;');
+  });
+
+  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF');
+  }
+
+  try {
+    migrate();
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON');
+    }
+  }
+
+  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
+  if (foreignKeyViolations.length > 0) {
+    throw new Error('SQLite schema migration left foreign key violations in buildings.');
+  }
+}
+
+function migrateTerritoriesDropClimate(database: Database.Database) {
+  const migrate = database.transaction(() => {
+    database.exec(`
+      CREATE TABLE territories__new (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        name text NOT NULL,
+        realm_id text,
+        description text,
+        food_cap_base integer NOT NULL DEFAULT 30,
+        food_cap_bonus integer NOT NULL DEFAULT 0,
+        has_river_access integer NOT NULL DEFAULT false,
+        has_sea_access integer NOT NULL DEFAULT false,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+    database.exec(`
+      INSERT INTO territories__new (
+        id,
+        game_id,
+        name,
+        realm_id,
+        description,
+        food_cap_base,
+        food_cap_bonus,
+        has_river_access,
+        has_sea_access
+      )
+      SELECT
+        id,
+        game_id,
+        name,
+        realm_id,
+        description,
+        COALESCE(food_cap_base, 30),
+        COALESCE(food_cap_bonus, 0),
+        COALESCE(has_river_access, 0),
+        COALESCE(has_sea_access, 0)
+      FROM territories;
+    `);
+    database.exec('DROP TABLE territories;');
+    database.exec('ALTER TABLE territories__new RENAME TO territories;');
+  });
+
+  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF');
+  }
+
+  try {
+    migrate();
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON');
+    }
+  }
+
+  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
+  if (foreignKeyViolations.length > 0) {
+    throw new Error('SQLite schema migration left foreign key violations in territories.');
+  }
+}
+
+function addColumnIfMissing(database: Database.Database, tableName: string, columnSql: string, columnName: string) {
+  if (!columnExists(database, tableName, columnName)) {
+    database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnSql};`);
+  }
+}
+
+function backfillResourceIndustryState(database: Database.Database) {
+  if (tableExists(database, 'resource_sites') && columnExists(database, 'resource_sites', 'industry_capacity')) {
+    database.exec(`
+      UPDATE resource_sites
+      SET industry_capacity = CASE rarity
+        WHEN 'Common' THEN 1
+        WHEN 'Luxury' THEN 1
+        ELSE 1
+      END
+      WHERE industry_capacity IS NULL OR industry_capacity <= 0;
+    `);
+  }
+
+  if (tableExists(database, 'industries') && columnExists(database, 'industries', 'output_product')) {
+    database.exec(`
+      UPDATE industries
+      SET output_product = COALESCE(
+        NULLIF(output_product, ''),
+        (
+          SELECT resource_type
+          FROM resource_sites
+          WHERE resource_sites.id = industries.resource_site_id
+        ),
+        ''
+      );
+    `);
+  }
+}
+
+function ensureEconomySchema(database: Database.Database) {
+  addColumnIfMissing(database, 'realms', 'levy_expires_year integer', 'levy_expires_year');
+  addColumnIfMissing(database, 'realms', 'levy_expires_season text', 'levy_expires_season');
+  addColumnIfMissing(database, 'realms', "food_balance integer DEFAULT 0 NOT NULL", 'food_balance');
+  addColumnIfMissing(
+    database,
+    'realms',
+    'consecutive_food_shortage_seasons integer DEFAULT 0 NOT NULL',
+    'consecutive_food_shortage_seasons',
+  );
+  addColumnIfMissing(
+    database,
+    'realms',
+    'consecutive_food_recovery_seasons integer DEFAULT 0 NOT NULL',
+    'consecutive_food_recovery_seasons',
+  );
+  addColumnIfMissing(database, 'realms', "technical_knowledge text DEFAULT '[]' NOT NULL", 'technical_knowledge');
+  addColumnIfMissing(database, 'realms', 'borrowed_amount integer DEFAULT 0 NOT NULL', 'borrowed_amount');
+  addColumnIfMissing(
+    database,
+    'realms',
+    'loan_repayment_per_season integer DEFAULT 0 NOT NULL',
+    'loan_repayment_per_season',
+  );
+  addColumnIfMissing(
+    database,
+    'realms',
+    'loan_repayment_seasons_remaining integer DEFAULT 0 NOT NULL',
+    'loan_repayment_seasons_remaining',
+  );
+
+  addColumnIfMissing(database, 'territories', 'food_cap_base integer DEFAULT 30 NOT NULL', 'food_cap_base');
+  addColumnIfMissing(database, 'territories', 'food_cap_bonus integer DEFAULT 0 NOT NULL', 'food_cap_bonus');
+  addColumnIfMissing(database, 'territories', 'has_river_access integer DEFAULT 0 NOT NULL', 'has_river_access');
+  addColumnIfMissing(database, 'territories', 'has_sea_access integer DEFAULT 0 NOT NULL', 'has_sea_access');
+
+  addColumnIfMissing(database, 'resource_sites', 'industry_capacity integer DEFAULT 1 NOT NULL', 'industry_capacity');
+
+  addColumnIfMissing(database, 'industries', "output_product text DEFAULT '' NOT NULL", 'output_product');
+  addColumnIfMissing(database, 'industries', 'is_operational integer DEFAULT 1 NOT NULL', 'is_operational');
+
+  addColumnIfMissing(database, 'trade_routes', "path_mode text DEFAULT 'land' NOT NULL", 'path_mode');
+  addColumnIfMissing(
+    database,
+    'trade_routes',
+    "import_selection_state text DEFAULT '[]' NOT NULL",
+    'import_selection_state',
+  );
+
+  if (!tableExists(database, 'economic_snapshots')) {
+    database.exec(`
+      CREATE TABLE economic_snapshots (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        realm_id text NOT NULL,
+        year integer NOT NULL,
+        season text NOT NULL,
+        opening_treasury integer NOT NULL,
+        total_revenue integer NOT NULL,
+        total_costs integer NOT NULL,
+        net_change integer NOT NULL,
+        closing_treasury integer NOT NULL,
+        tax_type_applied text NOT NULL,
+        summary text DEFAULT '{}' NOT NULL,
+        created_at integer,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'economic_entries')) {
+    database.exec(`
+      CREATE TABLE economic_entries (
+        id text PRIMARY KEY NOT NULL,
+        snapshot_id text NOT NULL,
+        game_id text NOT NULL,
+        realm_id text NOT NULL,
+        year integer NOT NULL,
+        season text NOT NULL,
+        kind text NOT NULL,
+        category text NOT NULL,
+        label text NOT NULL,
+        amount integer NOT NULL,
+        settlement_id text,
+        building_id text,
+        troop_id text,
+        siege_unit_id text,
+        trade_route_id text,
+        report_id text,
+        metadata text DEFAULT '{}' NOT NULL,
+        created_at integer,
+        FOREIGN KEY (snapshot_id) REFERENCES economic_snapshots(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'turn_resolutions')) {
+    database.exec(`
+      CREATE TABLE turn_resolutions (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        year integer NOT NULL,
+        season text NOT NULL,
+        idempotency_key text,
+        result text DEFAULT '{}' NOT NULL,
+        created_at integer,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS economic_snapshots_game_realm_turn_unique
+      ON economic_snapshots (game_id, realm_id, year, season);
+    CREATE UNIQUE INDEX IF NOT EXISTS turn_resolutions_game_turn_unique
+      ON turn_resolutions (game_id, year, season);
+    CREATE UNIQUE INDEX IF NOT EXISTS turn_resolutions_game_idempotency_unique
+      ON turn_resolutions (game_id, idempotency_key)
+      WHERE idempotency_key IS NOT NULL;
+  `);
+
+  addColumnIfMissing(database, 'buildings', 'territory_id text', 'territory_id');
+  addColumnIfMissing(database, 'buildings', 'hex_id text REFERENCES map_hexes(id)', 'hex_id');
+  addColumnIfMissing(database, 'buildings', "location_type text DEFAULT 'settlement' NOT NULL", 'location_type');
+  addColumnIfMissing(database, 'buildings', 'takes_building_slot integer DEFAULT 1 NOT NULL', 'takes_building_slot');
+  addColumnIfMissing(database, 'buildings', 'is_operational integer DEFAULT 1 NOT NULL', 'is_operational');
+  addColumnIfMissing(database, 'buildings', "maintenance_state text DEFAULT 'active' NOT NULL", 'maintenance_state');
+  addColumnIfMissing(database, 'buildings', 'allotted_gos_id text', 'allotted_gos_id');
+  addColumnIfMissing(database, 'buildings', 'custom_definition_id text', 'custom_definition_id');
+
+  database.exec(`
+    UPDATE buildings
+    SET takes_building_slot = CASE
+      WHEN type IN ('Gatehouse', 'Walls', 'Watchtower') THEN 0
+      ELSE COALESCE(takes_building_slot, 1)
+    END
+    WHERE location_type = 'settlement';
+  `);
+
+  database.exec(`
+    UPDATE buildings
+    SET allotted_gos_id = COALESCE(allotted_gos_id, guild_id)
+    WHERE allotted_gos_id IS NULL;
+  `);
+
+  backfillResourceIndustryState(database);
+}
+
+function ensureMapSchema(database: Database.Database) {
+  if (!tableExists(database, 'game_maps')) {
+    database.exec(`
+      CREATE TABLE game_maps (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        map_key text NOT NULL,
+        name text NOT NULL,
+        version integer NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'map_hexes')) {
+    database.exec(`
+      CREATE TABLE map_hexes (
+        id text PRIMARY KEY NOT NULL,
+        game_map_id text NOT NULL,
+        q integer NOT NULL,
+        r integer NOT NULL,
+        hex_kind text NOT NULL,
+        water_kind text,
+        terrain_type text,
+        territory_id text,
+        FOREIGN KEY (game_map_id) REFERENCES game_maps(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'map_hex_features')) {
+    database.exec(`
+      CREATE TABLE map_hex_features (
+        id text PRIMARY KEY NOT NULL,
+        hex_id text NOT NULL,
+        feature_type text NOT NULL,
+        name text,
+        metadata text,
+        FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'map_landmarks')) {
+    database.exec(`
+      CREATE TABLE map_landmarks (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        hex_id text NOT NULL,
+        name text NOT NULL,
+        kind text NOT NULL,
+        description text,
+        created_at integer,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+}
+
 function createIndexes(database: Database.Database) {
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS game_maps_game_id_unique
@@ -609,8 +1305,71 @@ export function initializeDatabaseSchema(database: Database.Database) {
 
     createBaseSchema(database);
     migrateSchema(database);
+    if (!columnExists(database, 'realms', 'immortals_troop_id')) {
+      database.exec('ALTER TABLE realms ADD COLUMN immortals_troop_id text;');
+    }
     createIndexes(database);
   } finally {
     database.pragma('foreign_keys = ON');
   }
+
+  if (settlementsRealmIdIsNotNull(database)) {
+    migrateSettlementsRealmIdToNullable(database);
+  }
+
+  if (buildingsSettlementIdIsNotNull(database)) {
+    migrateBuildingsToSupportStandaloneLocations(database);
+  }
+
+  ensureEconomySchema(database);
+  ensureGovernanceSchema(database);
+
+  if (tableExists(database, 'territories') && columnExists(database, 'territories', 'climate')) {
+    migrateTerritoriesDropClimate(database);
+  }
+
+  ensureMapSchema(database);
+
+  if (tableExists(database, 'games') && !columnExists(database, 'games', 'game_phase')) {
+    database.exec("ALTER TABLE games ADD COLUMN game_phase text NOT NULL DEFAULT 'Setup';");
+  }
+
+  if (tableExists(database, 'games') && !columnExists(database, 'games', 'init_state')) {
+    database.exec("ALTER TABLE games ADD COLUMN init_state text NOT NULL DEFAULT 'gm_world_setup';");
+  }
+
+  if (tableExists(database, 'games') && !columnExists(database, 'games', 'gm_setup_state')) {
+    database.exec("ALTER TABLE games ADD COLUMN gm_setup_state text NOT NULL DEFAULT 'pending';");
+  }
+
+  if (tableExists(database, 'realms') && !columnExists(database, 'realms', 'is_npc')) {
+    database.exec("ALTER TABLE realms ADD COLUMN is_npc integer NOT NULL DEFAULT 0;");
+  }
+
+  if (tableExists(database, 'games') && tableExists(database, 'territories') && tableExists(database, 'realms') && !tableExists(database, 'player_slots')) {
+    database.exec(`
+      CREATE TABLE player_slots (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        claim_code text NOT NULL UNIQUE,
+        territory_id text NOT NULL,
+        realm_id text,
+        display_name text,
+        setup_state text NOT NULL DEFAULT 'unclaimed',
+        claimed_at integer,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (tableExists(database, 'player_slots') && !columnExists(database, 'player_slots', 'setup_state')) {
+    database.exec("ALTER TABLE player_slots ADD COLUMN setup_state text NOT NULL DEFAULT 'unclaimed';");
+  }
+
+  backfillInitStateFromLegacyGamePhase(database);
+  backfillPlayerSlotSetupState(database);
+
+  database.pragma('foreign_keys = ON');
 }

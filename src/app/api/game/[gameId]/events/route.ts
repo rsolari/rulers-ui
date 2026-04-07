@@ -27,6 +27,13 @@ export async function POST(
     await requireGM(gameId);
     const body = await request.json();
 
+    if (body.eventType) {
+      return NextResponse.json(
+        { error: 'Governance events must use /api/game/:gameId/governance/events' },
+        { status: 400 },
+      );
+    }
+
     const id = uuid();
     const kind = (body.kind ?? 'gm_event') as TurnEventKind;
     const status = (body.status ?? 'open') as TurnEventStatus;

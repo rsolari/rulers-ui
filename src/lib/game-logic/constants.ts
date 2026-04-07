@@ -71,22 +71,37 @@ export interface TroopDef {
   requires: BuildingType[];
   upkeep: number;
   bonus: string;
+  combatBonuses: CombatBonus[];
+}
+
+export type CombatBonusTarget =
+  | 'Light'
+  | 'Armoured'
+  | 'Mounted'
+  | 'Troops'
+  | 'Walls'
+  | 'Buildings'
+  | 'Gates';
+
+export interface CombatBonus {
+  target: CombatBonusTarget;
+  value: number;
 }
 
 export const TROOP_DEFS: Record<TroopType, TroopDef> = {
-  Spearmen:      { type: 'Spearmen',      class: 'Basic', armourTypes: ['Light'],               requires: [],                                upkeep: 250,  bonus: '+1 vs Cavalry' },
-  Archers:       { type: 'Archers',       class: 'Basic', armourTypes: ['Light'],               requires: [],                                upkeep: 250,  bonus: '+2 vs Light' },
-  Shieldbearers: { type: 'Shieldbearers', class: 'Basic', armourTypes: ['Light'],               requires: ['Armoursmith'],                   upkeep: 500,  bonus: '+1 vs Cavalry, +1 vs Light' },
-  Berserkers:    { type: 'Berserkers',    class: 'Basic', armourTypes: ['Light'],               requires: ['Weaponsmith'],                   upkeep: 500,  bonus: '+2 vs Light' },
-  Crossbowmen:   { type: 'Crossbowmen',   class: 'Basic', armourTypes: ['Light'],               requires: ['Bowyer'],                        upkeep: 250,  bonus: '+1 vs Armoured' },
-  Harquebusiers: { type: 'Harquebusiers', class: 'Basic', armourTypes: ['Light'],               requires: ['Gunsmith'],                      upkeep: 250,  bonus: '+2 vs Armoured' },
-  LightCavalry:  { type: 'LightCavalry',  class: 'Basic', armourTypes: ['Light', 'Mounted'],    requires: ['Stables'],                       upkeep: 750,  bonus: '+2 vs Light' },
-  Pikemen:       { type: 'Pikemen',       class: 'Elite', armourTypes: ['Armoured'],            requires: ['Armoursmith'],                   upkeep: 750,  bonus: '+2 vs Cavalry' },
-  Swordsmen:     { type: 'Swordsmen',     class: 'Elite', armourTypes: ['Armoured'],            requires: ['Armoursmith', 'Weaponsmith'],    upkeep: 750,  bonus: '+2 vs Light' },
-  Fusiliers:     { type: 'Fusiliers',     class: 'Elite', armourTypes: ['Light'],               requires: ['Gunsmith'],                      upkeep: 500,  bonus: '+1 vs Light, +1 vs Armoured' },
-  Cavalry:       { type: 'Cavalry',       class: 'Elite', armourTypes: ['Armoured', 'Mounted'], requires: ['Armoursmith', 'Weaponsmith', 'Stables'], upkeep: 1000, bonus: '+4 vs Light' },
-  MountedArchers:{ type: 'MountedArchers',class: 'Elite', armourTypes: ['Light', 'Mounted'],    requires: ['Stables'],                       upkeep: 750,  bonus: '+2 vs Light' },
-  Dragoons:      { type: 'Dragoons',      class: 'Elite', armourTypes: ['Light', 'Mounted'],    requires: ['Gunsmith', 'Stables'],           upkeep: 750,  bonus: '+1 vs Light, +1 vs Armoured' },
+  Spearmen:      { type: 'Spearmen',      class: 'Basic', armourTypes: ['Light'],               requires: [],                                upkeep: 250,  bonus: '+1 vs Cavalry',               combatBonuses: [{ target: 'Mounted', value: 1 }] },
+  Archers:       { type: 'Archers',       class: 'Basic', armourTypes: ['Light'],               requires: [],                                upkeep: 250,  bonus: '+2 vs Light',                 combatBonuses: [{ target: 'Light', value: 2 }] },
+  Shieldbearers: { type: 'Shieldbearers', class: 'Basic', armourTypes: ['Light'],               requires: ['Armoursmith'],                   upkeep: 500,  bonus: '+1 vs Cavalry / +1 vs Light', combatBonuses: [{ target: 'Mounted', value: 1 }, { target: 'Light', value: 1 }] },
+  Berserkers:    { type: 'Berserkers',    class: 'Basic', armourTypes: ['Light'],               requires: ['Weaponsmith'],                   upkeep: 500,  bonus: '+2 vs Light',                 combatBonuses: [{ target: 'Light', value: 2 }] },
+  Crossbowmen:   { type: 'Crossbowmen',   class: 'Basic', armourTypes: ['Light'],               requires: ['Bowyer'],                        upkeep: 250,  bonus: '+1 vs Armoured',              combatBonuses: [{ target: 'Armoured', value: 1 }] },
+  Harquebusiers: { type: 'Harquebusiers', class: 'Basic', armourTypes: ['Light'],               requires: ['Gunsmith'],                      upkeep: 250,  bonus: '+2 vs Armoured',              combatBonuses: [{ target: 'Armoured', value: 2 }] },
+  LightCavalry:  { type: 'LightCavalry',  class: 'Basic', armourTypes: ['Light', 'Mounted'],    requires: ['Stables'],                       upkeep: 750,  bonus: '+2 vs Light',                 combatBonuses: [{ target: 'Light', value: 2 }] },
+  Pikemen:       { type: 'Pikemen',       class: 'Elite', armourTypes: ['Armoured'],            requires: ['Armoursmith'],                   upkeep: 750,  bonus: '+2 vs Cavalry',               combatBonuses: [{ target: 'Mounted', value: 2 }] },
+  Swordsmen:     { type: 'Swordsmen',     class: 'Elite', armourTypes: ['Armoured'],            requires: ['Armoursmith', 'Weaponsmith'],    upkeep: 750,  bonus: '+2 vs Light',                 combatBonuses: [{ target: 'Light', value: 2 }] },
+  Fusiliers:     { type: 'Fusiliers',     class: 'Elite', armourTypes: ['Light'],               requires: ['Gunsmith'],                      upkeep: 500,  bonus: '+2 vs Armoured',              combatBonuses: [{ target: 'Armoured', value: 2 }] },
+  Cavalry:       { type: 'Cavalry',       class: 'Elite', armourTypes: ['Armoured', 'Mounted'], requires: ['Armoursmith', 'Weaponsmith', 'Stables'], upkeep: 1000, bonus: '+2 vs Light',                 combatBonuses: [{ target: 'Light', value: 2 }] },
+  MountedArchers:{ type: 'MountedArchers',class: 'Elite', armourTypes: ['Light', 'Mounted'],    requires: ['Stables'],                       upkeep: 750,  bonus: '+2 vs Light',                 combatBonuses: [{ target: 'Light', value: 2 }] },
+  Dragoons:      { type: 'Dragoons',      class: 'Elite', armourTypes: ['Light', 'Mounted'],    requires: ['Gunsmith', 'Stables'],           upkeep: 750,  bonus: '+2 vs Armoured',              combatBonuses: [{ target: 'Armoured', value: 2 }] },
 };
 
 // ============================================================
@@ -99,14 +114,15 @@ export interface SiegeUnitDef {
   upkeep: number;
   constructionTurns: number;
   bonus: string;
+  combatBonuses: CombatBonus[];
 }
 
 export const SIEGE_UNIT_DEFS: Record<SiegeUnitType, SiegeUnitDef> = {
-  Catapult:     { type: 'Catapult',     requires: 'SiegeWorkshop',  upkeep: 750,  constructionTurns: 2, bonus: '+1 vs Walls' },
-  Trebuchet:    { type: 'Trebuchet',    requires: 'SiegeWorkshop',  upkeep: 1250, constructionTurns: 3, bonus: '+2 vs Buildings' },
-  Ballista:     { type: 'Ballista',     requires: 'SiegeWorkshop',  upkeep: 750,  constructionTurns: 2, bonus: '+1 vs Troops' },
-  BatteringRam: { type: 'BatteringRam', requires: 'SiegeWorkshop',  upkeep: 500,  constructionTurns: 1, bonus: '+4 vs Gates' },
-  Cannon:       { type: 'Cannon',       requires: 'CannonFoundry',  upkeep: 1500, constructionTurns: 3, bonus: '+2 vs Walls' },
+  Catapult:     { type: 'Catapult',     requires: 'SiegeWorkshop',  upkeep: 750,  constructionTurns: 2, bonus: '+2 vs Walls',     combatBonuses: [{ target: 'Walls', value: 2 }] },
+  Trebuchet:    { type: 'Trebuchet',    requires: 'SiegeWorkshop',  upkeep: 1250, constructionTurns: 3, bonus: '+2 vs Buildings', combatBonuses: [{ target: 'Walls', value: 2 }, { target: 'Buildings', value: 2 }] },
+  Ballista:     { type: 'Ballista',     requires: 'SiegeWorkshop',  upkeep: 750,  constructionTurns: 2, bonus: '+4 vs Troops',    combatBonuses: [{ target: 'Troops', value: 4 }] },
+  BatteringRam: { type: 'BatteringRam', requires: 'SiegeWorkshop',  upkeep: 500,  constructionTurns: 1, bonus: '+4 vs Gates',     combatBonuses: [{ target: 'Gates', value: 4 }] },
+  Cannon:       { type: 'Cannon',       requires: 'CannonFoundry',  upkeep: 1500, constructionTurns: 3, bonus: '+2 vs Walls',     combatBonuses: [{ target: 'Walls', value: 2 }] },
 };
 
 // ============================================================

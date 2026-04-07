@@ -63,7 +63,6 @@ describe('POST /api/game/[gameId]/noble-families', () => {
       id: 'family-1',
       realmId: 'realm-player',
       name: 'Vale',
-      isRulingFamily: true,
     });
   });
 

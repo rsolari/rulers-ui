@@ -2,6 +2,7 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB } from '@/db';
 import {
+  armies,
   buildings,
   economicEntries,
   economicSnapshots,
@@ -40,6 +41,7 @@ import {
   type EconomyRealmInput,
   type EconomyResult,
 } from '@/lib/game-logic/economy';
+import { getRequiredEstateLevelsForRealm } from '@/lib/game-logic/governance';
 import { resolveTradeNetwork } from '@/lib/game-logic/trade';
 import { prepareTurnReportFinancialActions } from '@/lib/turn-report-financial-actions';
 import type {
@@ -101,6 +103,7 @@ interface InvalidModifierEvent {
 interface LoadedEconomyState {
   game: typeof games.$inferSelect;
   realmRows: Array<typeof realms.$inferSelect>;
+  armyRows: Array<typeof armies.$inferSelect>;
   buildingRows: Array<typeof buildings.$inferSelect>;
   troopRows: Array<typeof troops.$inferSelect>;
   siegeUnitRows: Array<typeof siegeUnits.$inferSelect>;
@@ -358,6 +361,10 @@ function loadGameEconomyState(
     ? database.select().from(troops).where(inArray(troops.realmId, realmIds)).all()
     : [];
 
+  const armyRows = realmIds.length > 0
+    ? database.select().from(armies).where(inArray(armies.realmId, realmIds)).all()
+    : [];
+
   const siegeUnitRows = realmIds.length > 0
     ? database.select().from(siegeUnits).where(inArray(siegeUnits.realmId, realmIds)).all()
     : [];
@@ -579,32 +586,39 @@ function loadGameEconomyState(
     modifiersByRealm.set(realm.id, [...globalModifiers, ...realmModifiers]);
   }
 
-  const economyRealms: EconomyRealmInput[] = realmRows.map((realm) => ({
-    id: realm.id,
-    name: realm.name,
-    treasury: realm.treasury,
-    taxType: realm.taxType as TaxType,
-    levyExpiresYear: realm.levyExpiresYear,
-    levyExpiresSeason: realm.levyExpiresSeason as Season | null,
-    foodBalance: realm.foodBalance,
-    consecutiveFoodShortageSeasons: realm.consecutiveFoodShortageSeasons,
-    consecutiveFoodRecoverySeasons: realm.consecutiveFoodRecoverySeasons,
-    technicalKnowledge: parseJson<TechnicalKnowledgeKey[]>(realm.technicalKnowledge, []),
-    turmoilSources: buildRealmTurmoilSources({
-      storedSources: parseJson<TurmoilSource[]>(realm.turmoilSources, []),
-      nobleSources: nobleSourcesByRealm.get(realm.id),
-      gosSources: gosSourcesByRealm.get(realm.id),
-    }),
-    traditions: parseJson<Tradition[]>(realm.traditions, []),
-    territories: territoryRows
-      .filter((territory) => territory.realmId === realm.id)
-      .map((territory) => ({
-        id: territory.id,
-        name: territory.name,
-        foodCapBase: territory.foodCapBase,
-        foodCapBonus: territory.foodCapBonus,
-      })),
-    settlements: (settlementsByRealm.get(realm.id) ?? []).map((settlement) => ({
+  const economyRealms: EconomyRealmInput[] = realmRows.map((realm) => {
+    const realmSettlements = settlementsByRealm.get(realm.id) ?? [];
+    const requiredEstateByNobleId = getRequiredEstateLevelsForRealm({
+      realmRulerNobleId: realm.rulerNobleId,
+      settlements: realmSettlements,
+    });
+
+    return {
+      id: realm.id,
+      name: realm.name,
+      treasury: realm.treasury,
+      taxType: realm.taxType as TaxType,
+      levyExpiresYear: realm.levyExpiresYear,
+      levyExpiresSeason: realm.levyExpiresSeason as Season | null,
+      foodBalance: realm.foodBalance,
+      consecutiveFoodShortageSeasons: realm.consecutiveFoodShortageSeasons,
+      consecutiveFoodRecoverySeasons: realm.consecutiveFoodRecoverySeasons,
+      technicalKnowledge: parseJson<TechnicalKnowledgeKey[]>(realm.technicalKnowledge, []),
+      turmoilSources: buildRealmTurmoilSources({
+        storedSources: parseJson<TurmoilSource[]>(realm.turmoilSources, []),
+        nobleSources: nobleSourcesByRealm.get(realm.id),
+        gosSources: gosSourcesByRealm.get(realm.id),
+      }),
+      traditions: parseJson<Tradition[]>(realm.traditions, []),
+      territories: territoryRows
+        .filter((territory) => territory.realmId === realm.id)
+        .map((territory) => ({
+          id: territory.id,
+          name: territory.name,
+          foodCapBase: territory.foodCapBase,
+          foodCapBonus: territory.foodCapBonus,
+        })),
+      settlements: realmSettlements.map((settlement) => ({
       id: settlement.id,
       name: settlement.name,
       size: settlement.size as EconomyRealmInput['settlements'][number]['size'],
@@ -639,8 +653,8 @@ function loadGameEconomyState(
             : null,
         };
       }),
-    })),
-    standaloneBuildings: (standaloneBuildingsByRealm.get(realm.id) ?? []).map((building) => ({
+      })),
+      standaloneBuildings: (standaloneBuildingsByRealm.get(realm.id) ?? []).map((building) => ({
       id: building.id,
       type: building.type,
       size: building.size as EconomyRealmInput['standaloneBuildings'][number]['size'],
@@ -656,20 +670,20 @@ function loadGameEconomyState(
       id: troop.id,
       type: troop.type as EconomyRealmInput['troops'][number]['type'],
       recruitmentTurnsRemaining: troop.recruitmentTurnsRemaining,
-    })),
-    siegeUnits: (siegeUnitsByRealm.get(realm.id) ?? []).map((unit) => ({
+      })),
+      siegeUnits: (siegeUnitsByRealm.get(realm.id) ?? []).map((unit) => ({
       id: unit.id,
       type: unit.type as EconomyRealmInput['siegeUnits'][number]['type'],
       constructionTurnsRemaining: unit.constructionTurnsRemaining,
-    })),
+      })),
     nobles: (noblesByRealm.get(realm.id) ?? []).map((noble) => ({
       id: noble.id,
       name: noble.name,
       estateLevel: noble.estateLevel as EconomyRealmInput['nobles'][number]['estateLevel'],
-      isRuler: noble.isRuler,
+      requiredEstateLevel: requiredEstateByNobleId.get(noble.id) ?? null,
       isPrisoner: noble.isPrisoner,
     })),
-    tradeRoutes: tradeRouteRows
+      tradeRoutes: tradeRouteRows
       .filter((route) => route.realm1Id === realm.id || route.realm2Id === realm.id)
       .map((route) => ({
         id: route.id,
@@ -696,11 +710,13 @@ function loadGameEconomyState(
         financialActions: financialActionsByRealm.get(realm.id) ?? [],
       }
       : null,
-  }));
+    };
+  });
 
   return {
     game,
     realmRows,
+    armyRows,
     buildingRows,
     troopRows,
     siegeUnitRows,
@@ -1274,6 +1290,24 @@ export function createEconomyService(database: DB = defaultDb) {
         tx.update(troops)
           .set({ recruitmentTurnsRemaining: Math.max(troop.recruitmentTurnsRemaining - 1, 0) })
           .where(eq(troops.id, troop.id))
+          .run();
+      }
+
+      for (const army of state.armyRows) {
+        if (army.movementTurnsRemaining <= 0) continue;
+
+        const nextTurnsRemaining = Math.max(army.movementTurnsRemaining - 1, 0);
+        const arrivesThisTurn = nextTurnsRemaining === 0 && army.destinationTerritoryId;
+
+        tx.update(armies)
+          .set({
+            movementTurnsRemaining: nextTurnsRemaining,
+            locationTerritoryId: arrivesThisTurn ? army.destinationTerritoryId! : army.locationTerritoryId,
+            locationHexId: arrivesThisTurn ? army.destinationHexId : army.locationHexId,
+            destinationTerritoryId: arrivesThisTurn ? null : army.destinationTerritoryId,
+            destinationHexId: arrivesThisTurn ? null : army.destinationHexId,
+          })
+          .where(eq(armies.id, army.id))
           .run();
       }
 

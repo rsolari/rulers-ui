@@ -8,6 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
+import { NobleStatusEditor } from '@/components/governance/NobleStatusEditor';
+import { NobleActivityBadge } from '@/components/governance/NobleActivityBadge';
 import { GmTurnReviewPanel } from '@/components/turn-actions/gm-turn-review-panel';
 import { useRole } from '@/hooks/use-role';
 import type { EconomyOverviewRealmDto } from '@/lib/economy-dto';
@@ -1026,7 +1029,243 @@ export default function GMDashboard() {
         </CardContent>
       </Card>
 
+      {/* Governance Panel */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Governance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-ink-300 text-sm mb-4">Edit noble assignments, heir designations, and GM status text per realm.</p>
+          {realms.map((realm) => (
+            <GovernanceRealmPanel key={realm.id} gameId={gameId} realmId={realm.id} realmName={realm.name} />
+          ))}
+          {realms.length === 0 && <p className="text-ink-300 text-sm">No realms yet.</p>}
+        </CardContent>
+      </Card>
+
       <GmTurnReviewPanel gameId={gameId} />
     </main>
+  );
+}
+
+// ── Governance sub-panel (loaded per realm) ──
+
+interface GovNoble {
+  id: string;
+  name: string;
+  isRuler: boolean;
+  isHeir: boolean;
+  isActingRuler?: boolean;
+  title: string | null;
+  isPrisoner: boolean;
+  isAlive?: boolean;
+  gmStatusText: string | null;
+}
+
+interface GovSettlement {
+  id: string;
+  name: string;
+  size: string;
+  governingNobleId: string | null;
+}
+
+interface GovArmy {
+  id: string;
+  name: string;
+  generalId: string | null;
+}
+
+interface GovGOS {
+  id: string;
+  name: string;
+  type: string;
+  leaderId: string | null;
+}
+
+function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; realmId: string; realmName: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [nobles, setNobles] = useState<GovNoble[]>([]);
+  const [settlements, setSettlements] = useState<GovSettlement[]>([]);
+  const [armies, setArmies] = useState<GovArmy[]>([]);
+  const [gosList, setGosList] = useState<GovGOS[]>([]);
+  const [error, setError] = useState('');
+  const [loaded, setLoaded] = useState(false);
+
+  async function load() {
+    const [noblesRes, settRes, armiesRes, gosRes] = await Promise.all([
+      fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`),
+      fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
+      fetch(`/api/game/${gameId}/armies?realmId=${realmId}`),
+      fetch(`/api/game/${gameId}/gos?realmId=${realmId}`),
+    ]);
+    setNobles(await noblesRes.json());
+    setSettlements(await settRes.json());
+    const armyData = await armiesRes.json();
+    setArmies(armyData.armies ?? armyData);
+    setGosList(await gosRes.json());
+    setLoaded(true);
+  }
+
+  function toggle() {
+    if (!expanded && !loaded) void load();
+    setExpanded(!expanded);
+  }
+
+  const currentHeir = nobles.find((n) => n.isHeir);
+
+  async function callAssignEndpoint(url: string, nobleId: string | null): Promise<string | null> {
+    setError('');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nobleId }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const msg = data.error ?? 'Assignment failed';
+      setError(msg);
+      return msg;
+    }
+    await load();
+    return null;
+  }
+
+  async function assignGovernor(settlementId: string, nobleId: string | null) {
+    return callAssignEndpoint(`/api/game/${gameId}/settlements/${settlementId}/governor`, nobleId);
+  }
+
+  async function assignGeneral(armyId: string, nobleId: string | null) {
+    return callAssignEndpoint(`/api/game/${gameId}/armies/${armyId}/general`, nobleId);
+  }
+
+  async function assignLeader(gosId: string, nobleId: string | null) {
+    return callAssignEndpoint(`/api/game/${gameId}/gos/${gosId}/leader`, nobleId);
+  }
+
+  async function designateHeir(nobleId: string | null) {
+    setError('');
+    const response = await fetch(`/api/game/${gameId}/governance/heir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realmId, nobleId }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const msg = data.error ?? 'Failed to designate heir';
+      setError(msg);
+      return msg;
+    }
+    await load();
+    return null;
+  }
+
+  return (
+    <div className="medieval-border rounded mb-4">
+      <div
+        className="p-3 flex items-center justify-between cursor-pointer hover:bg-parchment-100/50"
+        onClick={toggle}
+      >
+        <div className="flex items-center gap-2">
+          <span className={`inline-block text-xs transition-transform ${expanded ? 'rotate-90' : ''}`}>&#9654;</span>
+          <span className="font-heading font-semibold">{realmName}</span>
+        </div>
+      </div>
+
+      {expanded && loaded && (
+        <div className="p-4 pt-0 space-y-6">
+          {error && <p className="text-sm text-red-500">{error}</p>}
+
+          {/* Heir */}
+          <div>
+            <p className="font-heading font-semibold text-sm mb-2">Heir Designation</p>
+            <NobleAssignmentSelect
+              label="Heir"
+              nobles={nobles.filter((n) => !n.isRuler && n.isAlive !== false && !n.isPrisoner)}
+              currentNobleId={currentHeir?.id ?? null}
+              onAssign={designateHeir}
+            />
+          </div>
+
+          {/* Settlements — Governors */}
+          {settlements.length > 0 && (
+            <div>
+              <p className="font-heading font-semibold text-sm mb-2">Settlement Governors</p>
+              <div className="space-y-3">
+                {settlements.map((s) => (
+                  <NobleAssignmentSelect
+                    key={s.id}
+                    label={`${s.name} (${s.size})`}
+                    nobles={nobles}
+                    currentNobleId={s.governingNobleId}
+                    onAssign={(nobleId) => assignGovernor(s.id, nobleId)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Armies — Generals */}
+          {armies.length > 0 && (
+            <div>
+              <p className="font-heading font-semibold text-sm mb-2">Army Generals</p>
+              <div className="space-y-3">
+                {armies.map((a) => (
+                  <NobleAssignmentSelect
+                    key={a.id}
+                    label={a.name}
+                    nobles={nobles}
+                    currentNobleId={a.generalId}
+                    onAssign={(nobleId) => assignGeneral(a.id, nobleId)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* GOS — Leaders */}
+          {gosList.length > 0 && (
+            <div>
+              <p className="font-heading font-semibold text-sm mb-2">Guild / Order / Society Leaders</p>
+              <div className="space-y-3">
+                {gosList.map((g) => (
+                  <NobleAssignmentSelect
+                    key={g.id}
+                    label={`${g.name} (${g.type})`}
+                    nobles={nobles}
+                    currentNobleId={g.leaderId}
+                    onAssign={(nobleId) => assignLeader(g.id, nobleId)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Noble status text */}
+          <div>
+            <p className="font-heading font-semibold text-sm mb-2">Noble Status & Activity</p>
+            <div className="space-y-3">
+              {nobles.map((noble) => (
+                <div key={noble.id} className="p-3 medieval-border rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-bold">{noble.name}</span>
+                    <NobleActivityBadge noble={noble} />
+                  </div>
+                  <NobleStatusEditor
+                    gameId={gameId}
+                    nobleId={noble.id}
+                    nobleName={noble.name}
+                    initialText={noble.gmStatusText}
+                    onSaved={(text) => {
+                      setNobles((prev) => prev.map((n) => n.id === noble.id ? { ...n, gmStatusText: text } : n));
+                    }}
+                  />
+                </div>
+              ))}
+              {nobles.length === 0 && <p className="text-ink-300 text-sm">No nobles in this realm.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

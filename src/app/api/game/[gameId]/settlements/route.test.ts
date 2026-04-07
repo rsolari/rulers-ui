@@ -73,6 +73,7 @@ describe('GET /api/game/[gameId]/settlements', () => {
         realmId: 'realm-1',
         name: 'Capital',
         size: 'Town',
+        governingNoble: null,
         buildings: [
           {
             id: 'building-1',

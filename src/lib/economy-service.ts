@@ -2,13 +2,16 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB } from '@/db';
 import {
+  armies,
   buildings,
   economicEntries,
   economicSnapshots,
   games,
   guildsOrdersSocieties,
   industries,
+  gosUnrestStates,
   nobles,
+  nobleGrievances,
   realms,
   resourceSites,
   settlements,
@@ -16,6 +19,7 @@ import {
   territories,
   tradeRoutes,
   troops,
+  turnActions,
   turnEvents,
   turnReports,
   turnResolutions,
@@ -23,11 +27,21 @@ import {
 import { BUILDING_DEFS, getNextSeason, SEASONS, SETTLEMENT_DATA, TERRITORY_FOOD_CAP, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { parseStoredEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 import {
+  buildRealmTurmoilSources,
+  createTurmoilReviewEventDraft,
+  createWinterUnrestEventDraft,
+  type TurmoilEventDraft,
+} from '@/lib/game-logic/turmoil-resolver';
+import { getActiveGOSUnrestSources, type GOSUnrestState } from '@/lib/gos-unrest-service';
+import { getActiveNobleGrievanceSources, type NobleGrievanceState } from '@/lib/noble-grievance-service';
+import { mapTurnActionRowToFinancialAction } from '@/lib/turn-action-service';
+import {
   projectEconomyForRealm,
   resolveEconomyForRealm,
   type EconomyRealmInput,
   type EconomyResult,
 } from '@/lib/game-logic/economy';
+import { getRequiredEstateLevelsForRealm } from '@/lib/game-logic/governance';
 import { resolveTradeNetwork } from '@/lib/game-logic/trade';
 import { prepareTurnReportFinancialActions } from '@/lib/turn-report-financial-actions';
 import type {
@@ -42,6 +56,7 @@ import type {
   Tradition,
   TroopType,
   TurmoilSource,
+  WinterUnrestLocationOption,
 } from '@/types/game';
 
 type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
@@ -57,9 +72,24 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
+function getRealmOpenTurmoilEvent(eventRows: Array<typeof turnEvents.$inferSelect>, realmId: string) {
+  return eventRows.find((event) =>
+    event.realmId === realmId
+    && event.status === 'open'
+    && (event.kind === 'turmoil_review' || event.kind === 'winter_unrest'),
+  ) ?? null;
+}
+
 function compareResolvedTurns(a: { year: number; season: string }, b: { year: number; season: string }) {
   if (a.year !== b.year) return b.year - a.year;
   return SEASONS.indexOf(b.season as Season) - SEASONS.indexOf(a.season as Season);
+}
+
+function deriveReportStatus(actions: Array<typeof turnActions.$inferSelect>) {
+  if (actions.length === 0) return 'draft';
+  if (actions.every((action) => action.status === 'executed')) return 'resolved';
+  if (actions.some((action) => action.status === 'submitted' || action.status === 'executed')) return 'submitted';
+  return 'draft';
 }
 
 const SETTLEMENT_GROWTH_ORDER: SettlementSize[] = ['Village', 'Town', 'City'];
@@ -73,10 +103,13 @@ interface InvalidModifierEvent {
 interface LoadedEconomyState {
   game: typeof games.$inferSelect;
   realmRows: Array<typeof realms.$inferSelect>;
+  armyRows: Array<typeof armies.$inferSelect>;
   buildingRows: Array<typeof buildings.$inferSelect>;
   troopRows: Array<typeof troops.$inferSelect>;
   siegeUnitRows: Array<typeof siegeUnits.$inferSelect>;
   reportRows: Array<typeof turnReports.$inferSelect>;
+  actionRows: Array<typeof turnActions.$inferSelect>;
+  eventRows: Array<typeof turnEvents.$inferSelect>;
   tradeRouteRows: Array<typeof tradeRoutes.$inferSelect>;
   economyRealms: EconomyRealmInput[];
   invalidModifierEvents: InvalidModifierEvent[];
@@ -283,9 +316,14 @@ function validateEconomyTurn(state: LoadedEconomyState): EconomyTurnValidationRe
   return { errors, warningsByRealm };
 }
 
-function loadGameEconomyState(database: DatabaseExecutor, gameId: string): LoadedEconomyState | null {
+function loadGameEconomyState(
+  database: DatabaseExecutor,
+  gameId: string,
+  financialActionStatuses: Array<typeof turnActions.$inferSelect['status']> = ['draft', 'submitted', 'executed'],
+): LoadedEconomyState | null {
   const game = database.select().from(games).where(eq(games.id, gameId)).get();
   if (!game) return null;
+  const currentSeason = game.currentSeason as Season;
 
   const realmRows = database.select().from(realms).where(eq(realms.gameId, gameId)).all();
   const territoryRows = database.select().from(territories).where(eq(territories.gameId, gameId)).all();
@@ -323,6 +361,10 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
     ? database.select().from(troops).where(inArray(troops.realmId, realmIds)).all()
     : [];
 
+  const armyRows = realmIds.length > 0
+    ? database.select().from(armies).where(inArray(armies.realmId, realmIds)).all()
+    : [];
+
   const siegeUnitRows = realmIds.length > 0
     ? database.select().from(siegeUnits).where(inArray(siegeUnits.realmId, realmIds)).all()
     : [];
@@ -334,18 +376,29 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
   const gosRows = realmIds.length > 0
     ? database.select().from(guildsOrdersSocieties).where(inArray(guildsOrdersSocieties.realmId, realmIds)).all()
     : [];
+  const nobleGrievanceRows = realmIds.length > 0
+    ? database.select().from(nobleGrievances).where(inArray(nobleGrievances.realmId, realmIds)).all()
+    : [];
+  const gosUnrestRows = realmIds.length > 0
+    ? database.select().from(gosUnrestStates).where(inArray(gosUnrestStates.realmId, realmIds)).all()
+    : [];
 
   const tradeRouteRows = database.select().from(tradeRoutes).where(eq(tradeRoutes.gameId, gameId)).all();
 
   const reportRows = database.select().from(turnReports).where(and(
     eq(turnReports.gameId, gameId),
     eq(turnReports.year, game.currentYear),
-    eq(turnReports.season, game.currentSeason),
+    eq(turnReports.season, currentSeason),
+  )).all();
+  const actionRows = database.select().from(turnActions).where(and(
+    eq(turnActions.gameId, gameId),
+    eq(turnActions.year, game.currentYear),
+    eq(turnActions.season, currentSeason),
   )).all();
   const eventRows = database.select().from(turnEvents).where(and(
     eq(turnEvents.gameId, gameId),
     eq(turnEvents.year, game.currentYear),
-    eq(turnEvents.season, game.currentSeason),
+    eq(turnEvents.season, currentSeason),
   )).all();
 
   const buildingsBySettlement = new Map<string, Array<typeof buildings.$inferSelect>>();
@@ -423,15 +476,32 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
     reportsByRealm.set(report.realmId, report);
   }
 
+  const financialActionsByRealm = new Map<string, FinancialAction[]>();
+  for (const action of actionRows) {
+    if (action.kind !== 'financial') continue;
+    if (!financialActionStatuses.includes(action.status)) continue;
+
+    const existing = financialActionsByRealm.get(action.realmId) ?? [];
+    existing.push(mapTurnActionRowToFinancialAction(action));
+    financialActionsByRealm.set(action.realmId, existing);
+  }
+
   const modifiersByRealm = new Map<string, ReturnType<typeof parseStoredEconomicModifiers>>();
+  const nobleSourcesByRealm = new Map<string, TurmoilSource[]>();
+  const gosSourcesByRealm = new Map<string, TurmoilSource[]>();
   const invalidModifierEvents: InvalidModifierEvent[] = [];
   const globalModifiers = eventRows
-    .filter((event) => !event.realmId)
+    .filter((event) => !event.realmId && event.kind === 'gm_event' && event.status !== 'dismissed')
     .flatMap((event) => {
       const rawEffect = event.mechanicalEffect?.trim();
       const modifiers = parseStoredEconomicModifiers(rawEffect, {
         description: event.description,
         idPrefix: event.id,
+        originYear: event.year,
+        originSeason: event.season as Season,
+        linkedEntityType: 'event',
+        linkedEntityId: event.id,
+        autoGenerated: event.autoGenerated,
       });
 
       if (rawEffect && modifiers.length === 0) {
@@ -446,13 +516,60 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
     });
 
   for (const realm of realmRows) {
+    const grievanceSources = getActiveNobleGrievanceSources(
+      nobleGrievanceRows
+        .filter((row) => row.realmId === realm.id)
+        .map((row) => ({
+          id: row.id,
+          realmId: row.realmId,
+          nobleId: row.nobleId,
+          kind: row.kind,
+          severity: row.severity,
+          sourceSettlementId: row.sourceSettlementId,
+          sourceTitle: row.sourceTitle,
+          notes: row.notes,
+          startedYear: row.startedYear,
+          startedSeason: row.startedSeason as Season,
+          expiresYear: row.expiresYear,
+          expiresSeason: row.expiresSeason as Season | null,
+          resolvedAt: row.resolvedAt,
+        }) satisfies NobleGrievanceState),
+      game.currentYear,
+      currentSeason,
+    );
+    const gosUnrestSources = getActiveGOSUnrestSources(
+      gosUnrestRows
+        .filter((row) => row.realmId === realm.id)
+        .map((row) => ({
+          id: row.id,
+          realmId: row.realmId,
+          gosId: row.gosId,
+          kind: row.kind,
+          severity: row.severity,
+          notes: row.notes,
+          startedYear: row.startedYear,
+          startedSeason: row.startedSeason as Season,
+          expiresYear: row.expiresYear,
+          expiresSeason: row.expiresSeason as Season | null,
+          resolvedAt: row.resolvedAt,
+        }) satisfies GOSUnrestState),
+      game.currentYear,
+      currentSeason,
+    );
+    nobleSourcesByRealm.set(realm.id, grievanceSources);
+    gosSourcesByRealm.set(realm.id, gosUnrestSources);
     const realmModifiers = eventRows
-      .filter((event) => event.realmId === realm.id)
+      .filter((event) => event.realmId === realm.id && event.kind === 'gm_event' && event.status !== 'dismissed')
       .flatMap((event) => {
         const rawEffect = event.mechanicalEffect?.trim();
         const modifiers = parseStoredEconomicModifiers(rawEffect, {
           description: event.description,
           idPrefix: event.id,
+          originYear: event.year,
+          originSeason: event.season as Season,
+          linkedEntityType: 'event',
+          linkedEntityId: event.id,
+          autoGenerated: event.autoGenerated,
         });
 
         if (rawEffect && modifiers.length === 0) {
@@ -469,29 +586,39 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
     modifiersByRealm.set(realm.id, [...globalModifiers, ...realmModifiers]);
   }
 
-  const economyRealms: EconomyRealmInput[] = realmRows.map((realm) => ({
-    id: realm.id,
-    name: realm.name,
-    treasury: realm.treasury,
-    taxType: realm.taxType as TaxType,
-    levyExpiresYear: realm.levyExpiresYear,
-    levyExpiresSeason: realm.levyExpiresSeason as Season | null,
-    foodBalance: realm.foodBalance,
-    consecutiveFoodShortageSeasons: realm.consecutiveFoodShortageSeasons,
-    consecutiveFoodRecoverySeasons: realm.consecutiveFoodRecoverySeasons,
-    technicalKnowledge: parseJson<TechnicalKnowledgeKey[]>(realm.technicalKnowledge, []),
-    turmoil: realm.turmoil,
-    turmoilSources: parseJson<TurmoilSource[]>(realm.turmoilSources, []),
-    traditions: parseJson<Tradition[]>(realm.traditions, []),
-    territories: territoryRows
-      .filter((territory) => territory.realmId === realm.id)
-      .map((territory) => ({
-        id: territory.id,
-        name: territory.name,
-        foodCapBase: territory.foodCapBase,
-        foodCapBonus: territory.foodCapBonus,
-      })),
-    settlements: (settlementsByRealm.get(realm.id) ?? []).map((settlement) => ({
+  const economyRealms: EconomyRealmInput[] = realmRows.map((realm) => {
+    const realmSettlements = settlementsByRealm.get(realm.id) ?? [];
+    const requiredEstateByNobleId = getRequiredEstateLevelsForRealm({
+      realmRulerNobleId: realm.rulerNobleId,
+      settlements: realmSettlements,
+    });
+
+    return {
+      id: realm.id,
+      name: realm.name,
+      treasury: realm.treasury,
+      taxType: realm.taxType as TaxType,
+      levyExpiresYear: realm.levyExpiresYear,
+      levyExpiresSeason: realm.levyExpiresSeason as Season | null,
+      foodBalance: realm.foodBalance,
+      consecutiveFoodShortageSeasons: realm.consecutiveFoodShortageSeasons,
+      consecutiveFoodRecoverySeasons: realm.consecutiveFoodRecoverySeasons,
+      technicalKnowledge: parseJson<TechnicalKnowledgeKey[]>(realm.technicalKnowledge, []),
+      turmoilSources: buildRealmTurmoilSources({
+        storedSources: parseJson<TurmoilSource[]>(realm.turmoilSources, []),
+        nobleSources: nobleSourcesByRealm.get(realm.id),
+        gosSources: gosSourcesByRealm.get(realm.id),
+      }),
+      traditions: parseJson<Tradition[]>(realm.traditions, []),
+      territories: territoryRows
+        .filter((territory) => territory.realmId === realm.id)
+        .map((territory) => ({
+          id: territory.id,
+          name: territory.name,
+          foodCapBase: territory.foodCapBase,
+          foodCapBonus: territory.foodCapBonus,
+        })),
+      settlements: realmSettlements.map((settlement) => ({
       id: settlement.id,
       name: settlement.name,
       size: settlement.size as EconomyRealmInput['settlements'][number]['size'],
@@ -526,8 +653,8 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
             : null,
         };
       }),
-    })),
-    standaloneBuildings: (standaloneBuildingsByRealm.get(realm.id) ?? []).map((building) => ({
+      })),
+      standaloneBuildings: (standaloneBuildingsByRealm.get(realm.id) ?? []).map((building) => ({
       id: building.id,
       type: building.type,
       size: building.size as EconomyRealmInput['standaloneBuildings'][number]['size'],
@@ -543,20 +670,20 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
       id: troop.id,
       type: troop.type as EconomyRealmInput['troops'][number]['type'],
       recruitmentTurnsRemaining: troop.recruitmentTurnsRemaining,
-    })),
-    siegeUnits: (siegeUnitsByRealm.get(realm.id) ?? []).map((unit) => ({
+      })),
+      siegeUnits: (siegeUnitsByRealm.get(realm.id) ?? []).map((unit) => ({
       id: unit.id,
       type: unit.type as EconomyRealmInput['siegeUnits'][number]['type'],
       constructionTurnsRemaining: unit.constructionTurnsRemaining,
-    })),
+      })),
     nobles: (noblesByRealm.get(realm.id) ?? []).map((noble) => ({
       id: noble.id,
       name: noble.name,
       estateLevel: noble.estateLevel as EconomyRealmInput['nobles'][number]['estateLevel'],
-      isRuler: noble.isRuler,
+      requiredEstateLevel: requiredEstateByNobleId.get(noble.id) ?? null,
       isPrisoner: noble.isPrisoner,
     })),
-    tradeRoutes: tradeRouteRows
+      tradeRoutes: tradeRouteRows
       .filter((route) => route.realm1Id === realm.id || route.realm2Id === realm.id)
       .map((route) => ({
         id: route.id,
@@ -580,19 +707,23 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
     report: reportsByRealm.has(realm.id)
       ? {
         id: reportsByRealm.get(realm.id)!.id,
-        financialActions: parseJson<FinancialAction[]>(reportsByRealm.get(realm.id)!.financialActions, []),
+        financialActions: financialActionsByRealm.get(realm.id) ?? [],
       }
       : null,
-  }));
+    };
+  });
 
   return {
     game,
     realmRows,
+    armyRows,
     buildingRows,
     troopRows,
     siegeUnitRows,
     reportRows,
+    actionRows,
     tradeRouteRows,
+    eventRows,
     economyRealms,
     invalidModifierEvents,
   };
@@ -632,7 +763,11 @@ function prepareEconomyReportActions(
   };
 }
 
-function formatProjectionResponse(result: EconomyResult, realm: EconomyRealmInput) {
+function formatProjectionResponse(
+  result: EconomyResult,
+  realm: EconomyRealmInput,
+  openEvent: typeof turnEvents.$inferSelect | null,
+) {
   return {
     realm: {
       id: realm.id,
@@ -650,6 +785,9 @@ function formatProjectionResponse(result: EconomyResult, realm: EconomyRealmInpu
     foodNeeded: result.food.needed,
     foodSurplus: result.food.surplus,
     projectedTurmoil: result.turmoil.closing,
+    turmoilBreakdown: result.turmoil.sources,
+    openTurmoilEventId: openEvent?.id ?? null,
+    winterUnrestPending: openEvent?.kind === 'winter_unrest',
     technicalKnowledge: result.technicalKnowledge,
     warnings: result.warnings,
     settlementBreakdown: result.settlementBreakdown,
@@ -678,6 +816,51 @@ function getNextSettlementSize(size: SettlementSize): SettlementSize | null {
   const currentIndex = SETTLEMENT_GROWTH_ORDER.indexOf(size);
   if (currentIndex < 0 || currentIndex === SETTLEMENT_GROWTH_ORDER.length - 1) return null;
   return SETTLEMENT_GROWTH_ORDER[currentIndex + 1];
+}
+
+function buildWinterUnrestLocationOptions(realm: EconomyRealmInput): WinterUnrestLocationOption[] {
+  return realm.settlements.map((settlement) => ({
+    settlementId: settlement.id,
+    settlementName: settlement.name,
+    territoryId: settlement.territoryId ?? '',
+    territoryName: realm.territories?.find((territory) => territory.id === settlement.territoryId)?.name ?? 'Unknown Territory',
+  }));
+}
+
+function buildNextTurnTurmoilEventDraft(args: {
+  gameId: string;
+  nextYear: number;
+  nextSeason: Season;
+  realm: EconomyRealmInput;
+  result: EconomyResult;
+}): TurmoilEventDraft | null {
+  if (args.result.turmoil.closing <= 0) {
+    return null;
+  }
+
+  if (args.nextSeason === 'Winter') {
+    return createWinterUnrestEventDraft({
+      gameId: args.gameId,
+      year: args.nextYear,
+      season: args.nextSeason,
+      realmId: args.realm.id,
+      realmName: args.realm.name,
+      projectedTurmoil: args.result.turmoil.closing,
+      turmoilBreakdown: args.result.turmoil.sources,
+      locationOptions: buildWinterUnrestLocationOptions(args.realm),
+    });
+  }
+
+  return createTurmoilReviewEventDraft({
+    gameId: args.gameId,
+    year: args.nextYear,
+    season: args.nextSeason,
+    realmId: args.realm.id,
+    realmName: args.realm.name,
+    projectedTurmoil: args.result.turmoil.closing,
+    buildingReduction: args.result.turmoil.buildingReduction,
+    turmoilBreakdown: args.result.turmoil.sources,
+  });
 }
 
 function resolveSettlementGrowth(
@@ -742,7 +925,7 @@ export function createEconomyService(database: DB = defaultDb) {
 
     return {
       game: state.game,
-      projection: formatProjectionResponse(result, realm),
+      projection: formatProjectionResponse(result, realm, getRealmOpenTurmoilEvent(state.eventRows, realm.id)),
     };
   }
 
@@ -791,6 +974,9 @@ export function createEconomyService(database: DB = defaultDb) {
           projectedTreasury: result.closingTreasury,
           foodSurplus: result.food.surplus,
           projectedTurmoil: result.turmoil.closing,
+          turmoilBreakdown: result.turmoil.sources,
+          openTurmoilEventId: getRealmOpenTurmoilEvent(state.eventRows, realm.id)?.id ?? null,
+          winterUnrestPending: getRealmOpenTurmoilEvent(state.eventRows, realm.id)?.kind === 'winter_unrest',
           warnings: result.warnings,
           warningCount: result.warnings.length,
         };
@@ -857,7 +1043,7 @@ export function createEconomyService(database: DB = defaultDb) {
         }
       }
 
-      const state = loadGameEconomyState(tx, gameId);
+      const state = loadGameEconomyState(tx, gameId, ['submitted', 'executed']);
       if (!state) return null;
 
       const currentSeason = state.game.currentSeason as Season;
@@ -966,6 +1152,7 @@ export function createEconomyService(database: DB = defaultDb) {
 
       const { season: nextSeason, yearIncrement } = getNextSeason(currentSeason);
       const nextYear = currentYear + yearIncrement;
+      const nextTurnEventDrafts: TurmoilEventDraft[] = [];
 
       for (const { realm, result } of resolvedRealms) {
         const snapshotId = uuid();
@@ -1019,11 +1206,21 @@ export function createEconomyService(database: DB = defaultDb) {
             consecutiveFoodShortageSeasons: result.food.consecutiveShortageSeasons,
             consecutiveFoodRecoverySeasons: result.food.consecutiveRecoverySeasons,
             technicalKnowledge: JSON.stringify(result.technicalKnowledge),
-            turmoil: result.turmoil.closing,
             turmoilSources: JSON.stringify(result.turmoil.sources),
           })
           .where(eq(realms.id, realm.id))
           .run();
+
+        const nextTurnEventDraft = buildNextTurnTurmoilEventDraft({
+          gameId,
+          nextYear,
+          nextSeason,
+          realm,
+          result,
+        });
+        if (nextTurnEventDraft) {
+          nextTurnEventDrafts.push(nextTurnEventDraft);
+        }
 
         for (const buildingState of result.buildingStates) {
           tx.update(buildings)
@@ -1072,6 +1269,10 @@ export function createEconomyService(database: DB = defaultDb) {
         }
       }
 
+      for (const eventDraft of nextTurnEventDrafts) {
+        tx.insert(turnEvents).values(eventDraft).run();
+      }
+
       for (const building of state.buildingRows) {
         if (building.constructionTurnsRemaining <= 0) continue;
         const nextTurnsRemaining = Math.max(building.constructionTurnsRemaining - 1, 0);
@@ -1089,6 +1290,24 @@ export function createEconomyService(database: DB = defaultDb) {
         tx.update(troops)
           .set({ recruitmentTurnsRemaining: Math.max(troop.recruitmentTurnsRemaining - 1, 0) })
           .where(eq(troops.id, troop.id))
+          .run();
+      }
+
+      for (const army of state.armyRows) {
+        if (army.movementTurnsRemaining <= 0) continue;
+
+        const nextTurnsRemaining = Math.max(army.movementTurnsRemaining - 1, 0);
+        const arrivesThisTurn = nextTurnsRemaining === 0 && army.destinationTerritoryId;
+
+        tx.update(armies)
+          .set({
+            movementTurnsRemaining: nextTurnsRemaining,
+            locationTerritoryId: arrivesThisTurn ? army.destinationTerritoryId! : army.locationTerritoryId,
+            locationHexId: arrivesThisTurn ? army.destinationHexId : army.locationHexId,
+            destinationTerritoryId: arrivesThisTurn ? null : army.destinationTerritoryId,
+            destinationHexId: arrivesThisTurn ? null : army.destinationHexId,
+          })
+          .where(eq(armies.id, army.id))
           .run();
       }
 
@@ -1123,15 +1342,26 @@ export function createEconomyService(database: DB = defaultDb) {
           .run();
       }
 
-      for (const report of state.reportRows) {
-        tx.update(turnReports)
+      for (const action of state.actionRows) {
+        if (action.kind !== 'financial' || action.status !== 'submitted') continue;
+
+        tx.update(turnActions)
           .set({
-            status: 'Resolved',
-            financialActions: JSON.stringify(
-              preparedReports.normalizedFinancialActionsByReportId.get(report.id)
-              ?? parseJson<FinancialAction[]>(report.financialActions, []),
-            ),
+            status: 'executed',
+            outcome: 'success',
+            resolutionSummary: action.resolutionSummary ?? 'Resolved automatically during economy turn advancement.',
+            executedAt: new Date(),
+            executedBy: action.executedBy ?? 'system',
+            updatedAt: new Date(),
           })
+          .where(eq(turnActions.id, action.id))
+          .run();
+      }
+
+      for (const report of state.reportRows) {
+        const reportActions = tx.select().from(turnActions).where(eq(turnActions.turnReportId, report.id)).all();
+        tx.update(turnReports)
+          .set({ status: deriveReportStatus(reportActions) })
           .where(eq(turnReports.id, report.id))
           .run();
       }

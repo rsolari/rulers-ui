@@ -2,29 +2,13 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { nobleFamilies, nobles } from '@/db/schema';
+import { nobleFamilies, nobles, realms } from '@/db/schema';
 import { isAuthError, requireInitState, requireRealmOwner, resolveSessionFromCookies } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
+import { appointRuler } from '@/lib/game-logic/governance';
+import { isGovernanceError } from '@/lib/game-logic/nobles';
 
-type RulerRecord = {
-  id: string;
-  familyId: string;
-  realmId: string;
-  name: string;
-  gender: string;
-  age: string;
-  race: string | null;
-  backstory: string | null;
-  personality: string | null;
-  relationshipWithRuler: string | null;
-  belief: string | null;
-  valuedObject: string | null;
-  valuedPerson: string | null;
-  greatestDesire: string | null;
-  familyName: string;
-};
-
-async function getRulerByRealmId(realmId: string): Promise<RulerRecord | undefined> {
+async function getRulerByRealmId(realmId: string) {
   return db.select({
     id: nobles.id,
     familyId: nobles.familyId,
@@ -41,10 +25,12 @@ async function getRulerByRealmId(realmId: string): Promise<RulerRecord | undefin
     valuedPerson: nobles.valuedPerson,
     greatestDesire: nobles.greatestDesire,
     familyName: nobleFamilies.name,
+    governanceState: realms.governanceState,
   })
     .from(nobles)
     .innerJoin(nobleFamilies, eq(nobles.familyId, nobleFamilies.id))
-    .where(and(eq(nobles.realmId, realmId), eq(nobles.isRuler, true)))
+    .innerJoin(realms, eq(realms.rulerNobleId, nobles.id))
+    .where(eq(realms.id, realmId))
     .get();
 }
 
@@ -62,7 +48,7 @@ export async function GET(request: Request) {
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ gameId: string }> }
+  { params }: { params: Promise<{ gameId: string }> },
 ) {
   try {
     const { gameId } = await params;
@@ -71,7 +57,7 @@ export async function POST(
     if (!body.name || !body.gender || !body.age || !body.personality) {
       return NextResponse.json(
         { error: 'name, gender, age, and personality are required' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -81,7 +67,7 @@ export async function POST(
     if (hasExistingFamily === hasNewFamily) {
       return NextResponse.json(
         { error: 'Provide exactly one of familyId or newFamilyName' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -89,10 +75,6 @@ export async function POST(
     const effectiveRealmId = session.gameId === gameId && session.role === 'player'
       ? session.realmId
       : body.realmId;
-
-    if (session.gameId === gameId && session.role === 'player' && !effectiveRealmId) {
-      return NextResponse.json({ error: 'Realm access required' }, { status: 403 });
-    }
 
     if (!effectiveRealmId) {
       return NextResponse.json({ error: 'realmId required' }, { status: 400 });
@@ -102,19 +84,14 @@ export async function POST(
     await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
 
     const created = db.transaction((tx) => {
-      const existingRuler = tx.select({ id: nobles.id })
-        .from(nobles)
-        .where(and(eq(nobles.realmId, effectiveRealmId), eq(nobles.isRuler, true)))
+      const existingRuler = tx.select({ rulerNobleId: realms.rulerNobleId })
+        .from(realms)
+        .where(eq(realms.id, effectiveRealmId))
         .get();
 
-      if (existingRuler) {
+      if (existingRuler?.rulerNobleId) {
         return { error: 'Realm already has a ruler', status: 409 as const };
       }
-
-      tx.update(nobleFamilies)
-        .set({ isRulingFamily: false })
-        .where(eq(nobleFamilies.realmId, effectiveRealmId))
-        .run();
 
       let familyId = body.familyId as string | undefined;
       let familyName = '';
@@ -127,7 +104,6 @@ export async function POST(
           id: familyId,
           realmId: effectiveRealmId,
           name: familyName,
-          isRulingFamily: true,
         }).run();
       } else if (familyId) {
         const family = tx.select({
@@ -143,24 +119,18 @@ export async function POST(
         }
 
         familyName = family.name;
-
-        tx.update(nobleFamilies)
-          .set({ isRulingFamily: true })
-          .where(eq(nobleFamilies.id, family.id))
-          .run();
       }
 
       const rulerId = uuid();
-
       tx.insert(nobles).values({
         id: rulerId,
         familyId: familyId!,
         realmId: effectiveRealmId,
+        originRealmId: effectiveRealmId,
+        displacedFromRealmId: null,
         name: body.name,
         gender: body.gender,
         age: body.age,
-        isRuler: true,
-        isHeir: false,
         race: body.race ?? null,
         backstory: body.backstory ?? null,
         personality: body.personality,
@@ -169,15 +139,38 @@ export async function POST(
         valuedObject: body.valuedObject ?? null,
         valuedPerson: body.valuedPerson ?? null,
         greatestDesire: body.greatestDesire ?? null,
-        title: body.title ?? null,
         estateLevel: body.estateLevel ?? 'Meagre',
         reasonSkill: body.reasonSkill ?? 0,
         cunningSkill: body.cunningSkill ?? 0,
+        isAlive: true,
+        deathYear: null,
+        deathSeason: null,
+        deathCause: null,
+        isPrisoner: false,
+        captorRealmId: null,
+        capturedYear: null,
+        capturedSeason: null,
+        releasedYear: null,
+        releasedSeason: null,
+        locationTerritoryId: null,
+        locationHexId: null,
       }).run();
+
+      appointRuler(tx, {
+        gameId,
+        realmId: effectiveRealmId,
+        nobleId: rulerId,
+        year: 1,
+        season: 'Spring',
+        description: `${body.name} was appointed as ruler.`,
+      });
 
       return {
         status: 201 as const,
-        ruler: {
+        realmId: effectiveRealmId,
+        rulerNobleId: rulerId,
+        governanceState: 'stable' as const,
+        noble: {
           id: rulerId,
           familyId: familyId!,
           realmId: effectiveRealmId,
@@ -202,10 +195,13 @@ export async function POST(
     }
 
     await recomputeGameInitState(gameId);
-
-    return NextResponse.json(created.ruler, { status: created.status });
+    return NextResponse.json(created, { status: created.status });
   } catch (error) {
     if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isGovernanceError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

@@ -1,15 +1,35 @@
-import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex, index, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 import type {
+  ActionAuthorRole,
+  ActionKind,
   BuildingLocationType,
   BuildingMaintenanceState,
+  AgeCategory,
+  BuildingSize,
+  FortificationMaterial,
+  EstateLevel,
   GameInitState,
   GamePhase,
+  Gender,
   GMSetupState,
+  GovernanceEventType,
+  GovernanceState,
+  GovernmentType,
+  GOSType,
+  NobleTitleType,
   PlayerSetupState,
+  ReportStatus,
   ResourceRarity,
   ResourceType,
+  Season,
+  SettlementSize,
+  TechnicalKnowledgeKey,
   TradeRoutePathMode,
+  TurnActionOutcome,
+  TurnActionStatus,
+  TurnEventKind,
+  TurnEventStatus,
 } from '@/types/game';
 import type { MapFeatureType, MapHexKind, MapTerrainType, WaterHexKind } from '@/lib/maps/types';
 
@@ -38,7 +58,12 @@ export const gamesRelations = relations(games, ({ many }) => ({
   playerSlots: many(playerSlots),
   tradeRoutes: many(tradeRoutes),
   turnReports: many(turnReports),
+  turnActions: many(turnActions),
   turnEvents: many(turnEvents),
+  nobleTitles: many(nobleTitles),
+  governanceEvents: many(governanceEvents),
+  nobleGrievances: many(nobleGrievances),
+  gosUnrestStates: many(gosUnrestStates),
   economicSnapshots: many(economicSnapshots),
   economicEntries: many(economicEntries),
   turnResolutions: many(turnResolutions),
@@ -52,8 +77,13 @@ export const realms = sqliteTable('realms', {
   id: text('id').primaryKey(),
   gameId: text('game_id').notNull().references(() => games.id),
   name: text('name').notNull(),
-  governmentType: text('government_type').notNull(),
+  governmentType: text('government_type').$type<GovernmentType>().notNull(),
+  governanceState: text('governance_state').$type<GovernanceState>().default('stable').notNull(),
+  rulerNobleId: text('ruler_noble_id').references((): AnySQLiteColumn => nobles.id),
+  heirNobleId: text('heir_noble_id').references((): AnySQLiteColumn => nobles.id),
+  actingRulerNobleId: text('acting_ruler_noble_id').references((): AnySQLiteColumn => nobles.id),
   traditions: text('traditions').default('[]').notNull(), // JSON array of 3 traditions
+  immortalsTroopId: text('immortals_troop_id'),
   isNPC: integer('is_npc', { mode: 'boolean' }).default(false).notNull(),
   treasury: integer('treasury').default(0).notNull(),
   taxType: text('tax_type').default('Tribute').notNull(),
@@ -72,6 +102,13 @@ export const realms = sqliteTable('realms', {
 
 export const realmsRelations = relations(realms, ({ one, many }) => ({
   game: one(games, { fields: [realms.gameId], references: [games.id] }),
+  ruler: one(nobles, { fields: [realms.rulerNobleId], references: [nobles.id], relationName: 'realm_ruler' }),
+  heir: one(nobles, { fields: [realms.heirNobleId], references: [nobles.id], relationName: 'realm_heir' }),
+  actingRuler: one(nobles, {
+    fields: [realms.actingRulerNobleId],
+    references: [nobles.id],
+    relationName: 'realm_acting_ruler',
+  }),
   territories: many(territories),
   settlements: many(settlements),
   playerSlots: many(playerSlots),
@@ -81,7 +118,13 @@ export const realmsRelations = relations(realms, ({ one, many }) => ({
   troops: many(troops),
   siegeUnits: many(siegeUnits),
   guildsOrdersSocieties: many(guildsOrdersSocieties),
+  nobleTitles: many(nobleTitles),
+  governanceEvents: many(governanceEvents),
   turnReports: many(turnReports),
+  turnActions: many(turnActions),
+  turnEvents: many(turnEvents),
+  nobleGrievances: many(nobleGrievances),
+  gosUnrestStates: many(gosUnrestStates),
   economicSnapshots: many(economicSnapshots),
   economicEntries: many(economicEntries),
 }));
@@ -212,18 +255,26 @@ export const settlements = sqliteTable('settlements', {
   hexId: text('hex_id').references(() => mapHexes.id),
   realmId: text('realm_id').references(() => realms.id),
   name: text('name').notNull(),
-  size: text('size').notNull(), // Village | Town | City
-  governingNobleId: text('governing_noble_id'),
+  size: text('size').$type<SettlementSize>().notNull(),
+  isCapital: integer('is_capital', { mode: 'boolean' }).default(false).notNull(),
+  governingNobleId: text('governing_noble_id').references(() => nobles.id),
 });
 
 export const settlementsRelations = relations(settlements, ({ one, many }) => ({
   territory: one(territories, { fields: [settlements.territoryId], references: [territories.id] }),
   hex: one(mapHexes, { fields: [settlements.hexId], references: [mapHexes.id] }),
   realm: one(realms, { fields: [settlements.realmId], references: [realms.id] }),
+  governingNoble: one(nobles, {
+    fields: [settlements.governingNobleId],
+    references: [nobles.id],
+    relationName: 'settlement_governor',
+  }),
   buildings: many(buildings),
   resourceSites: many(resourceSites),
   garrisonTroops: many(troops),
   garrisonSiegeUnits: many(siegeUnits),
+  nobleTitles: many(nobleTitles),
+  governanceEvents: many(governanceEvents),
 }));
 
 // ============================================================
@@ -303,9 +354,8 @@ export const industriesRelations = relations(industries, ({ one }) => ({
 
 export const nobleFamilies = sqliteTable('noble_families', {
   id: text('id').primaryKey(),
-  realmId: text('realm_id').notNull().references(() => realms.id),
+  realmId: text('realm_id').notNull().references((): AnySQLiteColumn => realms.id),
   name: text('name').notNull(),
-  isRulingFamily: integer('is_ruling_family', { mode: 'boolean' }).default(false).notNull(),
 });
 
 export const nobleFamiliesRelations = relations(nobleFamilies, ({ one, many }) => ({
@@ -319,13 +369,13 @@ export const nobleFamiliesRelations = relations(nobleFamilies, ({ one, many }) =
 
 export const nobles = sqliteTable('nobles', {
   id: text('id').primaryKey(),
-  familyId: text('family_id').notNull().references(() => nobleFamilies.id),
-  realmId: text('realm_id').notNull().references(() => realms.id),
+  familyId: text('family_id').notNull().references((): AnySQLiteColumn => nobleFamilies.id),
+  realmId: text('realm_id').notNull().references((): AnySQLiteColumn => realms.id),
+  originRealmId: text('origin_realm_id').notNull().references((): AnySQLiteColumn => realms.id),
+  displacedFromRealmId: text('displaced_from_realm_id').references((): AnySQLiteColumn => realms.id),
   name: text('name').notNull(),
-  gender: text('gender').notNull(),
-  age: text('age').notNull(),
-  isRuler: integer('is_ruler', { mode: 'boolean' }).default(false).notNull(),
-  isHeir: integer('is_heir', { mode: 'boolean' }).default(false).notNull(),
+  gender: text('gender').$type<Gender>().notNull(),
+  age: text('age').$type<AgeCategory>().notNull(),
   backstory: text('backstory'),
   race: text('race'),
 
@@ -337,30 +387,57 @@ export const nobles = sqliteTable('nobles', {
   valuedPerson: text('valued_person'),
   greatestDesire: text('greatest_desire'),
 
-  // Assignment
-  title: text('title'),
-  assignedSettlementId: text('assigned_settlement_id'),
-  assignedArmyId: text('assigned_army_id'),
-  assignedGuildId: text('assigned_guild_id'),
-
   // Estate
-  estateLevel: text('estate_level').default('Meagre').notNull(),
+  estateLevel: text('estate_level').$type<EstateLevel>().default('Meagre').notNull(),
 
   // Skills
   reasonSkill: integer('reason_skill').default(0).notNull(),
   cunningSkill: integer('cunning_skill').default(0).notNull(),
 
   // Status
+  isAlive: integer('is_alive', { mode: 'boolean' }).default(true).notNull(),
+  deathYear: integer('death_year'),
+  deathSeason: text('death_season').$type<Season>(),
+  deathCause: text('death_cause'),
   isPrisoner: integer('is_prisoner', { mode: 'boolean' }).default(false).notNull(),
-  prisonerOfRealmId: text('prisoner_of_realm_id'),
-  locationTerritoryId: text('location_territory_id'),
+  captorRealmId: text('captor_realm_id').references((): AnySQLiteColumn => realms.id),
+  capturedYear: integer('captured_year'),
+  capturedSeason: text('captured_season').$type<Season>(),
+  releasedYear: integer('released_year'),
+  releasedSeason: text('released_season').$type<Season>(),
+  gmStatusText: text('gm_status_text'),
+  locationTerritoryId: text('location_territory_id').references(() => territories.id),
   locationHexId: text('location_hex_id').references(() => mapHexes.id),
 });
 
-export const noblesRelations = relations(nobles, ({ one }) => ({
+export const noblesRelations = relations(nobles, ({ one, many }) => ({
   family: one(nobleFamilies, { fields: [nobles.familyId], references: [nobleFamilies.id] }),
   realm: one(realms, { fields: [nobles.realmId], references: [realms.id] }),
+  originRealm: one(realms, { fields: [nobles.originRealmId], references: [realms.id], relationName: 'noble_origin' }),
+  displacedFromRealm: one(realms, {
+    fields: [nobles.displacedFromRealmId],
+    references: [realms.id],
+    relationName: 'noble_displaced_from',
+  }),
+  captorRealm: one(realms, {
+    fields: [nobles.captorRealmId],
+    references: [realms.id],
+    relationName: 'noble_captor',
+  }),
+  locationTerritory: one(territories, {
+    fields: [nobles.locationTerritoryId],
+    references: [territories.id],
+  }),
   locationHex: one(mapHexes, { fields: [nobles.locationHexId], references: [mapHexes.id] }),
+  ruledRealm: many(realms, { relationName: 'realm_ruler' }),
+  inheritedRealm: many(realms, { relationName: 'realm_heir' }),
+  actingRealm: many(realms, { relationName: 'realm_acting_ruler' }),
+  governedSettlements: many(settlements, { relationName: 'settlement_governor' }),
+  commandedArmies: many(armies, { relationName: 'army_general' }),
+  ledSocieties: many(guildsOrdersSocieties, { relationName: 'gos_leader' }),
+  titles: many(nobleTitles),
+  governanceEvents: many(governanceEvents, { relationName: 'governance_event_noble' }),
+  relatedGovernanceEvents: many(governanceEvents, { relationName: 'governance_event_related_noble' }),
 }));
 
 // ============================================================
@@ -371,7 +448,7 @@ export const armies = sqliteTable('armies', {
   id: text('id').primaryKey(),
   realmId: text('realm_id').notNull().references(() => realms.id),
   name: text('name').notNull(),
-  generalId: text('general_id'),
+  generalId: text('general_id').references(() => nobles.id),
   locationTerritoryId: text('location_territory_id').notNull().references(() => territories.id),
   destinationTerritoryId: text('destination_territory_id'),
   locationHexId: text('location_hex_id').references(() => mapHexes.id),
@@ -381,6 +458,7 @@ export const armies = sqliteTable('armies', {
 
 export const armiesRelations = relations(armies, ({ one, many }) => ({
   realm: one(realms, { fields: [armies.realmId], references: [realms.id] }),
+  general: one(nobles, { fields: [armies.generalId], references: [nobles.id], relationName: 'army_general' }),
   locationTerritory: one(territories, { fields: [armies.locationTerritoryId], references: [territories.id] }),
   locationHex: one(mapHexes, {
     fields: [armies.locationHexId],
@@ -394,6 +472,8 @@ export const armiesRelations = relations(armies, ({ one, many }) => ({
   }),
   troops: many(troops),
   siegeUnits: many(siegeUnits),
+  nobleTitles: many(nobleTitles),
+  governanceEvents: many(governanceEvents),
 }));
 
 // ============================================================
@@ -471,14 +551,92 @@ export const guildsOrdersSocieties = sqliteTable('guilds_orders_societies', {
   id: text('id').primaryKey(),
   realmId: text('realm_id').notNull().references(() => realms.id),
   name: text('name').notNull(),
-  type: text('type').notNull(), // Guild | Order | Society
+  type: text('type').$type<GOSType>().notNull(),
   focus: text('focus'),
-  leaderId: text('leader_id'),
+  leaderId: text('leader_id').references(() => nobles.id),
   income: integer('income').default(0).notNull(),
 });
 
-export const guildsOrdersSocietiesRelations = relations(guildsOrdersSocieties, ({ one }) => ({
+export const guildsOrdersSocietiesRelations = relations(guildsOrdersSocieties, ({ one, many }) => ({
   realm: one(realms, { fields: [guildsOrdersSocieties.realmId], references: [realms.id] }),
+  leader: one(nobles, {
+    fields: [guildsOrdersSocieties.leaderId],
+    references: [nobles.id],
+    relationName: 'gos_leader',
+  }),
+  nobleTitles: many(nobleTitles),
+  governanceEvents: many(governanceEvents),
+}));
+
+// ============================================================
+// NOBLE TITLES
+// ============================================================
+
+export const nobleTitles = sqliteTable('noble_titles', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+  nobleId: text('noble_id').notNull().references(() => nobles.id),
+  type: text('type').$type<NobleTitleType>().notNull(),
+  label: text('label').notNull(),
+  settlementId: text('settlement_id').references(() => settlements.id),
+  armyId: text('army_id').references(() => armies.id),
+  gosId: text('gos_id').references(() => guildsOrdersSocieties.id),
+  isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
+  grantedYear: integer('granted_year').notNull(),
+  grantedSeason: text('granted_season').$type<Season>().notNull(),
+  revokedYear: integer('revoked_year'),
+  revokedSeason: text('revoked_season').$type<Season>(),
+  notes: text('notes'),
+});
+
+export const nobleTitlesRelations = relations(nobleTitles, ({ one }) => ({
+  game: one(games, { fields: [nobleTitles.gameId], references: [games.id] }),
+  realm: one(realms, { fields: [nobleTitles.realmId], references: [realms.id] }),
+  noble: one(nobles, { fields: [nobleTitles.nobleId], references: [nobles.id] }),
+  settlement: one(settlements, { fields: [nobleTitles.settlementId], references: [settlements.id] }),
+  army: one(armies, { fields: [nobleTitles.armyId], references: [armies.id] }),
+  gos: one(guildsOrdersSocieties, { fields: [nobleTitles.gosId], references: [guildsOrdersSocieties.id] }),
+}));
+
+// ============================================================
+// GOVERNANCE EVENTS
+// ============================================================
+
+export const governanceEvents = sqliteTable('governance_events', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+  year: integer('year').notNull(),
+  season: text('season').$type<Season>().notNull(),
+  eventType: text('event_type').$type<GovernanceEventType>().notNull(),
+  nobleId: text('noble_id').references(() => nobles.id),
+  relatedNobleId: text('related_noble_id').references(() => nobles.id),
+  settlementId: text('settlement_id').references(() => settlements.id),
+  armyId: text('army_id').references(() => armies.id),
+  gosId: text('gos_id').references(() => guildsOrdersSocieties.id),
+  payload: text('payload').default('{}').notNull(),
+  description: text('description').notNull(),
+  createdByRole: text('created_by_role').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const governanceEventsRelations = relations(governanceEvents, ({ one }) => ({
+  game: one(games, { fields: [governanceEvents.gameId], references: [games.id] }),
+  realm: one(realms, { fields: [governanceEvents.realmId], references: [realms.id] }),
+  noble: one(nobles, {
+    fields: [governanceEvents.nobleId],
+    references: [nobles.id],
+    relationName: 'governance_event_noble',
+  }),
+  relatedNoble: one(nobles, {
+    fields: [governanceEvents.relatedNobleId],
+    references: [nobles.id],
+    relationName: 'governance_event_related_noble',
+  }),
+  settlement: one(settlements, { fields: [governanceEvents.settlementId], references: [settlements.id] }),
+  army: one(armies, { fields: [governanceEvents.armyId], references: [armies.id] }),
+  gos: one(guildsOrdersSocieties, { fields: [governanceEvents.gosId], references: [guildsOrdersSocieties.id] }),
 }));
 
 // ============================================================
@@ -490,16 +648,91 @@ export const turnReports = sqliteTable('turn_reports', {
   gameId: text('game_id').notNull().references(() => games.id),
   realmId: text('realm_id').notNull().references(() => realms.id),
   year: integer('year').notNull(),
-  season: text('season').notNull(),
-  financialActions: text('financial_actions').default('[]').notNull(), // JSON
-  politicalActions: text('political_actions').default('[]').notNull(), // JSON
-  status: text('status').default('Draft').notNull(),
+  season: text('season').$type<Season>().notNull(),
+  status: text('status').$type<ReportStatus>().default('draft').notNull(),
   gmNotes: text('gm_notes'),
-});
+}, (table) => ([
+  uniqueIndex('turn_reports_game_realm_turn_unique').on(
+    table.gameId,
+    table.realmId,
+    table.year,
+    table.season,
+  ),
+]));
 
-export const turnReportsRelations = relations(turnReports, ({ one }) => ({
+export const turnActions = sqliteTable('turn_actions', {
+  id: text('id').primaryKey(),
+  turnReportId: text('turn_report_id').notNull().references(() => turnReports.id),
+  gameId: text('game_id').notNull().references(() => games.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+  year: integer('year').notNull(),
+  season: text('season').$type<Season>().notNull(),
+  kind: text('kind').$type<ActionKind>().notNull(),
+  status: text('status').$type<TurnActionStatus>().default('draft').notNull(),
+  outcome: text('outcome').$type<TurnActionOutcome>().default('pending').notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  description: text('description').default('').notNull(),
+  actionWords: text('action_words').default('[]').notNull(),
+  targetRealmId: text('target_realm_id'),
+  assignedNobleId: text('assigned_noble_id'),
+  triggerCondition: text('trigger_condition'),
+  financialType: text('financial_type'),
+  buildingType: text('building_type'),
+  troopType: text('troop_type'),
+  settlementId: text('settlement_id'),
+  territoryId: text('territory_id'),
+  material: text('material').$type<FortificationMaterial>(),
+  wallSize: text('wall_size').$type<BuildingSize>(),
+  isGuildOwned: integer('is_guild_owned', { mode: 'boolean' }),
+  guildId: text('guild_id'),
+  allottedGosId: text('allotted_gos_id'),
+  locationType: text('location_type').$type<BuildingLocationType>(),
+  buildingSize: text('building_size').$type<BuildingSize>(),
+  takesBuildingSlot: integer('takes_building_slot', { mode: 'boolean' }),
+  constructionTurns: integer('construction_turns'),
+  taxType: text('tax_type'),
+  technicalKnowledgeKey: text('technical_knowledge_key').$type<TechnicalKnowledgeKey>(),
+  cost: integer('cost').default(0).notNull(),
+  resolutionSummary: text('resolution_summary'),
+  submittedAt: integer('submitted_at', { mode: 'timestamp' }),
+  submittedBy: text('submitted_by'),
+  executedAt: integer('executed_at', { mode: 'timestamp' }),
+  executedBy: text('executed_by'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+}, (table) => ([
+  index('turn_actions_turn_lookup_idx').on(table.gameId, table.realmId, table.year, table.season),
+  index('turn_actions_turn_status_kind_idx').on(table.gameId, table.year, table.season, table.status, table.kind),
+  index('turn_actions_report_sort_idx').on(table.turnReportId, table.sortOrder),
+  index('turn_actions_realm_status_kind_idx').on(table.realmId, table.status, table.kind),
+]));
+
+export const actionComments = sqliteTable('action_comments', {
+  id: text('id').primaryKey(),
+  actionId: text('action_id').notNull().references(() => turnActions.id),
+  authorRole: text('author_role').$type<ActionAuthorRole>().notNull(),
+  authorLabel: text('author_label').notNull(),
+  body: text('body').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+}, (table) => ([
+  index('action_comments_action_created_idx').on(table.actionId, table.createdAt),
+]));
+
+export const turnReportsRelations = relations(turnReports, ({ one, many }) => ({
   game: one(games, { fields: [turnReports.gameId], references: [games.id] }),
   realm: one(realms, { fields: [turnReports.realmId], references: [realms.id] }),
+  actions: many(turnActions),
+}));
+
+export const turnActionsRelations = relations(turnActions, ({ one, many }) => ({
+  turnReport: one(turnReports, { fields: [turnActions.turnReportId], references: [turnReports.id] }),
+  game: one(games, { fields: [turnActions.gameId], references: [games.id] }),
+  realm: one(realms, { fields: [turnActions.realmId], references: [realms.id] }),
+  comments: many(actionComments),
+}));
+
+export const actionCommentsRelations = relations(actionComments, ({ one }) => ({
+  action: one(turnActions, { fields: [actionComments.actionId], references: [turnActions.id] }),
 }));
 
 // ============================================================
@@ -510,15 +743,92 @@ export const turnEvents = sqliteTable('turn_events', {
   id: text('id').primaryKey(),
   gameId: text('game_id').notNull().references(() => games.id),
   year: integer('year').notNull(),
-  season: text('season').notNull(),
+  season: text('season').$type<Season>().notNull(),
   realmId: text('realm_id').references(() => realms.id),
+  kind: text('kind').$type<TurnEventKind>().notNull(),
+  status: text('status').$type<TurnEventStatus>().notNull(),
+  title: text('title'),
   description: text('description').notNull(),
+  payload: text('payload').default('{}').notNull(),
   mechanicalEffect: text('mechanical_effect'),
-});
+  resolution: text('resolution'),
+  autoGenerated: integer('auto_generated', { mode: 'boolean' }).default(false).notNull(),
+  resolvedAt: integer('resolved_at', { mode: 'timestamp' }),
+  resolvedBy: text('resolved_by'),
+}, (table) => ([
+  index('turn_events_game_turn_status_idx').on(table.gameId, table.year, table.season, table.status),
+  index('turn_events_game_realm_turn_kind_idx').on(table.gameId, table.realmId, table.year, table.season, table.kind),
+]));
 
 export const turnEventsRelations = relations(turnEvents, ({ one }) => ({
   game: one(games, { fields: [turnEvents.gameId], references: [games.id] }),
   realm: one(realms, { fields: [turnEvents.realmId], references: [realms.id] }),
+}));
+
+export const nobleGrievances = sqliteTable('noble_grievances', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+  nobleId: text('noble_id').notNull().references(() => nobles.id),
+  kind: text('kind').notNull(),
+  severity: integer('severity').notNull(),
+  sourceSettlementId: text('source_settlement_id').references(() => settlements.id),
+  sourceTitle: text('source_title'),
+  notes: text('notes'),
+  startedYear: integer('started_year').notNull(),
+  startedSeason: text('started_season').$type<Season>().notNull(),
+  expiresYear: integer('expires_year'),
+  expiresSeason: text('expires_season').$type<Season>(),
+  resolvedAt: integer('resolved_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+}, (table) => ([
+  index('noble_grievances_realm_noble_kind_resolved_idx').on(
+    table.realmId,
+    table.nobleId,
+    table.kind,
+    table.resolvedAt,
+  ),
+  index('noble_grievances_game_realm_resolved_idx').on(table.gameId, table.realmId, table.resolvedAt),
+]));
+
+export const nobleGrievancesRelations = relations(nobleGrievances, ({ one }) => ({
+  game: one(games, { fields: [nobleGrievances.gameId], references: [games.id] }),
+  realm: one(realms, { fields: [nobleGrievances.realmId], references: [realms.id] }),
+  noble: one(nobles, { fields: [nobleGrievances.nobleId], references: [nobles.id] }),
+  sourceSettlement: one(settlements, {
+    fields: [nobleGrievances.sourceSettlementId],
+    references: [settlements.id],
+  }),
+}));
+
+export const gosUnrestStates = sqliteTable('gos_unrest_states', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+  gosId: text('gos_id').notNull().references(() => guildsOrdersSocieties.id),
+  kind: text('kind').notNull(),
+  severity: integer('severity').notNull(),
+  notes: text('notes'),
+  startedYear: integer('started_year').notNull(),
+  startedSeason: text('started_season').$type<Season>().notNull(),
+  expiresYear: integer('expires_year'),
+  expiresSeason: text('expires_season').$type<Season>(),
+  resolvedAt: integer('resolved_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+}, (table) => ([
+  index('gos_unrest_realm_gos_kind_resolved_idx').on(
+    table.realmId,
+    table.gosId,
+    table.kind,
+    table.resolvedAt,
+  ),
+  index('gos_unrest_game_realm_resolved_idx').on(table.gameId, table.realmId, table.resolvedAt),
+]));
+
+export const gosUnrestStatesRelations = relations(gosUnrestStates, ({ one }) => ({
+  game: one(games, { fields: [gosUnrestStates.gameId], references: [games.id] }),
+  realm: one(realms, { fields: [gosUnrestStates.realmId], references: [realms.id] }),
+  gos: one(guildsOrdersSocieties, { fields: [gosUnrestStates.gosId], references: [guildsOrdersSocieties.id] }),
 }));
 
 // ============================================================

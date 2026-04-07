@@ -49,11 +49,14 @@ export async function POST(
         gameId,
         name: body.name,
         governmentType: body.governmentType,
+        governanceState: 'stable',
+        rulerNobleId: null,
+        heirNobleId: null,
+        actingRulerNobleId: null,
         traditions: JSON.stringify(body.traditions || []),
         isNPC: false,
         treasury: 0,
         taxType: 'Tribute',
-        turmoil: 0,
         turmoilSources: '[]',
       }).run();
 
@@ -64,6 +67,7 @@ export async function POST(
         realmId,
         name: body.townName,
         size: 'Town',
+        isCapital: true,
         governingNobleId: null,
       }).run();
 

@@ -1,6 +1,7 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
+import { createRequire } from 'node:module';
 import { v4 as uuid } from 'uuid';
-import { db as defaultDb, type DB } from '@/db';
+import type { DB } from '@/db';
 import {
   armies,
   buildings,
@@ -65,6 +66,9 @@ const WALL_SIZE_BY_SETTLEMENT: Record<SettlementSize, BuildingSize> = {
   Town: 'Medium',
   City: 'Large',
 };
+const require = createRequire(import.meta.url);
+
+let cachedDefaultDb: DB | null = null;
 
 interface GosReference {
   id: string;
@@ -253,6 +257,16 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
 
 function dedupe<T>(values: T[]) {
   return [...new Set(values)];
+}
+
+function resolveDatabase(database?: DatabaseLike): DatabaseLike {
+  if (database) return database;
+
+  if (!cachedDefaultDb) {
+    cachedDefaultDb = require('../db').db as DB;
+  }
+
+  return cachedDefaultDb;
 }
 
 function assertKnownBuildingType(type: string): BuildingType {
@@ -1049,7 +1063,7 @@ export async function createBuilding(
   input: CreateBuildingInput,
   options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
 ) {
-  const database = options.database ?? defaultDb;
+  const database = resolveDatabase(options.database);
   const requestedHex = loadLandHex(database, input.hexId ?? null);
   const settlement = loadSettlement(database, input.settlementId ?? null);
   if (input.settlementId && !settlement) {
@@ -1133,7 +1147,7 @@ export function prepareRealmBuildingCreation(
   input: CreateBuildingInput,
   options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
 ) {
-  const database = options.database ?? defaultDb;
+  const database = resolveDatabase(options.database);
   const settlement = loadSettlement(database, input.settlementId ?? null);
   if (input.settlementId && !settlement) {
     throw new RuleValidationError('Settlement not found', 404, 'settlement_not_found', { settlementId: input.settlementId });
@@ -1189,7 +1203,7 @@ export async function createResourceSite(
   input: CreateResourceSiteInput,
   options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
 ) {
-  const database = options.database ?? defaultDb;
+  const database = resolveDatabase(options.database);
   const territory = loadTerritory(database, gameId, input.territoryId ?? null);
   const settlement = loadSettlement(database, input.settlementId ?? null);
 
@@ -1212,7 +1226,7 @@ export async function createTroopRecruitment(
   input: CreateTroopInput,
   options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
 ) {
-  const database = options.database ?? defaultDb;
+  const database = resolveDatabase(options.database);
   const realmId = input.realmId ?? null;
 
   if (!realmId) {
@@ -1407,7 +1421,7 @@ export function prepareRealmTroopRecruitment(
   input: CreateTroopInput,
   options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
 ) {
-  const database = options.database ?? defaultDb;
+  const database = resolveDatabase(options.database);
   const recruitmentSettlementId = input.recruitmentSettlementId ?? null;
 
   if (!recruitmentSettlementId) {
@@ -1492,7 +1506,7 @@ export async function createTradeRoute(
   input: CreateTradeRouteInput,
   options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
 ) {
-  const database = options.database ?? defaultDb;
+  const database = resolveDatabase(options.database);
   const realm1Id = input.realm1Id ?? null;
   const realm2Id = input.realm2Id ?? null;
   const settlement1 = loadSettlement(database, input.settlement1Id ?? null);

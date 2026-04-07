@@ -130,7 +130,6 @@ export async function POST(
             foodBalance: 0,
             consecutiveFoodShortageSeasons: 0,
             consecutiveFoodRecoverySeasons: 0,
-            turmoil: 0,
             turmoilSources: '[]',
           }).run();
         }

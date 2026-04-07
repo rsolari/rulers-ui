@@ -1,39 +1,40 @@
 'use client';
 
-import type { MouseEvent } from 'react';
+import { memo, type MouseEvent } from 'react';
 
 interface HexTileProps {
+  hexId: string;
   points: string;
   fill: string;
   overlayFill?: string | null;
-  isSelected: boolean;
-  isHovered: boolean;
-  onMouseEnter: (event: MouseEvent<SVGGElement>) => void;
-  onMouseMove: (event: MouseEvent<SVGGElement>) => void;
-  onMouseLeave: () => void;
-  onClick: () => void;
+  onHexEnter: (hexId: string, event: MouseEvent<SVGGElement>) => void;
+  onHexMove: (hexId: string, event: MouseEvent<SVGGElement>) => void;
+  onHexLeave: (hexId: string) => void;
+  onHexClick: (hexId: string) => void;
 }
 
-export function HexTile({
+export const HexTile = memo(function HexTile({
+  hexId,
   points,
   fill,
   overlayFill,
-  isSelected,
-  isHovered,
-  onMouseEnter,
-  onMouseMove,
-  onMouseLeave,
-  onClick,
+  onHexEnter,
+  onHexMove,
+  onHexLeave,
+  onHexClick,
 }: HexTileProps) {
-  const stroke = isSelected ? '#c49000' : isHovered ? '#4a3728' : 'rgba(58, 42, 30, 0.24)';
-
   return (
-    <g onMouseEnter={onMouseEnter} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} onClick={onClick}>
+    <g
+      onMouseEnter={(event) => onHexEnter(hexId, event)}
+      onMouseMove={(event) => onHexMove(hexId, event)}
+      onMouseLeave={() => onHexLeave(hexId)}
+      onClick={() => onHexClick(hexId)}
+    >
       <polygon
         points={points}
         fill={fill}
-        stroke={stroke}
-        strokeWidth={isSelected ? 2.5 : isHovered ? 1.6 : 1}
+        stroke="rgba(58, 42, 30, 0.24)"
+        strokeWidth={1}
         vectorEffect="non-scaling-stroke"
       />
       {overlayFill ? (
@@ -47,4 +48,4 @@ export function HexTile({
       ) : null}
     </g>
   );
-}
+});

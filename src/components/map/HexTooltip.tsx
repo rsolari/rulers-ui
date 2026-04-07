@@ -1,5 +1,6 @@
 'use client';
 
+import { forwardRef } from 'react';
 import type { HoveredHexData } from '@/components/map/types';
 
 interface HexTooltipProps {
@@ -18,7 +19,7 @@ function humanize(value: string | null | undefined) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export function HexTooltip({ hex, x, y }: HexTooltipProps) {
+export const HexTooltip = forwardRef<HTMLDivElement, HexTooltipProps>(function HexTooltip({ hex, x, y }, ref) {
   if (!hex) {
     return null;
   }
@@ -27,8 +28,9 @@ export function HexTooltip({ hex, x, y }: HexTooltipProps) {
 
   return (
     <div
+      ref={ref}
       className="pointer-events-none absolute z-20 w-72 rounded-lg border border-ink-200 bg-parchment-50/95 px-4 py-3 text-sm text-ink-600 shadow-lg backdrop-blur-sm"
-      style={{ left: x, top: y }}
+      style={{ left: 0, top: 0, transform: `translate(${x}px, ${y}px)` }}
     >
       <p className="font-heading text-base font-semibold text-ink-600">
         {hex.territoryName ?? 'Open Water'}
@@ -53,4 +55,4 @@ export function HexTooltip({ hex, x, y }: HexTooltipProps) {
       ) : null}
     </div>
   );
-}
+});

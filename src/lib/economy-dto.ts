@@ -1,4 +1,4 @@
-import type { ResourceType, TaxType } from '@/types/game';
+import type { ResourceType, TaxType, TurmoilSource } from '@/types/game';
 
 export interface EconomyLedgerEntryDto {
   kind: 'revenue' | 'cost' | 'adjustment';
@@ -45,6 +45,10 @@ export interface EconomyProjectionDto {
   foodProduced: number;
   foodNeeded: number;
   foodSurplus: number;
+  projectedTurmoil: number;
+  turmoilBreakdown: TurmoilSource[];
+  openTurmoilEventId?: string | null;
+  winterUnrestPending?: boolean;
   warnings: string[];
   settlementBreakdown: SettlementEconomyBreakdownDto[];
   projectedLedgerEntries: EconomyLedgerEntryDto[];
@@ -58,6 +62,10 @@ export interface EconomyOverviewRealmDto {
   projectedCosts: number;
   projectedTreasury: number;
   foodSurplus: number;
+  projectedTurmoil: number;
+  turmoilBreakdown: TurmoilSource[];
+  openTurmoilEventId?: string | null;
+  winterUnrestPending?: boolean;
   warnings: string[];
   warningCount: number;
 }

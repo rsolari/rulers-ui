@@ -266,7 +266,6 @@ describe('POST /api/game/[gameId]/setup', () => {
           foodBalance: 0,
           consecutiveFoodShortageSeasons: 0,
           consecutiveFoodRecoverySeasons: 0,
-          turmoil: 0,
           turmoilSources: '[]',
         },
       },

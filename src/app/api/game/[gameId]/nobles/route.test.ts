@@ -2,8 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nobles } from '@/db/schema';
 
 const dbMocks = vi.hoisted(() => {
-  const dbGet = vi.fn();
-  const where = vi.fn(() => ({ get: dbGet }));
+  const whereResults: unknown[] = [];
+  const getResults: unknown[] = [];
+  const where = vi.fn(() => {
+    const chain = {
+      get: vi.fn(() => {
+        const result = getResults.shift();
+        return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
+      }),
+      then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
+        const result = whereResults.shift();
+        return (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)).then(resolve, reject);
+      },
+    };
+
+    return chain;
+  });
   const from = vi.fn(() => ({ where }));
   const select = vi.fn(() => ({ from }));
   const insertValues = vi.fn();
@@ -14,7 +28,9 @@ const dbMocks = vi.hoisted(() => {
       select,
       insert,
     },
-    dbGet,
+    whereResults,
+    getResults,
+    where,
     insertValues,
     insert,
   };
@@ -39,12 +55,74 @@ vi.mock('@/lib/game-init-state', () => ({
   recomputeGameInitState: recomputeGameInitStateMock,
 }));
 
-import { POST } from './route';
+import { GET, POST } from './route';
+
+describe('GET /api/game/[gameId]/nobles', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbMocks.whereResults.length = 0;
+    dbMocks.getResults.length = 0;
+  });
+
+  it('returns nobles with gm status text and derived title flags', async () => {
+    dbMocks.getResults.push({
+      rulerNobleId: 'noble-1',
+      heirNobleId: 'noble-2',
+      actingRulerNobleId: null,
+    });
+    dbMocks.whereResults.push(
+      [
+        {
+          id: 'noble-1',
+          realmId: 'realm-1',
+          name: 'Lady Rowan',
+          gmStatusText: 'on a trade mission to Gondor',
+        },
+        {
+          id: 'noble-2',
+          realmId: 'realm-1',
+          name: 'Sir Ash',
+          gmStatusText: null,
+        },
+      ],
+      [{ id: 'settlement-1', name: 'Stonewatch', governingNobleId: 'noble-1' }],
+      [{ id: 'army-1', name: 'First Army', generalId: 'noble-2' }],
+      [{ id: 'gos-1', name: 'Silver Guild', leaderId: null }],
+    );
+
+    const response = await GET(new Request('http://localhost/api/game/game-1/nobles?realmId=realm-1'));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([
+      {
+        id: 'noble-1',
+        realmId: 'realm-1',
+        name: 'Lady Rowan',
+        gmStatusText: 'on a trade mission to Gondor',
+        isRuler: true,
+        isHeir: false,
+        isActingRuler: false,
+        title: 'Stonewatch Governor',
+      },
+      {
+        id: 'noble-2',
+        realmId: 'realm-1',
+        name: 'Sir Ash',
+        gmStatusText: null,
+        isRuler: false,
+        isHeir: true,
+        isActingRuler: false,
+        title: 'First Army General',
+      },
+    ]);
+  });
+});
 
 describe('POST /api/game/[gameId]/nobles', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.dbGet.mockReset();
+    dbMocks.whereResults.length = 0;
+    dbMocks.getResults.length = 0;
     dbMocks.insertValues.mockReset();
     uuidMock.mockReset();
     authMocks.requireOwnedRealmAccess.mockReset();
@@ -58,7 +136,7 @@ describe('POST /api/game/[gameId]/nobles', () => {
       realmId: 'realm-player',
       session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
     });
-    dbMocks.dbGet.mockResolvedValue({ id: 'family-1' });
+    dbMocks.getResults.push({ id: 'family-1' });
 
     const response = await POST(new Request('http://localhost/api/game/game-1/nobles', {
       method: 'POST',
@@ -93,6 +171,7 @@ describe('POST /api/game/[gameId]/nobles', () => {
         valuedObject: null,
         valuedPerson: null,
         greatestDesire: null,
+        gmStatusText: null,
       }),
     });
     expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
@@ -103,6 +182,7 @@ describe('POST /api/game/[gameId]/nobles', () => {
       familyId: 'family-1',
       realmId: 'realm-player',
       name: 'Sir Rowan',
+      gmStatusText: null,
     }));
   });
 
@@ -128,7 +208,7 @@ describe('POST /api/game/[gameId]/nobles', () => {
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: 'Realm ownership required' });
-    expect(dbMocks.dbGet).not.toHaveBeenCalled();
+    expect(dbMocks.getResults).toHaveLength(0);
     expect(dbMocks.insertValues).not.toHaveBeenCalled();
   });
 
@@ -138,7 +218,7 @@ describe('POST /api/game/[gameId]/nobles', () => {
       realmId: 'realm-player',
       session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
     });
-    dbMocks.dbGet.mockResolvedValue(undefined);
+    dbMocks.getResults.push(undefined);
 
     const response = await POST(new Request('http://localhost/api/game/game-1/nobles', {
       method: 'POST',

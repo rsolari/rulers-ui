@@ -217,6 +217,7 @@ function createBaseSchema(database: Database.Database) {
       captured_season text,
       released_year integer,
       released_season text,
+      gm_status_text text,
       location_territory_id text,
       location_hex_id text,
       FOREIGN KEY (family_id) REFERENCES noble_families(id) ON UPDATE no action ON DELETE no action,
@@ -443,6 +444,7 @@ function ensureGovernanceSchema(database: Database.Database) {
   addColumnIfMissing(database, 'nobles', 'captured_season text', 'captured_season');
   addColumnIfMissing(database, 'nobles', 'released_year integer', 'released_year');
   addColumnIfMissing(database, 'nobles', 'released_season text', 'released_season');
+  addColumnIfMissing(database, 'nobles', 'gm_status_text text', 'gm_status_text');
 
   database.exec(`
     UPDATE nobles

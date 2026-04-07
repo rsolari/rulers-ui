@@ -1,11 +1,41 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { buildings, games, settlements, territories, troops, siegeUnits } from '@/db/schema';
+import { buildings, games, nobles, settlements, territories, troops, siegeUnits } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
 import { getAvailableSettlementHexId, getLandHexById } from '@/lib/game-logic/maps';
 import { recomputeGameInitState } from '@/lib/game-init-state';
+
+type GoverningNobleSummary = {
+  id: string;
+  name: string;
+  gmStatusText: string | null;
+};
+
+async function getGoverningNobleMap(settlementList: Array<{
+  governingNobleId: string | null;
+}>) {
+  const governingNobleIds = [...new Set(
+    settlementList
+      .map((settlement) => settlement.governingNobleId)
+      .filter((nobleId): nobleId is string => Boolean(nobleId)),
+  )];
+
+  if (governingNobleIds.length === 0) {
+    return new Map<string, GoverningNobleSummary>();
+  }
+
+  const governingNobles = await db.select({
+    id: nobles.id,
+    name: nobles.name,
+    gmStatusText: nobles.gmStatusText,
+  })
+    .from(nobles)
+    .where(inArray(nobles.id, governingNobleIds));
+
+  return new Map(governingNobles.map((noble) => [noble.id, noble]));
+}
 
 export async function GET(
   request: Request,
@@ -19,19 +49,30 @@ export async function GET(
   if (realmId) {
     const settList = await db.select().from(settlements).where(eq(settlements.realmId, realmId));
     const settIds = settList.map((settlement) => settlement.id);
+    const governingNobleById = await getGoverningNobleMap(settList);
     const buildingList = settIds.length > 0
       ? await db.select().from(buildings).where(inArray(buildings.settlementId, settIds))
       : [];
 
     return NextResponse.json(settList.map((settlement) => ({
       ...settlement,
+      governingNoble: settlement.governingNobleId
+        ? governingNobleById.get(settlement.governingNobleId) ?? null
+        : null,
       buildings: buildingList.filter((building) => building.settlementId === settlement.id),
     })));
   }
 
   if (territoryId) {
     const settList = await db.select().from(settlements).where(eq(settlements.territoryId, territoryId));
-    return NextResponse.json(settList);
+    const governingNobleById = await getGoverningNobleMap(settList);
+
+    return NextResponse.json(settList.map((settlement) => ({
+      ...settlement,
+      governingNoble: settlement.governingNobleId
+        ? governingNobleById.get(settlement.governingNobleId) ?? null
+        : null,
+    })));
   }
 
   const territoryList = await db.select().from(territories).where(eq(territories.gameId, gameId));
@@ -43,12 +84,16 @@ export async function GET(
 
   const settList = await db.select().from(settlements).where(inArray(settlements.territoryId, territoryIds));
   const settIds = settList.map((settlement) => settlement.id);
+  const governingNobleById = await getGoverningNobleMap(settList);
   const buildingList = settIds.length > 0
     ? await db.select().from(buildings).where(inArray(buildings.settlementId, settIds))
     : [];
 
   return NextResponse.json(settList.map((settlement) => ({
     ...settlement,
+    governingNoble: settlement.governingNobleId
+      ? governingNobleById.get(settlement.governingNobleId) ?? null
+      : null,
     buildings: buildingList.filter((building) => building.settlementId === settlement.id),
   })));
 }

@@ -387,6 +387,7 @@ export const nobles = sqliteTable('nobles', {
   capturedSeason: text('captured_season').$type<Season>(),
   releasedYear: integer('released_year'),
   releasedSeason: text('released_season').$type<Season>(),
+  gmStatusText: text('gm_status_text'),
   locationTerritoryId: text('location_territory_id').references(() => territories.id),
   locationHexId: text('location_hex_id').references(() => mapHexes.id),
 });

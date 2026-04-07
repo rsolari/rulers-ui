@@ -130,6 +130,7 @@ export async function POST(
       capturedSeason: null,
       releasedYear: null,
       releasedSeason: null,
+      gmStatusText: null,
       locationTerritoryId: null,
       locationHexId: null,
     };

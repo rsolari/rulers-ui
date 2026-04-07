@@ -1,244 +1,54614 @@
-import type {
-  CuratedMapDefinition,
-  CuratedMapFeatureDefinition,
-  CuratedMapHexDefinition,
-  CuratedMapTerritoryDefinition,
-  HexCoordinate,
-  MapTerrainType,
-} from '@/lib/maps/types';
+import type { CuratedMapDefinition } from '@/lib/maps/types';
 
-const CLUSTER_OFFSETS: HexCoordinate[] = [
-  { q: 0, r: 1 },
-  { q: -1, r: 1 },
-  { q: -1, r: 0 },
-  { q: 0, r: -1 },
-  { q: 1, r: -1 },
-  { q: 1, r: 0 },
-  { q: 0, r: 0 },
-];
-
-const WORLD_TERRITORIES: Array<CuratedMapTerritoryDefinition & {
-  center: HexCoordinate;
-  terrainRing: readonly MapTerrainType[];
-}> = [
-  {
-    key: 'kingdom-1',
-    name: 'Kingdom 1',
-    description: 'A coastal northern kingdom with wooded uplands and exposed sea lanes.',
-    center: { q: -18, r: -8 },
-    terrainRing: ['forest', 'hills', 'forest', 'plains', 'mountains', 'plains', 'plains'],
-  },
-  {
-    key: 'kingdom-2',
-    name: 'Kingdom 2',
-    description: 'A fertile western mainland kingdom bordered by river valleys and coast.',
-    center: { q: -16, r: -1 },
-    terrainRing: ['plains', 'forest', 'plains', 'hills', 'hills', 'forest', 'plains'],
-  },
-  {
-    key: 'kingdom-3',
-    name: 'Kingdom 3',
-    description: 'An island realm with broken hills and narrow inland routes.',
-    center: { q: -6, r: -3 },
-    terrainRing: ['forest', 'plains', 'forest', 'hills', 'hills', 'plains', 'plains'],
-  },
-  {
-    key: 'kingdom-4',
-    name: 'Kingdom 4',
-    description: 'A northeastern kingdom defined by forested lowlands and mountain edges.',
-    center: { q: 6, r: -4 },
-    terrainRing: ['plains', 'forest', 'plains', 'forest', 'mountains', 'hills', 'plains'],
-  },
-  {
-    key: 'kingdom-5',
-    name: 'Kingdom 5',
-    description: 'A broad western heartland with forests, low hills, and marshy inlets.',
-    center: { q: -16, r: 6 },
-    terrainRing: ['forest', 'swamp', 'plains', 'hills', 'forest', 'plains', 'plains'],
-  },
-  {
-    key: 'kingdom-6',
-    name: 'Kingdom 6',
-    description: 'A central realm wrapped around straits, lakes, and broken high ground.',
-    center: { q: -6, r: 5 },
-    terrainRing: ['hills', 'forest', 'plains', 'swamp', 'mountains', 'plains', 'plains'],
-  },
-  {
-    key: 'kingdom-7',
-    name: 'Kingdom 7',
-    description: 'A maritime kingdom on scattered coasts with easy access to open water.',
-    center: { q: 6, r: 6 },
-    terrainRing: ['plains', 'forest', 'plains', 'plains', 'hills', 'forest', 'plains'],
-  },
-  {
-    key: 'kingdom-8',
-    name: 'Kingdom 8',
-    description: 'A southeastern subcontinent kingdom with jungles, deltas, and interior ridges.',
-    center: { q: -1, r: 13 },
-    terrainRing: ['jungle', 'forest', 'plains', 'hills', 'mountains', 'plains', 'plains'],
-  },
-  {
-    key: 'kingdom-9',
-    name: 'Kingdom 9',
-    description: 'A southwestern kingdom spanning plains, woods, and a rugged frontier.',
-    center: { q: -14, r: 12 },
-    terrainRing: ['forest', 'plains', 'forest', 'hills', 'hills', 'plains', 'plains'],
-  },
-  {
-    key: 'kingdom-10',
-    name: 'Kingdom 10',
-    description: 'A far-southwestern kingdom of broad plains and wet interior basins.',
-    center: { q: -18, r: 19 },
-    terrainRing: ['plains', 'forest', 'plains', 'swamp', 'hills', 'forest', 'plains'],
-  },
-  {
-    key: 'kingdom-11',
-    name: 'Kingdom 11',
-    description: 'A southern central kingdom divided by a mountain spine and river crossings.',
-    center: { q: -7, r: 20 },
-    terrainRing: ['forest', 'plains', 'hills', 'mountains', 'hills', 'plains', 'plains'],
-  },
-  {
-    key: 'kingdom-12',
-    name: 'Kingdom 12',
-    description: 'A remote southeastern archipelago kingdom with reefs and exposed sea trade.',
-    center: { q: 14, r: 20 },
-    terrainRing: ['jungle', 'plains', 'forest', 'hills', 'plains', 'forest', 'plains'],
-  },
-];
-
-const MANUAL_LAKE_COORDS: HexCoordinate[] = [
-  { q: -15, r: 8 },
-  { q: -4, r: 6 },
-  { q: -13, r: 15 },
-  { q: -9, r: 22 },
-];
-
-const MANUAL_FEATURES = new Map<string, CuratedMapFeatureDefinition[]>([
-  ['-18:-8', [{ type: 'river', name: 'Kingsrun' }]],
-  ['-6:5', [{ type: 'ford', name: 'Stone Ford' }]],
-  ['7:-5', [{ type: 'volcano', name: 'Ash Crown' }]],
-  ['14:19', [{ type: 'reef', name: 'Sable Reefs' }]],
-]);
-
-function toKey({ q, r }: HexCoordinate) {
-  return `${q}:${r}`;
-}
-
-function getNeighbors({ q, r }: HexCoordinate): HexCoordinate[] {
-  return [
-    { q: q + 1, r },
-    { q: q + 1, r: r - 1 },
-    { q, r: r - 1 },
-    { q: q - 1, r },
-    { q: q - 1, r: r + 1 },
-    { q, r: r + 1 },
-  ];
-}
-
-function buildLandHexes() {
-  const landHexes: CuratedMapHexDefinition[] = [];
-
-  for (const territory of WORLD_TERRITORIES) {
-    CLUSTER_OFFSETS.forEach((offset, index) => {
-      landHexes.push({
-        q: territory.center.q + offset.q,
-        r: territory.center.r + offset.r,
-        kind: 'land',
-        terrainType: territory.terrainRing[index] ?? 'plains',
-        territoryKey: territory.key,
-      });
-    });
-  }
-
-  return landHexes;
-}
-
-function buildWaterHexes(landHexes: CuratedMapHexDefinition[]) {
-  const occupied = new Set(landHexes.map((hex) => toKey(hex)));
-  const lakes = new Set(MANUAL_LAKE_COORDS.map(toKey));
-  const seaNeighbors = new Set<string>();
-
-  for (const lakeKey of lakes) {
-    occupied.add(lakeKey);
-  }
-
-  for (const hex of landHexes) {
-    for (const neighbor of getNeighbors(hex)) {
-      const neighborKey = toKey(neighbor);
-      if (!occupied.has(neighborKey)) {
-        seaNeighbors.add(neighborKey);
+// Generated by scripts/generate-world-v1.mjs from /Users/rafael/conductor/workspaces/rulers-ui/baghdad/.context/attachments/World 3 Draft.wxx.
+export const WORLD_V1_MAP_DEFINITION = {
+  "key": "world-v1",
+  "name": "World Map v1",
+  "version": 1,
+  "territories": [
+    {
+      "key": "kingdom-1",
+      "name": "Kingdom 1",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, hills, mountains."
+    },
+    {
+      "key": "kingdom-2",
+      "name": "Kingdom 2",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, mountains, forest."
+    },
+    {
+      "key": "kingdom-3",
+      "name": "Kingdom 3",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, hills, forest."
+    },
+    {
+      "key": "kingdom-4",
+      "name": "Kingdom 4",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, mountains, hills."
+    },
+    {
+      "key": "kingdom-5",
+      "name": "Kingdom 5",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, forest, hills."
+    },
+    {
+      "key": "kingdom-6",
+      "name": "Kingdom 6",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, hills, forest."
+    },
+    {
+      "key": "kingdom-7",
+      "name": "Kingdom 7",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, forest, hills."
+    },
+    {
+      "key": "kingdom-8",
+      "name": "Kingdom 8",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, mountains, forest."
+    },
+    {
+      "key": "kingdom-9",
+      "name": "Kingdom 9",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, forest, hills."
+    },
+    {
+      "key": "kingdom-10",
+      "name": "Kingdom 10",
+      "description": "Imported from World 3 Draft. Dominant terrain: plains, forest, hills."
+    },
+    {
+      "key": "kingdom-11",
+      "name": "Kingdom 11",
+      "description": "Imported from World 3 Draft. Dominant terrain: hills, mountains, plains."
+    },
+    {
+      "key": "kingdom-12",
+      "name": "Kingdom 12",
+      "description": "Imported from World 3 Draft. Dominant terrain: hills, forest, plains."
+    }
+  ],
+  "hexes": [
+    {
+      "q": 48,
+      "r": -85,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -85,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -84,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -84,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -84,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -84,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -83,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -83,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -83,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -83,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -83,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -83,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -82,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -82,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -82,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -82,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -82,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -82,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -82,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -82,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -81,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -80,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -79,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -78,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -77,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -76,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -75,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -74,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -73,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -73,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -72,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -72,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -72,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -72,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -72,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -72,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -72,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -71,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -71,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -71,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -71,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -71,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -71,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -71,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -71,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -70,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -70,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -70,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -70,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 23,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 24,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 25,
+      "r": -70,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -70,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -70,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -69,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -69,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -69,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 22,
+      "r": -69,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -69,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -69,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -69,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -69,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -68,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -68,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -67,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -67,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -66,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -66,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -65,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -65,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 23,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -64,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -64,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "volcano"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 23,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -63,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -63,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 22,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -62,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -62,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 34,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 36,
+      "r": -61,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -61,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 34,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -60,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 38,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -60,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 10,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 30,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 33,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 34,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 35,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 36,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -59,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 38,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -59,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 30,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 31,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 34,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -58,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -58,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 21,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 30,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 32,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 34,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -57,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -57,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 10,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "volcano"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 29,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 31,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 34,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -56,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -56,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 27,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 28,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 29,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -55,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -55,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 27,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 28,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 29,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 30,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 31,
+      "r": -54,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -54,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 15,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 27,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 28,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 29,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 30,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -53,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -53,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        },
+        {
+          "type": "volcano",
+          "metadata": {
+            "state": "dormant"
+          }
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 27,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 28,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 29,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -52,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -52,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "volcano"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 28,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 29,
+      "r": -51,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -51,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 25,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 26,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 27,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 28,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 29,
+      "r": -50,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -50,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -4,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -3,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 23,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 24,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -49,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -49,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -26,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -9,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-4",
+      "features": []
+    },
+    {
+      "q": 22,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -48,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -48,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -28,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -10,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -5,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 20,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 21,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -47,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -47,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -30,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 19,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -46,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -46,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -32,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -31,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -26,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -7,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -3,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 20,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -45,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -45,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -34,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -33,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -32,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -31,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-4",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -44,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -44,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -36,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -35,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -34,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -33,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -25,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -43,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -43,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -35,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -34,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -10,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -42,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -42,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -41,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -41,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -6,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 15,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -40,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -40,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -25,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 16,
+      "r": -39,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -39,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -41,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -38,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -38,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -43,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -42,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -41,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -23,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -37,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -37,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -43,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -42,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -41,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -36,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -36,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -42,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -41,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -25,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -21,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -13,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -1,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -35,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -42,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -41,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -27,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -13,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -5,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -3,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -2,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -1,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -34,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -42,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -41,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -28,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -26,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -22,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -4,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -3,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -2,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 10,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -33,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -43,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -22,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -32,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -42,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 9,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -31,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -43,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "volcano"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 7,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 8,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 9,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -30,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 6,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 7,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 8,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 9,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -29,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-1",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-3",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-3",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 5,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 6,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 9,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -28,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -37,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -35,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 5,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 7,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 10,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -27,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-1",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -36,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -35,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 5,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -26,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 10,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 5,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": []
+    },
+    {
+      "q": 6,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -25,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 10,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 5,
+      "r": -24,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -1,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-7",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -23,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -9,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -3,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -1,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 0,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 5,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 7,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 49,
+      "r": -22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -35,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -34,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 5,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 6,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 47,
+      "r": -21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 48,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -35,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -34,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 4,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 5,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 6,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 41,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 45,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 47,
+      "r": -20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 48,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -39,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -35,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 4,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 5,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 6,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 8,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 39,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 41,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 42,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 43,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 44,
+      "r": -19,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 45,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 5,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 6,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 8,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 36,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 38,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 39,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 40,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 41,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 42,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 43,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 44,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 45,
+      "r": -18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 46,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -17,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -16,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 6,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 36,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 37,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 38,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 39,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 40,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 42,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 43,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 44,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 46,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-2",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -11,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 6,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 34,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 35,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 36,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 37,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 38,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 39,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 40,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 42,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 43,
+      "r": -16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 44,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -13,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -11,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 34,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 35,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 36,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 38,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 39,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 40,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 44,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -19,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -15,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -13,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -9,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 5,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 25,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 27,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 33,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 34,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 35,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 37,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 38,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 39,
+      "r": -14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 40,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 48,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 49,
+      "r": -14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -14,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -13,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -11,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -10,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 22,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 23,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 24,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 26,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 27,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 28,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 29,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 33,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 34,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 35,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 38,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 40,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 46,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 47,
+      "r": -13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -15,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -14,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -13,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -11,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -10,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -9,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-6",
+      "features": [
+        {
+          "type": "coast"
+        },
+        {
+          "type": "volcano"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -3,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 3,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 4,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 30,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 32,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 33,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 34,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 35,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 36,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 37,
+      "r": -12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 38,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 44,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 45,
+      "r": -12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -18,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -17,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -16,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -15,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -14,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -13,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -11,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -10,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -9,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -8,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 1,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 2,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 32,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 33,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 34,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 35,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 36,
+      "r": -11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 37,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 42,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 43,
+      "r": -11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -17,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -16,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -15,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -14,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -12,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -11,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -10,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -9,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -8,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -3,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": 0,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 31,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 33,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 34,
+      "r": -10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 35,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 40,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 41,
+      "r": -10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -18,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -14,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -10,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -9,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -8,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -5,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -2,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 1,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 17,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 18,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 32,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 33,
+      "r": -9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 34,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 38,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 39,
+      "r": -9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -13,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -8,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -6,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": []
+    },
+    {
+      "q": -1,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 1,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 2,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 16,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 17,
+      "r": -8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 36,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 37,
+      "r": -8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -1,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 15,
+      "r": -7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 34,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 35,
+      "r": -7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-5",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -18,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 0,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "volcano",
+          "metadata": {
+            "state": "dormant"
+          }
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 14,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 15,
+      "r": -6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 16,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 32,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 33,
+      "r": -6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "jungle",
+      "territoryKey": "kingdom-5",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -21,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -19,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -18,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 10,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 13,
+      "r": -5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 14,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 30,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 31,
+      "r": -5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -17,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-8",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 9,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": []
+    },
+    {
+      "q": 12,
+      "r": -4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 13,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 28,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 29,
+      "r": -4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -20,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -19,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -18,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "volcano",
+          "metadata": {
+            "state": "dormant"
+          }
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 8,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 9,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 11,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 26,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 27,
+      "r": -3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -23,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -20,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 9,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 10,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 11,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 12,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": -2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 21,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 24,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 25,
+      "r": -2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -25,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -23,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": 7,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 9,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 10,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 18,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": -1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 20,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 22,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 23,
+      "r": -1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -26,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 5,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": 0,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-12",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 19,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 20,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 21,
+      "r": 0,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 3,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 5,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": 6,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 7,
+      "r": 1,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 18,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 19,
+      "r": 1,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -30,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -29,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -23,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 4,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 5,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": 2,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 8,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 16,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 17,
+      "r": 2,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -30,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -27,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -25,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -24,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -23,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -8,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": 3,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": 6,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 14,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 15,
+      "r": 3,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -30,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -29,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -28,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -24,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": 4,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 12,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 13,
+      "r": 4,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -42,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -41,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "desert",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -31,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -30,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -26,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": 5,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 10,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 11,
+      "r": 5,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -43,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -42,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -41,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -31,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -30,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -26,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": 6,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 8,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 9,
+      "r": 6,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        },
+        {
+          "type": "volcano"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -31,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -30,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -13,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -12,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -9,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -7,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": 7,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 6,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 7,
+      "r": 7,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -44,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -31,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -30,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -14,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -11,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -8,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -4,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -3,
+      "r": 8,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -2,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 4,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 5,
+      "r": 8,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -37,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -31,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -30,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -12,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -10,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -8,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -5,
+      "r": 9,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 2,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 3,
+      "r": 9,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -33,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -32,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -31,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -30,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -16,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -15,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -11,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -8,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -6,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -5,
+      "r": 10,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -4,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 0,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": 1,
+      "r": 10,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -33,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -32,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -31,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -30,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -20,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -17,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -7,
+      "r": 11,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -2,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -1,
+      "r": 11,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -33,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -32,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -31,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -21,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -16,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -15,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -7,
+      "r": 12,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -6,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -4,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -3,
+      "r": 12,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-9",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -33,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -23,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -22,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -20,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -10,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -9,
+      "r": 13,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -8,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -6,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -5,
+      "r": 13,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -27,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -26,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -24,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -21,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -19,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": []
+    },
+    {
+      "q": -18,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -16,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -13,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": 14,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -8,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -7,
+      "r": 14,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -28,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -25,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -23,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -21,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -19,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -14,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": 15,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -10,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -9,
+      "r": 15,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -29,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -27,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -25,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -24,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "lake"
+    },
+    {
+      "q": -22,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": 16,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -17,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -12,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -11,
+      "r": 16,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -30,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -29,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -26,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -25,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -23,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -21,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -20,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": 17,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -18,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -14,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -13,
+      "r": 17,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -40,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -39,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -31,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -30,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -29,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -28,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -27,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -26,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -25,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": 18,
+      "kind": "land",
+      "terrainType": "mountains",
+      "territoryKey": "kingdom-11",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -22,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -16,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -15,
+      "r": 18,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -43,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -41,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -33,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -32,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -31,
+      "r": 19,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -30,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -29,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -28,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -27,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -26,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -25,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -18,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -17,
+      "r": 19,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -42,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -34,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -33,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -31,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -30,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -29,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -28,
+      "r": 20,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -27,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -26,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -25,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -20,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -19,
+      "r": 20,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 21,
+      "kind": "land",
+      "terrainType": "swamp",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -37,
+      "r": 21,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -36,
+      "r": 21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -35,
+      "r": 21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -34,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -33,
+      "r": 21,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -31,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -30,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -29,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -28,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -27,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -26,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -25,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -22,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -21,
+      "r": 21,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": []
+    },
+    {
+      "q": -38,
+      "r": 22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -37,
+      "r": 22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": 22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -35,
+      "r": 22,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -34,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -33,
+      "r": 22,
+      "kind": "land",
+      "terrainType": "forest",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -32,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -31,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -30,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -29,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -28,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -27,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -26,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -25,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -24,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -23,
+      "r": 22,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 23,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -39,
+      "r": 23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": 23,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -36,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -35,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -34,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -33,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -32,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -31,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -30,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -29,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -28,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -27,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -26,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -25,
+      "r": 23,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 24,
+      "kind": "land",
+      "terrainType": "hills",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -40,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 24,
+      "kind": "land",
+      "terrainType": "plains",
+      "territoryKey": "kingdom-10",
+      "features": [
+        {
+          "type": "coast"
+        }
+      ]
+    },
+    {
+      "q": -38,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -36,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -35,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -34,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -33,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -32,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -31,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -30,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -29,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -28,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -27,
+      "r": 24,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -36,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -35,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -34,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -33,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -32,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -31,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -30,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -29,
+      "r": 25,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -36,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -35,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -34,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -33,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -32,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -31,
+      "r": 26,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -36,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -35,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -34,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -33,
+      "r": 27,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -36,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -35,
+      "r": 28,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -38,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -37,
+      "r": 29,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -40,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -39,
+      "r": 30,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -42,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -41,
+      "r": 31,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -44,
+      "r": 32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -43,
+      "r": 32,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -46,
+      "r": 33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -45,
+      "r": 33,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -48,
+      "r": 34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -47,
+      "r": 34,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -50,
+      "r": 35,
+      "kind": "water",
+      "waterKind": "sea"
+    },
+    {
+      "q": -49,
+      "r": 35,
+      "kind": "water",
+      "waterKind": "sea"
+    }
+  ],
+  "suggestedStarts": [
+    {
+      "territoryKey": "kingdom-1",
+      "hex": {
+        "q": -34,
+        "r": -35
+      }
+    },
+    {
+      "territoryKey": "kingdom-2",
+      "hex": {
+        "q": -32,
+        "r": -25
+      }
+    },
+    {
+      "territoryKey": "kingdom-3",
+      "hex": {
+        "q": -7,
+        "r": -43
+      }
+    },
+    {
+      "territoryKey": "kingdom-4",
+      "hex": {
+        "q": 19,
+        "r": -58
+      }
+    },
+    {
+      "territoryKey": "kingdom-5",
+      "hex": {
+        "q": -29,
+        "r": -17
+      }
+    },
+    {
+      "territoryKey": "kingdom-6",
+      "hex": {
+        "q": -11,
+        "r": -21
+      }
+    },
+    {
+      "territoryKey": "kingdom-7",
+      "hex": {
+        "q": 12,
+        "r": -34
+      }
+    },
+    {
+      "territoryKey": "kingdom-8",
+      "hex": {
+        "q": -2,
+        "r": -11
+      }
+    },
+    {
+      "territoryKey": "kingdom-9",
+      "hex": {
+        "q": -30,
+        "r": 0
+      }
+    },
+    {
+      "territoryKey": "kingdom-10",
+      "hex": {
+        "q": -32,
+        "r": 14
+      }
+    },
+    {
+      "territoryKey": "kingdom-11",
+      "hex": {
+        "q": -10,
+        "r": 5
+      }
+    },
+    {
+      "territoryKey": "kingdom-12",
+      "hex": {
+        "q": 31,
+        "r": -14
       }
     }
-  }
-
-  const waterHexes: CuratedMapHexDefinition[] = [];
-
-  for (const coordinate of MANUAL_LAKE_COORDS) {
-    waterHexes.push({
-      ...coordinate,
-      kind: 'water',
-      waterKind: 'lake',
-    });
-  }
-
-  for (const key of seaNeighbors) {
-    const [qValue, rValue] = key.split(':');
-    waterHexes.push({
-      q: Number(qValue),
-      r: Number(rValue),
-      kind: 'water',
-      waterKind: 'sea',
-    });
-  }
-
-  return waterHexes;
-}
-
-function applyFeatures(hexes: CuratedMapHexDefinition[]) {
-  const landCoordsWithSeaNeighbors = new Set<string>();
-  const waterCoords = new Set(
-    hexes
-      .filter((hex): hex is Extract<CuratedMapHexDefinition, { kind: 'water' }> => hex.kind === 'water')
-      .map(toKey),
-  );
-
-  for (const hex of hexes) {
-    if (hex.kind !== 'land') {
-      continue;
-    }
-
-    if (getNeighbors(hex).some((neighbor) => waterCoords.has(toKey(neighbor)))) {
-      landCoordsWithSeaNeighbors.add(toKey(hex));
-    }
-  }
-
-  return hexes.map((hex) => {
-    const features = [
-      ...(hex.features ?? []),
-      ...(landCoordsWithSeaNeighbors.has(toKey(hex)) ? [{ type: 'coast' as const }] : []),
-      ...(MANUAL_FEATURES.get(toKey(hex)) ?? []),
-    ];
-
-    return features.length > 0 ? { ...hex, features } : hex;
-  });
-}
-
-const LAND_HEXES = buildLandHexes();
-const WORLD_V1_HEXES = applyFeatures([...LAND_HEXES, ...buildWaterHexes(LAND_HEXES)]);
-
-export const WORLD_V1_MAP_DEFINITION: CuratedMapDefinition = {
-  key: 'world-v1',
-  name: 'World Map v1',
-  version: 1,
-  territories: WORLD_TERRITORIES.map(({ center, terrainRing, ...territory }) => {
-    void center;
-    void terrainRing;
-    return territory;
-  }),
-  hexes: WORLD_V1_HEXES,
-  suggestedStarts: WORLD_TERRITORIES.map((territory) => ({
-    territoryKey: territory.key,
-    hex: territory.center,
-  })),
-};
+  ]
+} satisfies CuratedMapDefinition;

@@ -96,7 +96,6 @@ export const realms = sqliteTable('realms', {
   borrowedAmount: integer('borrowed_amount').default(0).notNull(),
   loanRepaymentPerSeason: integer('loan_repayment_per_season').default(0).notNull(),
   loanRepaymentSeasonsRemaining: integer('loan_repayment_seasons_remaining').default(0).notNull(),
-  turmoil: integer('turmoil').default(0).notNull(),
   turmoilSources: text('turmoil_sources').default('[]').notNull(), // JSON array
 });
 

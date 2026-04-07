@@ -94,6 +94,7 @@ export function HexMap({ data }: HexMapProps) {
   const [selectedHexId, setSelectedHexId] = useState<string | null>(null);
   const [hoveredHex, setHoveredHex] = useState<HoveredHexData | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 16, y: 16 });
+  const [isDragging, setIsDragging] = useState(false);
 
   const territoryById = useMemo(
     () => new Map(data.territories.map((territory) => [territory.id, territory])),
@@ -197,6 +198,7 @@ export function HexMap({ data }: HexMapProps) {
       startViewBox: viewBox,
       moved: false,
     };
+    setIsDragging(true);
   }
 
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
@@ -246,6 +248,7 @@ export function HexMap({ data }: HexMapProps) {
       startViewBox: null,
       moved: false,
     };
+    setIsDragging(false);
   }
 
   function handleWheel(event: WheelEvent<SVGSVGElement>) {
@@ -293,7 +296,7 @@ export function HexMap({ data }: HexMapProps) {
         onPointerUp={finishPointer}
         onPointerCancel={finishPointer}
         onWheel={handleWheel}
-        style={{ cursor: dragStateRef.current.startViewBox ? 'grabbing' : 'grab' }}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       >
         <rect
           x={viewBox.x - HEX_SIZE}

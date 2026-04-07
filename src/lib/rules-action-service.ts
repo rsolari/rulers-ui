@@ -5,6 +5,7 @@ import {
   armies,
   buildings,
   guildsOrdersSocieties,
+  mapHexes,
   realms,
   resourceSites,
   settlements,
@@ -65,6 +66,7 @@ interface GosReference {
 interface PlacementSettlement {
   id: string;
   territoryId: string;
+  hexId?: string | null;
   realmId: string | null;
   name: string;
   size: SettlementSize;
@@ -193,6 +195,7 @@ export interface PreparedTradeRouteCreation {
 interface CreateBuildingInput {
   settlementId?: string | null;
   territoryId?: string | null;
+  hexId?: string | null;
   type: string;
   material?: string | null;
   instant?: boolean;
@@ -854,10 +857,38 @@ function loadSettlement(database: DatabaseLike, settlementId?: string | null): P
   return {
     id: settlement.id,
     territoryId: settlement.territoryId,
+    hexId: settlement.hexId ?? null,
     realmId: settlement.realmId ?? null,
     name: settlement.name,
     size: settlement.size as SettlementSize,
   };
+}
+
+function loadLandHex(database: DatabaseLike, hexId?: string | null) {
+  if (!hexId) return null;
+
+  return database.select({
+    id: mapHexes.id,
+    territoryId: mapHexes.territoryId,
+  })
+    .from(mapHexes)
+    .where(and(
+      eq(mapHexes.id, hexId),
+      eq(mapHexes.hexKind, 'land'),
+    ))
+    .get();
+}
+
+function loadFirstLandHexForTerritory(database: DatabaseLike, territoryId?: string | null) {
+  if (!territoryId) return null;
+
+  return database.select({ id: mapHexes.id })
+    .from(mapHexes)
+    .where(and(
+      eq(mapHexes.territoryId, territoryId),
+      eq(mapHexes.hexKind, 'land'),
+    ))
+    .get();
 }
 
 function loadRealmRuleAccess(database: DatabaseLike, gameId: string, realmId: string | null) {
@@ -972,17 +1003,47 @@ export async function createBuilding(
   options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
 ) {
   const database = options.database ?? defaultDb;
+  const requestedHex = loadLandHex(database, input.hexId ?? null);
   const settlement = loadSettlement(database, input.settlementId ?? null);
   if (input.settlementId && !settlement) {
     throw new RuleValidationError('Settlement not found', 404, 'settlement_not_found', { settlementId: input.settlementId });
   }
 
-  const derivedTerritoryId = settlement?.territoryId ?? input.territoryId ?? null;
+  if (input.hexId && !requestedHex) {
+    throw new RuleValidationError('Building must be placed on a land hex', 400, 'building_hex_invalid', {
+      hexId: input.hexId,
+    });
+  }
+
+  if (settlement && requestedHex && requestedHex.territoryId !== settlement.territoryId) {
+    throw new RuleValidationError(
+      'Settlement hex must match the settlement territory',
+      400,
+      'building_settlement_hex_mismatch',
+      { settlementId: settlement.id, hexId: requestedHex.id, territoryId: settlement.territoryId },
+    );
+  }
+
+  const buildingType = assertKnownBuildingType(input.type);
+  const derivedTerritoryId = settlement?.territoryId ?? requestedHex?.territoryId ?? input.territoryId ?? null;
   const territory = loadTerritory(database, gameId, derivedTerritoryId);
   if (derivedTerritoryId && !territory) {
     throw new RuleValidationError('Territory not found', 404, 'territory_not_found', { territoryId: derivedTerritoryId, gameId });
   }
 
+  if (requestedHex && territory && requestedHex.territoryId !== territory.id) {
+    throw new RuleValidationError(
+      'Building hex does not belong to the specified territory',
+      400,
+      'building_hex_territory_mismatch',
+      { hexId: requestedHex.id, territoryId: territory.id },
+    );
+  }
+
+  const effectiveHexId = settlement?.hexId
+    ?? requestedHex?.id
+    ?? loadFirstLandHexForTerritory(database, territory?.id ?? null)?.id
+    ?? null;
   const realmId = settlement?.realmId ?? territory?.realmId ?? null;
   const ruleAccess = loadRealmRuleAccess(database, gameId, realmId);
   const existingBuildings = settlement
@@ -999,6 +1060,7 @@ export async function createBuilding(
 
   const prepared = prepareBuildingCreation({
     ...input,
+    type: buildingType,
     territoryId: derivedTerritoryId,
   }, {
     gameId,
@@ -1008,7 +1070,13 @@ export async function createBuilding(
     ...ruleAccess,
   }, options.idGenerator);
 
-  database.insert(buildings).values(prepared.row).run();
+  const row = {
+    ...prepared.row,
+    hexId: effectiveHexId,
+  };
+
+  database.insert(buildings).values(row).run();
+  prepared.row = row;
   return prepared;
 }
 

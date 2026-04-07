@@ -29,7 +29,6 @@ const TRADITION_OPTIONS = Object.entries(TRADITION_DEFS).map(([key, def]) => ({
 interface Territory {
   id: string;
   name: string;
-  climate: string | null;
   description: string | null;
 }
 
@@ -170,7 +169,6 @@ export default function CreateRealmPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2 flex-wrap">
-              {territory.climate && <Badge>{territory.climate}</Badge>}
               <Badge variant="gold">Realm Territory</Badge>
             </div>
             {territory.description && <p className="text-sm text-ink-300">{territory.description}</p>}

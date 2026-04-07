@@ -1,4 +1,14 @@
-import type { MapHexData } from '@/components/map/types';
+export interface BorderHexData {
+  id: string;
+  q: number;
+  r: number;
+  territoryId: string | null;
+}
+
+export interface TerritoryBorderSegment {
+  path: string;
+  territoryId: string | null;
+}
 
 export interface PixelPoint {
   x: number;
@@ -79,13 +89,13 @@ export function computeViewBox(hexPixels: PixelPoint[], size: number): ViewBox {
   };
 }
 
-export function computeTerritoryBorders(
-  hexes: MapHexData[],
+export function computeTerritoryBorderSegments(
+  hexes: BorderHexData[],
   hexPixels: Map<string, PixelPoint>,
   size: number
-): string[] {
+): TerritoryBorderSegment[] {
   const coordMap = new Map(hexes.map((hex) => [`${hex.q},${hex.r}`, hex]));
-  const segments: string[] = [];
+  const segments: TerritoryBorderSegment[] = [];
 
   for (const hex of hexes) {
     if (!hex.territoryId) {
@@ -109,9 +119,20 @@ export function computeTerritoryBorders(
       const [fromIndex, toIndex] = EDGE_CORNERS[directionIndex];
       const from = corners[fromIndex];
       const to = corners[toIndex];
-      segments.push(`M ${from.x} ${from.y} L ${to.x} ${to.y}`);
+      segments.push({
+        path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+        territoryId: hex.territoryId,
+      });
     });
   }
 
   return segments;
+}
+
+export function computeTerritoryBorders(
+  hexes: BorderHexData[],
+  hexPixels: Map<string, PixelPoint>,
+  size: number
+): string[] {
+  return computeTerritoryBorderSegments(hexes, hexPixels, size).map((segment) => segment.path);
 }

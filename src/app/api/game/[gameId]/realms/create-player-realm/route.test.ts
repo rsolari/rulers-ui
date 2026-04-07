@@ -53,7 +53,7 @@ const gameInitStateMocks = vi.hoisted(() => ({
 }));
 
 const mapMocks = vi.hoisted(() => ({
-  getAvailableSettlementHexId: vi.fn(),
+  isSettlementHexAvailable: vi.fn(),
 }));
 
 const uuidMock = vi.hoisted(() => vi.fn());
@@ -82,7 +82,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
       gameId: 'game-1',
       name: 'Westreach',
     });
-    mapMocks.getAvailableSettlementHexId.mockResolvedValue('hex-1');
+    mapMocks.isSettlementHexAvailable.mockResolvedValue(true);
     gameInitStateMocks.recomputeGameInitState.mockResolvedValue(undefined);
   });
 
@@ -97,6 +97,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
         name: 'Aster',
         governmentType: 'Monarch',
         townName: 'Highgate',
+        hexId: 'hex-1',
       }),
     }), {
       params: Promise.resolve({ gameId: 'game-1' }),
@@ -271,6 +272,28 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
       governmentType: 'Monarch',
       traditions: [],
       townId: 'uuid-2',
+    });
+  });
+
+  it('rejects capitals on invalid or occupied hexes', async () => {
+    mapMocks.isSettlementHexAvailable.mockResolvedValue(false);
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/realms/create-player-realm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Aster',
+        governmentType: 'Monarch',
+        townName: 'Highgate',
+        hexId: 'hex-1',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Capital must be placed on an unoccupied land hex in your territory',
     });
   });
 });

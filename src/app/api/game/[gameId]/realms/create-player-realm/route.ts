@@ -6,7 +6,7 @@ import { buildings, playerSlots, realms, settlements, territories, troops } from
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
 import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
-import { getAvailableSettlementHexId } from '@/lib/game-logic/maps';
+import { isSettlementHexAvailable } from '@/lib/game-logic/maps';
 import { REALM_STARTING_TROOPS } from '@/lib/game-logic/map-generation';
 
 export async function POST(
@@ -23,8 +23,8 @@ export async function POST(
     }
 
     const body = await request.json();
-    if (!body.name || !body.governmentType || !body.townName) {
-      return NextResponse.json({ error: 'name, governmentType, and townName are required' }, { status: 400 });
+    if (!body.name || !body.governmentType || !body.townName || !body.hexId) {
+      return NextResponse.json({ error: 'name, governmentType, townName, and hexId are required' }, { status: 400 });
     }
 
     const territory = await db.select().from(territories)
@@ -41,7 +41,12 @@ export async function POST(
     const realmId = uuid();
     const townId = uuid();
     const claimedAt = new Date();
-    const settlementHexId = await getAvailableSettlementHexId(db, territory.id);
+    const settlementHexId = body.hexId as string;
+    const isValidSettlementHex = await isSettlementHexAvailable(db, territory.id, settlementHexId);
+
+    if (!isValidSettlementHex) {
+      return NextResponse.json({ error: 'Capital must be placed on an unoccupied land hex in your territory' }, { status: 400 });
+    }
 
     await db.transaction((tx) => {
       tx.insert(realms).values({

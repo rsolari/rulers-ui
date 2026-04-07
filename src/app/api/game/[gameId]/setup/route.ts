@@ -18,6 +18,7 @@ interface SetupResourceInput {
   resourceType: ResourceType;
   rarity: ResourceRarity;
   settlement: {
+    hexKey?: string | null;
     name: string;
     size: SettlementSize;
   };
@@ -175,15 +176,36 @@ export async function POST(
         const realmId = ownershipByIndex.get(territoryIndex)?.realmId ?? null;
         const curatedTerritory = curatedTerritories[territoryIndex];
         const territoryHexIds = curatedTerritory
-          ? [...(importedMap.territoryHexIds.get(curatedTerritory.key) ?? [])]
-          : [];
+          ? new Set(importedMap.territoryHexIds.get(curatedTerritory.key) ?? [])
+          : new Set<string>();
+        const usedHexIds = new Set<string>();
 
         for (const resource of territory.resources || []) {
-          const settlementHexId = territoryHexIds.shift() ?? null;
-
-          if (!settlementHexId && territoryHexIds.length === 0 && curatedTerritory) {
-            throw new Error(`Map territory ${curatedTerritory.key} does not have enough land hexes for starting settlements.`);
+          const settlementHexKey = resource.settlement.hexKey?.trim() ?? '';
+          if (!settlementHexKey) {
+            throw Object.assign(
+              new Error(`Each starting settlement in ${territory.name} requires a map hex placement.`),
+              { status: 400 }
+            );
           }
+
+          const settlementHexId = importedMap.hexIdsByCoordKey.get(settlementHexKey) ?? null;
+
+          if (!settlementHexId || !territoryHexIds.has(settlementHexId)) {
+            throw Object.assign(
+              new Error(`Settlement ${resource.settlement.name} must be placed on a land hex in ${territory.name}.`),
+              { status: 400 }
+            );
+          }
+
+          if (usedHexIds.has(settlementHexId)) {
+            throw Object.assign(
+              new Error(`Starting settlements in ${territory.name} cannot share the same hex.`),
+              { status: 400 }
+            );
+          }
+
+          usedHexIds.add(settlementHexId);
 
           const settlementId = uuid();
           const resourceSiteId = uuid();
@@ -252,6 +274,17 @@ export async function POST(
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (
+      typeof error === 'object'
+      && error !== null
+      && 'status' in error
+      && error.status === 400
+      && 'message' in error
+      && typeof error.message === 'string'
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     throw error;

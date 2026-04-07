@@ -208,6 +208,7 @@ export interface CreateBuildingInput {
   territoryId?: string | null;
   hexId?: string | null;
   type: string;
+  technicalKnowledgeKey?: string | null;
   material?: string | null;
   instant?: boolean;
   isGuildOwned?: boolean;

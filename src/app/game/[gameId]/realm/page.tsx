@@ -456,61 +456,34 @@ export default function RealmDashboard() {
         <CardContent>
           <div className="space-y-4">
             {(() => {
-              const realmMap = Object.fromEntries(allRealms.map((r) => [r.id, r.name]));
               const ownTerritories = territories.filter((t) => t.realmId === realmId);
-              const otherTerritories = territories.filter((t) => t.realmId && t.realmId !== realmId);
-              const unclaimedTerritories = territories.filter((t) => !t.realmId);
-
-              function renderTerritory(territory: Territory, isOwn: boolean) {
-                const territorySettlements = isOwn ? settlements.filter((s) => s.territoryId === territory.id) : [];
-                return (
-                  <div key={territory.id} className={`p-3 medieval-border rounded space-y-2 ${isOwn ? 'border-gold-500/50' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-heading font-semibold">{territory.name}</span>
-                        {isOwn && <Badge variant="gold">Yours</Badge>}
-                        {!isOwn && territory.realmId && <Badge>{realmMap[territory.realmId] || 'Unknown'}</Badge>}
-                        {!territory.realmId && <Badge variant="default">Unclaimed</Badge>}
-                      </div>
-                      {territory.climate && <Badge>{territory.climate}</Badge>}
-                    </div>
-                    {territorySettlements.length > 0 && (
-                      <div className="space-y-1 ml-4">
-                        {territorySettlements.map((settlement) => (
-                          <div key={settlement.id} className="flex items-center justify-between p-2 rounded bg-parchment-100/50">
-                            <div className="flex items-center gap-3">
-                              <span>{settlement.name}</span>
-                              <Badge>{settlement.size}</Badge>
-                            </div>
-                            <span className="text-sm text-ink-300">{settlement.buildings?.length || 0} buildings</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
 
               return (
                 <>
-                  {ownTerritories.length > 0 && (
-                    <>
-                      <p className="text-sm font-heading font-semibold text-ink-500">Your Territories</p>
-                      {ownTerritories.map((t) => renderTerritory(t, true))}
-                    </>
-                  )}
-                  {otherTerritories.length > 0 && (
-                    <>
-                      <p className="text-sm font-heading font-semibold text-ink-500 mt-4">Other Realms</p>
-                      {otherTerritories.map((t) => renderTerritory(t, false))}
-                    </>
-                  )}
-                  {unclaimedTerritories.length > 0 && (
-                    <>
-                      <p className="text-sm font-heading font-semibold text-ink-500 mt-4">Unclaimed</p>
-                      {unclaimedTerritories.map((t) => renderTerritory(t, false))}
-                    </>
-                  )}
+                  {ownTerritories.map((territory) => {
+                    const territorySettlements = settlements.filter((s) => s.territoryId === territory.id);
+                    return (
+                      <div key={territory.id} className="p-3 medieval-border rounded space-y-2 border-gold-500/50">
+                        <div className="flex items-center justify-between">
+                          <span className="font-heading font-semibold">{territory.name}</span>
+                          {territory.climate && <Badge>{territory.climate}</Badge>}
+                        </div>
+                        {territorySettlements.length > 0 && (
+                          <div className="space-y-1 ml-4">
+                            {territorySettlements.map((settlement) => (
+                              <div key={settlement.id} className="flex items-center justify-between p-2 rounded bg-parchment-100/50">
+                                <div className="flex items-center gap-3">
+                                  <span>{settlement.name}</span>
+                                  <Badge>{settlement.size}</Badge>
+                                </div>
+                                <span className="text-sm text-ink-300">{settlement.buildings?.length || 0} buildings</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </>
               );
             })()}

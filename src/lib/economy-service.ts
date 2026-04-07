@@ -16,12 +16,14 @@ import {
   territories,
   tradeRoutes,
   troops,
+  turnActions,
   turnEvents,
   turnReports,
   turnResolutions,
 } from '@/db/schema';
 import { BUILDING_DEFS, getNextSeason, SEASONS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { parseStoredEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
+import { mapTurnActionRowToFinancialAction } from '@/lib/turn-action-service';
 import {
   projectEconomyForRealm,
   resolveEconomyForRealm,
@@ -60,6 +62,13 @@ function compareResolvedTurns(a: { year: number; season: string }, b: { year: nu
   return SEASONS.indexOf(b.season as Season) - SEASONS.indexOf(a.season as Season);
 }
 
+function deriveReportStatus(actions: Array<typeof turnActions.$inferSelect>) {
+  if (actions.length === 0) return 'draft';
+  if (actions.every((action) => action.status === 'executed')) return 'resolved';
+  if (actions.some((action) => action.status === 'submitted' || action.status === 'executed')) return 'submitted';
+  return 'draft';
+}
+
 interface InvalidModifierEvent {
   id: string;
   description: string;
@@ -73,6 +82,7 @@ interface LoadedEconomyState {
   troopRows: Array<typeof troops.$inferSelect>;
   siegeUnitRows: Array<typeof siegeUnits.$inferSelect>;
   reportRows: Array<typeof turnReports.$inferSelect>;
+  actionRows: Array<typeof turnActions.$inferSelect>;
   tradeRouteRows: Array<typeof tradeRoutes.$inferSelect>;
   economyRealms: EconomyRealmInput[];
   invalidModifierEvents: InvalidModifierEvent[];
@@ -239,9 +249,14 @@ function validateEconomyTurn(state: LoadedEconomyState): EconomyTurnValidationRe
   return { errors, warningsByRealm };
 }
 
-function loadGameEconomyState(database: DatabaseExecutor, gameId: string): LoadedEconomyState | null {
+function loadGameEconomyState(
+  database: DatabaseExecutor,
+  gameId: string,
+  financialActionStatuses: Array<typeof turnActions.$inferSelect['status']> = ['draft', 'submitted', 'executed'],
+): LoadedEconomyState | null {
   const game = database.select().from(games).where(eq(games.id, gameId)).get();
   if (!game) return null;
+  const currentSeason = game.currentSeason as Season;
 
   const realmRows = database.select().from(realms).where(eq(realms.gameId, gameId)).all();
   const territoryRows = database.select().from(territories).where(eq(territories.gameId, gameId)).all();
@@ -296,12 +311,17 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
   const reportRows = database.select().from(turnReports).where(and(
     eq(turnReports.gameId, gameId),
     eq(turnReports.year, game.currentYear),
-    eq(turnReports.season, game.currentSeason),
+    eq(turnReports.season, currentSeason),
+  )).all();
+  const actionRows = database.select().from(turnActions).where(and(
+    eq(turnActions.gameId, gameId),
+    eq(turnActions.year, game.currentYear),
+    eq(turnActions.season, currentSeason),
   )).all();
   const eventRows = database.select().from(turnEvents).where(and(
     eq(turnEvents.gameId, gameId),
     eq(turnEvents.year, game.currentYear),
-    eq(turnEvents.season, game.currentSeason),
+    eq(turnEvents.season, currentSeason),
   )).all();
 
   const buildingsBySettlement = new Map<string, Array<typeof buildings.$inferSelect>>();
@@ -377,6 +397,16 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
   const reportsByRealm = new Map<string, typeof turnReports.$inferSelect>();
   for (const report of reportRows) {
     reportsByRealm.set(report.realmId, report);
+  }
+
+  const financialActionsByRealm = new Map<string, FinancialAction[]>();
+  for (const action of actionRows) {
+    if (action.kind !== 'financial') continue;
+    if (!financialActionStatuses.includes(action.status)) continue;
+
+    const existing = financialActionsByRealm.get(action.realmId) ?? [];
+    existing.push(mapTurnActionRowToFinancialAction(action));
+    financialActionsByRealm.set(action.realmId, existing);
   }
 
   const modifiersByRealm = new Map<string, ReturnType<typeof parseStoredEconomicModifiers>>();
@@ -522,7 +552,7 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
     report: reportsByRealm.has(realm.id)
       ? {
         id: reportsByRealm.get(realm.id)!.id,
-        financialActions: parseJson<FinancialAction[]>(reportsByRealm.get(realm.id)!.financialActions, []),
+        financialActions: financialActionsByRealm.get(realm.id) ?? [],
       }
       : null,
   }));
@@ -534,6 +564,7 @@ function loadGameEconomyState(database: DatabaseExecutor, gameId: string): Loade
     troopRows,
     siegeUnitRows,
     reportRows,
+    actionRows,
     tradeRouteRows,
     economyRealms,
     invalidModifierEvents,
@@ -723,7 +754,7 @@ export function createEconomyService(database: DB = defaultDb) {
         }
       }
 
-      const state = loadGameEconomyState(tx, gameId);
+      const state = loadGameEconomyState(tx, gameId, ['submitted', 'executed']);
       if (!state) return null;
 
       const currentSeason = state.game.currentSeason as Season;
@@ -971,9 +1002,26 @@ export function createEconomyService(database: DB = defaultDb) {
           .run();
       }
 
+      for (const action of state.actionRows) {
+        if (action.kind !== 'financial' || action.status !== 'submitted') continue;
+
+        tx.update(turnActions)
+          .set({
+            status: 'executed',
+            outcome: 'success',
+            resolutionSummary: action.resolutionSummary ?? 'Resolved automatically during economy turn advancement.',
+            executedAt: new Date(),
+            executedBy: action.executedBy ?? 'system',
+            updatedAt: new Date(),
+          })
+          .where(eq(turnActions.id, action.id))
+          .run();
+      }
+
       for (const report of state.reportRows) {
+        const reportActions = tx.select().from(turnActions).where(eq(turnActions.turnReportId, report.id)).all();
         tx.update(turnReports)
-          .set({ status: 'Resolved' })
+          .set({ status: deriveReportStatus(reportActions) })
           .where(eq(turnReports.id, report.id))
           .run();
       }

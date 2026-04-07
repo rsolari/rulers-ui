@@ -71,7 +71,11 @@ export type EstateLevel = 'Meagre' | 'Comfortable' | 'Ample' | 'Substantial' | '
 export type GOSType = 'Guild' | 'Order' | 'Society';
 
 // Turn Report Status
-export type ReportStatus = 'Draft' | 'Submitted' | 'Resolved';
+export type ReportStatus = 'draft' | 'submitted' | 'resolved';
+export type ActionKind = 'political' | 'financial';
+export type TurnActionStatus = 'draft' | 'submitted' | 'executed';
+export type TurnActionOutcome = 'pending' | 'success' | 'failure' | 'partial' | 'void';
+export type ActionAuthorRole = 'player' | 'gm';
 
 // Industry Quality
 export type IndustryQuality = 'Basic' | 'HighQuality';
@@ -127,6 +131,125 @@ export interface FinancialAction {
   technicalKnowledgeKey?: TechnicalKnowledgeKey;
   description?: string;
   cost: number;
+}
+
+export interface ActionCommentRecord {
+  id: string;
+  actionId: string;
+  authorRole: ActionAuthorRole;
+  authorLabel: string;
+  body: string;
+  createdAt: string | null;
+}
+
+export interface TurnActionRecord {
+  id: string;
+  turnReportId: string;
+  gameId: string;
+  realmId: string;
+  year: number;
+  season: Season;
+  kind: ActionKind;
+  status: TurnActionStatus;
+  outcome: TurnActionOutcome;
+  sortOrder: number;
+  description: string;
+  actionWords: ActionWord[];
+  targetRealmId: string | null;
+  assignedNobleId: string | null;
+  triggerCondition: string | null;
+  financialType: FinancialAction['type'] | null;
+  buildingType: BuildingType | null;
+  troopType: TroopType | null;
+  settlementId: string | null;
+  taxType: TaxType | null;
+  technicalKnowledgeKey: TechnicalKnowledgeKey | null;
+  cost: number;
+  resolutionSummary: string | null;
+  submittedAt: string | null;
+  submittedBy: string | null;
+  executedAt: string | null;
+  executedBy: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  comments: ActionCommentRecord[];
+}
+
+export interface TurnReportRecord {
+  id: string;
+  gameId: string;
+  realmId: string;
+  year: number;
+  season: Season;
+  status: ReportStatus;
+  gmNotes: string | null;
+}
+
+export interface TurnReportBundle {
+  realmId: string;
+  realmName: string;
+  report: TurnReportRecord | null;
+  actions: TurnActionRecord[];
+}
+
+export type TurnHistoryEntry = TurnReportBundle;
+
+export interface CurrentTurnResponseDto {
+  game: {
+    id: string;
+    currentYear: number;
+    currentSeason: Season;
+    turnPhase: TurnPhase;
+  };
+  realm?: TurnReportBundle;
+  realms?: TurnReportBundle[];
+}
+
+export interface TurnActionCreateDto {
+  kind: ActionKind;
+  description?: string;
+  actionWords?: ActionWord[];
+  targetRealmId?: string | null;
+  assignedNobleId?: string | null;
+  triggerCondition?: string | null;
+  financialType?: FinancialAction['type'];
+  buildingType?: BuildingType | null;
+  troopType?: TroopType | null;
+  settlementId?: string | null;
+  taxType?: TaxType | null;
+  technicalKnowledgeKey?: TechnicalKnowledgeKey | null;
+  cost?: number;
+}
+
+export interface TurnActionUpdateDto {
+  description?: string;
+  actionWords?: ActionWord[];
+  targetRealmId?: string | null;
+  assignedNobleId?: string | null;
+  triggerCondition?: string | null;
+  financialType?: FinancialAction['type'];
+  buildingType?: BuildingType | null;
+  troopType?: TroopType | null;
+  settlementId?: string | null;
+  taxType?: TaxType | null;
+  technicalKnowledgeKey?: TechnicalKnowledgeKey | null;
+  cost?: number;
+  outcome?: TurnActionOutcome;
+  resolutionSummary?: string | null;
+  status?: TurnActionStatus;
+}
+
+export interface TurnSubmitResponseDto {
+  report: TurnReportRecord;
+  actions: TurnActionRecord[];
+}
+
+export interface ActionCommentCreateDto {
+  body: string;
+}
+
+export interface TurnHistoryResponseDto {
+  history: TurnHistoryEntry[];
 }
 
 // Protected Product in Trade

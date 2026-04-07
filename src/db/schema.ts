@@ -1,15 +1,22 @@
-import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 import type {
+  ActionAuthorRole,
+  ActionKind,
   BuildingLocationType,
   BuildingMaintenanceState,
   GameInitState,
   GamePhase,
   GMSetupState,
   PlayerSetupState,
+  ReportStatus,
   ResourceRarity,
   ResourceType,
+  Season,
+  TechnicalKnowledgeKey,
   TradeRoutePathMode,
+  TurnActionOutcome,
+  TurnActionStatus,
 } from '@/types/game';
 
 // ============================================================
@@ -36,6 +43,7 @@ export const gamesRelations = relations(games, ({ many }) => ({
   playerSlots: many(playerSlots),
   tradeRoutes: many(tradeRoutes),
   turnReports: many(turnReports),
+  turnActions: many(turnActions),
   turnEvents: many(turnEvents),
   economicSnapshots: many(economicSnapshots),
   economicEntries: many(economicEntries),
@@ -80,6 +88,7 @@ export const realmsRelations = relations(realms, ({ one, many }) => ({
   siegeUnits: many(siegeUnits),
   guildsOrdersSocieties: many(guildsOrdersSocieties),
   turnReports: many(turnReports),
+  turnActions: many(turnActions),
   economicSnapshots: many(economicSnapshots),
   economicEntries: many(economicEntries),
 }));
@@ -397,16 +406,81 @@ export const turnReports = sqliteTable('turn_reports', {
   gameId: text('game_id').notNull().references(() => games.id),
   realmId: text('realm_id').notNull().references(() => realms.id),
   year: integer('year').notNull(),
-  season: text('season').notNull(),
-  financialActions: text('financial_actions').default('[]').notNull(), // JSON
-  politicalActions: text('political_actions').default('[]').notNull(), // JSON
-  status: text('status').default('Draft').notNull(),
+  season: text('season').$type<Season>().notNull(),
+  status: text('status').$type<ReportStatus>().default('draft').notNull(),
   gmNotes: text('gm_notes'),
-});
+}, (table) => ([
+  uniqueIndex('turn_reports_game_realm_turn_unique').on(
+    table.gameId,
+    table.realmId,
+    table.year,
+    table.season,
+  ),
+]));
 
-export const turnReportsRelations = relations(turnReports, ({ one }) => ({
+export const turnActions = sqliteTable('turn_actions', {
+  id: text('id').primaryKey(),
+  turnReportId: text('turn_report_id').notNull().references(() => turnReports.id),
+  gameId: text('game_id').notNull().references(() => games.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+  year: integer('year').notNull(),
+  season: text('season').$type<Season>().notNull(),
+  kind: text('kind').$type<ActionKind>().notNull(),
+  status: text('status').$type<TurnActionStatus>().default('draft').notNull(),
+  outcome: text('outcome').$type<TurnActionOutcome>().default('pending').notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  description: text('description').default('').notNull(),
+  actionWords: text('action_words').default('[]').notNull(),
+  targetRealmId: text('target_realm_id'),
+  assignedNobleId: text('assigned_noble_id'),
+  triggerCondition: text('trigger_condition'),
+  financialType: text('financial_type'),
+  buildingType: text('building_type'),
+  troopType: text('troop_type'),
+  settlementId: text('settlement_id'),
+  taxType: text('tax_type'),
+  technicalKnowledgeKey: text('technical_knowledge_key').$type<TechnicalKnowledgeKey>(),
+  cost: integer('cost').default(0).notNull(),
+  resolutionSummary: text('resolution_summary'),
+  submittedAt: integer('submitted_at', { mode: 'timestamp' }),
+  submittedBy: text('submitted_by'),
+  executedAt: integer('executed_at', { mode: 'timestamp' }),
+  executedBy: text('executed_by'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+}, (table) => ([
+  index('turn_actions_turn_lookup_idx').on(table.gameId, table.realmId, table.year, table.season),
+  index('turn_actions_turn_status_kind_idx').on(table.gameId, table.year, table.season, table.status, table.kind),
+  index('turn_actions_report_sort_idx').on(table.turnReportId, table.sortOrder),
+  index('turn_actions_realm_status_kind_idx').on(table.realmId, table.status, table.kind),
+]));
+
+export const actionComments = sqliteTable('action_comments', {
+  id: text('id').primaryKey(),
+  actionId: text('action_id').notNull().references(() => turnActions.id),
+  authorRole: text('author_role').$type<ActionAuthorRole>().notNull(),
+  authorLabel: text('author_label').notNull(),
+  body: text('body').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+}, (table) => ([
+  index('action_comments_action_created_idx').on(table.actionId, table.createdAt),
+]));
+
+export const turnReportsRelations = relations(turnReports, ({ one, many }) => ({
   game: one(games, { fields: [turnReports.gameId], references: [games.id] }),
   realm: one(realms, { fields: [turnReports.realmId], references: [realms.id] }),
+  actions: many(turnActions),
+}));
+
+export const turnActionsRelations = relations(turnActions, ({ one, many }) => ({
+  turnReport: one(turnReports, { fields: [turnActions.turnReportId], references: [turnReports.id] }),
+  game: one(games, { fields: [turnActions.gameId], references: [games.id] }),
+  realm: one(realms, { fields: [turnActions.realmId], references: [realms.id] }),
+  comments: many(actionComments),
+}));
+
+export const actionCommentsRelations = relations(actionComments, ({ one }) => ({
+  action: one(turnActions, { fields: [actionComments.actionId], references: [turnActions.id] }),
 }));
 
 // ============================================================

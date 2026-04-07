@@ -253,12 +253,55 @@ function createBaseSchema(database: Database.Database) {
       realm_id text NOT NULL,
       year integer NOT NULL,
       season text NOT NULL,
-      financial_actions text NOT NULL DEFAULT '[]',
-      political_actions text NOT NULL DEFAULT '[]',
-      status text NOT NULL DEFAULT 'Draft',
+      status text NOT NULL DEFAULT 'draft',
       gm_notes text,
       FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS turn_actions (
+      id text PRIMARY KEY NOT NULL,
+      turn_report_id text NOT NULL,
+      game_id text NOT NULL,
+      realm_id text NOT NULL,
+      year integer NOT NULL,
+      season text NOT NULL,
+      kind text NOT NULL,
+      status text NOT NULL DEFAULT 'draft',
+      outcome text NOT NULL DEFAULT 'pending',
+      sort_order integer NOT NULL DEFAULT 0,
+      description text NOT NULL DEFAULT '',
+      action_words text NOT NULL DEFAULT '[]',
+      target_realm_id text,
+      assigned_noble_id text,
+      trigger_condition text,
+      financial_type text,
+      building_type text,
+      troop_type text,
+      settlement_id text,
+      tax_type text,
+      technical_knowledge_key text,
+      cost integer NOT NULL DEFAULT 0,
+      resolution_summary text,
+      submitted_at integer,
+      submitted_by text,
+      executed_at integer,
+      executed_by text,
+      created_at integer,
+      updated_at integer,
+      FOREIGN KEY (turn_report_id) REFERENCES turn_reports(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS action_comments (
+      id text PRIMARY KEY NOT NULL,
+      action_id text NOT NULL,
+      author_role text NOT NULL,
+      author_label text NOT NULL,
+      body text NOT NULL,
+      created_at integer,
+      FOREIGN KEY (action_id) REFERENCES turn_actions(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS turn_events (
@@ -275,6 +318,98 @@ function createBaseSchema(database: Database.Database) {
   `);
 
   createBuildingsTable(database, 'buildings');
+}
+
+function needsTurnActionSchemaReset(database: Database.Database) {
+  if (!tableExists(database, 'turn_reports')) {
+    return false;
+  }
+
+  if (columnExists(database, 'turn_reports', 'financial_actions') || columnExists(database, 'turn_reports', 'political_actions')) {
+    return true;
+  }
+
+  return !tableExists(database, 'turn_actions') || !tableExists(database, 'action_comments');
+}
+
+function resetTurnActionSchema(database: Database.Database) {
+  const migrate = database.transaction(() => {
+    database.exec('DROP TABLE IF EXISTS action_comments;');
+    database.exec('DROP TABLE IF EXISTS turn_actions;');
+    database.exec('DROP TABLE IF EXISTS turn_reports;');
+
+    database.exec(`
+      CREATE TABLE turn_reports (
+        id text PRIMARY KEY NOT NULL,
+        game_id text NOT NULL,
+        realm_id text NOT NULL,
+        year integer NOT NULL,
+        season text NOT NULL,
+        status text NOT NULL DEFAULT 'draft',
+        gm_notes text,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      );
+
+      CREATE TABLE turn_actions (
+        id text PRIMARY KEY NOT NULL,
+        turn_report_id text NOT NULL,
+        game_id text NOT NULL,
+        realm_id text NOT NULL,
+        year integer NOT NULL,
+        season text NOT NULL,
+        kind text NOT NULL,
+        status text NOT NULL DEFAULT 'draft',
+        outcome text NOT NULL DEFAULT 'pending',
+        sort_order integer NOT NULL DEFAULT 0,
+        description text NOT NULL DEFAULT '',
+        action_words text NOT NULL DEFAULT '[]',
+        target_realm_id text,
+        assigned_noble_id text,
+        trigger_condition text,
+        financial_type text,
+        building_type text,
+        troop_type text,
+        settlement_id text,
+        tax_type text,
+        technical_knowledge_key text,
+        cost integer NOT NULL DEFAULT 0,
+        resolution_summary text,
+        submitted_at integer,
+        submitted_by text,
+        executed_at integer,
+        executed_by text,
+        created_at integer,
+        updated_at integer,
+        FOREIGN KEY (turn_report_id) REFERENCES turn_reports(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      );
+
+      CREATE TABLE action_comments (
+        id text PRIMARY KEY NOT NULL,
+        action_id text NOT NULL,
+        author_role text NOT NULL,
+        author_label text NOT NULL,
+        body text NOT NULL,
+        created_at integer,
+        FOREIGN KEY (action_id) REFERENCES turn_actions(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  });
+
+  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF');
+  }
+
+  try {
+    migrate();
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON');
+    }
+  }
 }
 
 function settlementsRealmIdIsNotNull(database: Database.Database) {
@@ -657,8 +792,29 @@ function ensureEconomySchema(database: Database.Database) {
   backfillResourceIndustryState(database);
 }
 
+function ensureTurnActionSchema(database: Database.Database) {
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS turn_reports_game_realm_turn_unique
+      ON turn_reports (game_id, realm_id, year, season);
+    CREATE INDEX IF NOT EXISTS turn_actions_turn_lookup_idx
+      ON turn_actions (game_id, realm_id, year, season);
+    CREATE INDEX IF NOT EXISTS turn_actions_turn_status_kind_idx
+      ON turn_actions (game_id, year, season, status, kind);
+    CREATE INDEX IF NOT EXISTS turn_actions_report_sort_idx
+      ON turn_actions (turn_report_id, sort_order);
+    CREATE INDEX IF NOT EXISTS turn_actions_realm_status_kind_idx
+      ON turn_actions (realm_id, status, kind);
+    CREATE INDEX IF NOT EXISTS action_comments_action_created_idx
+      ON action_comments (action_id, created_at);
+  `);
+}
+
 export function initializeDatabaseSchema(database: Database.Database) {
   createBaseSchema(database);
+
+  if (needsTurnActionSchemaReset(database)) {
+    resetTurnActionSchema(database);
+  }
 
   if (settlementsRealmIdIsNotNull(database)) {
     migrateSettlementsRealmIdToNullable(database);
@@ -715,6 +871,7 @@ export function initializeDatabaseSchema(database: Database.Database) {
 
   backfillInitStateFromLegacyGamePhase(database);
   backfillPlayerSlotSetupState(database);
+  ensureTurnActionSchema(database);
 
   database.pragma('foreign_keys = ON');
 }

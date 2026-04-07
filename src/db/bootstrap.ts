@@ -12,6 +12,8 @@ const APP_TABLES = [
   'turn_events',
   'noble_grievances',
   'gos_unrest_states',
+  'governance_events',
+  'noble_titles',
   'economic_entries',
   'economic_snapshots',
   'turn_resolutions',
@@ -145,7 +147,6 @@ function createBaseSchema(database: Database.Database) {
       borrowed_amount integer NOT NULL DEFAULT 0,
       loan_repayment_per_season integer NOT NULL DEFAULT 0,
       loan_repayment_seasons_remaining integer NOT NULL DEFAULT 0,
-      turmoil integer NOT NULL DEFAULT 0,
       turmoil_sources text NOT NULL DEFAULT '[]',
       capital_settlement_id text,
       FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
@@ -1172,6 +1173,9 @@ function ensureEconomySchema(database: Database.Database) {
   addColumnIfMissing(database, 'buildings', "maintenance_state text DEFAULT 'active' NOT NULL", 'maintenance_state');
   addColumnIfMissing(database, 'buildings', 'allotted_gos_id text', 'allotted_gos_id');
   addColumnIfMissing(database, 'buildings', 'custom_definition_id text', 'custom_definition_id');
+  addColumnIfMissing(database, 'troops', 'recruitment_settlement_id text', 'recruitment_settlement_id');
+  addColumnIfMissing(database, 'troops', 'recruitment_year integer', 'recruitment_year');
+  addColumnIfMissing(database, 'troops', 'recruitment_season text', 'recruitment_season');
 
   database.exec(`
     UPDATE buildings

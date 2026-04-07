@@ -195,6 +195,7 @@ export default function RealmDashboard() {
     } : current);
     setSaving(false);
   }
+
   if (!game || !realm) {
     return (
       <main className="min-h-screen flex items-center justify-center">

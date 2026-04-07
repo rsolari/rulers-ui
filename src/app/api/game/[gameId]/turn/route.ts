@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isAuthError, resolveSessionFromCookies } from '@/lib/auth';
 import { getCurrentTurn, isTurnActionError } from '@/lib/turn-action-service';
+import { isRuleValidationError } from '@/lib/rules-action-service';
 
 export async function GET(
   request: Request,
@@ -28,6 +29,14 @@ export async function GET(
   } catch (error) {
     if (isAuthError(error) || isTurnActionError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isRuleValidationError(error)) {
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        details: error.details ?? null,
+      }, { status: error.status });
     }
 
     throw error;

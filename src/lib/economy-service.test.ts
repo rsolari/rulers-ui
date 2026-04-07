@@ -206,7 +206,7 @@ describe('createEconomyService.advanceGameTurn', () => {
         id: 'resource-a',
         territoryId: 'territory-a',
         settlementId: 'settlement-a',
-        resourceType: 'Ore',
+        resourceType: 'Timber',
         rarity: 'Common',
       },
       {
@@ -259,7 +259,8 @@ describe('createEconomyService.advanceGameTurn', () => {
         {
           type: 'build',
           buildingType: 'Fort',
-          settlementId: 'settlement-a',
+          territoryId: 'territory-a',
+          locationType: 'territory',
           description: 'Raise border fortifications',
           cost: 1500,
         },
@@ -346,7 +347,9 @@ describe('createEconomyService.advanceGameTurn', () => {
       .where(eq(schema.buildings.type, 'Fort'))
       .get();
     expect(insertedFort).toMatchObject({
-      settlementId: 'settlement-a',
+      settlementId: null,
+      territoryId: 'territory-a',
+      locationType: 'territory',
       constructionTurnsRemaining: 2,
       isOperational: false,
     });
@@ -410,7 +413,7 @@ describe('createEconomyService.advanceGameTurn', () => {
     ]));
 
     const route = db.select().from(schema.tradeRoutes).where(eq(schema.tradeRoutes.id, 'route-1')).get();
-    expect(JSON.parse(route!.productsExported1to2)).toEqual(['Ore']);
+    expect(JSON.parse(route!.productsExported1to2)).toEqual(['Timber']);
     expect(JSON.parse(route!.productsExported2to1)).toEqual(['Gold']);
 
     const resolutionRows = db.select().from(schema.turnResolutions).all();
@@ -501,6 +504,154 @@ describe('createEconomyService.advanceGameTurn', () => {
       turmoil: 4,
     });
     expect(JSON.parse(realm!.turmoilSources)).toEqual([]);
+
+    sqlite.close();
+  });
+
+  it('applies territory food caps during turn resolution', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-cap',
+      name: 'Food Cap Test',
+      gmCode: 'gm-cap',
+      playerCode: 'player-cap',
+      currentYear: 1,
+      currentSeason: 'Summer',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-cap',
+      gameId: 'game-cap',
+      name: 'Lowfields',
+      governmentType: 'Monarch',
+      treasury: 1000,
+      taxType: 'Tribute',
+      turmoil: 0,
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-cap',
+      gameId: 'game-cap',
+      name: 'Lowfields',
+      realmId: 'realm-cap',
+      foodCapBase: 3,
+      foodCapBonus: 0,
+    }).run();
+
+    db.insert(schema.settlements).values([
+      {
+        id: 'settlement-cap-1',
+        territoryId: 'territory-cap',
+        realmId: 'realm-cap',
+        name: 'Northfield',
+        size: 'Village',
+      },
+      {
+        id: 'settlement-cap-2',
+        territoryId: 'territory-cap',
+        realmId: 'realm-cap',
+        name: 'Southfield',
+        size: 'Village',
+      },
+    ]).run();
+
+    service.advanceGameTurn('game-cap', {
+      expectedYear: 1,
+      expectedSeason: 'Summer',
+      idempotencyKey: 'game-cap:1:Summer',
+    });
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-cap')).get();
+    expect(realm).toMatchObject({
+      treasury: 1900,
+      foodBalance: 1,
+    });
+
+    const snapshot = db.select().from(schema.economicSnapshots).where(eq(schema.economicSnapshots.realmId, 'realm-cap')).get();
+    expect(parseJson(snapshot!.summary, {} as Record<string, unknown>)).toMatchObject({
+      foodProduced: 3,
+      foodNeeded: 2,
+      foodSurplus: 1,
+    });
+
+    sqlite.close();
+  });
+
+  it('rejects turn reports with multiple tax changes', () => {
+    const { sqlite, db } = createTestDatabase();
+    const service = createEconomyService(db);
+
+    db.insert(schema.games).values({
+      id: 'game-tax',
+      name: 'Tax Validation Test',
+      gmCode: 'gm-tax',
+      playerCode: 'player-tax',
+      currentYear: 1,
+      currentSeason: 'Spring',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-tax',
+      gameId: 'game-tax',
+      name: 'Ledgermarch',
+      governmentType: 'Monarch',
+      treasury: 1000,
+      taxType: 'Tribute',
+      turmoil: 0,
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-tax',
+      gameId: 'game-tax',
+      name: 'Ledgermarch',
+      realmId: 'realm-tax',
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-tax',
+      territoryId: 'territory-tax',
+      realmId: 'realm-tax',
+      name: 'Ledgermarch',
+      size: 'Village',
+    }).run();
+
+    db.insert(schema.turnReports).values({
+      id: 'report-tax',
+      gameId: 'game-tax',
+      realmId: 'realm-tax',
+      year: 1,
+      season: 'Spring',
+      financialActions: JSON.stringify([
+        { type: 'taxChange', taxType: 'Tribute', cost: 0 },
+        { type: 'taxChange', taxType: 'Levy', cost: 0 },
+      ]),
+      status: 'Submitted',
+    }).run();
+
+    try {
+      service.advanceGameTurn('game-tax', {
+        expectedYear: 1,
+        expectedSeason: 'Spring',
+      });
+      throw new Error('Expected resolution to fail');
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: 'invalid_economy_inputs',
+        status: 400,
+        details: {
+          errors: expect.arrayContaining([
+            expect.objectContaining({
+              realmId: 'realm-tax',
+              message: 'Only one tax change can be submitted in a turn.',
+            }),
+          ]),
+        },
+      });
+    }
 
     sqlite.close();
   });

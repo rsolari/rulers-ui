@@ -5,6 +5,7 @@ import {
   resolveIndustryProduct,
 } from './products';
 import type { IndustryProductInput } from './products';
+import type { ResourceType } from '@/types/game';
 
 function createProduct(overrides: Partial<IndustryProductInput>): IndustryProductInput {
   return {
@@ -132,7 +133,7 @@ describe('resolveIndustryProduct', () => {
       },
     },
   ])('$name', ({ product, availableResources, expected }) => {
-    expect(resolveIndustryProduct(product, availableResources)).toMatchObject(expected);
+    expect(resolveIndustryProduct(product, availableResources as ResourceType[])).toMatchObject(expected);
   });
 
   it.each([
@@ -180,7 +181,7 @@ describe('resolveIndustryProduct', () => {
       expectedTier: 1,
     },
   ])('$name', ({ product, availableResources, expectedIssue, expectedWealth, expectedTier }) => {
-    const resolved = resolveIndustryProduct(product, availableResources);
+    const resolved = resolveIndustryProduct(product, availableResources as ResourceType[]);
 
     expect(resolved.isLegal).toBe(false);
     expect(resolved.issues).toEqual(expect.arrayContaining([

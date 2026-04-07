@@ -9,6 +9,8 @@ import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
+import { TurnReportFinancialActionsEditor } from '@/components/turn-report-financial-actions-editor';
+import { normalizeFinancialActions } from '@/lib/financial-actions';
 import { TRADITION_DEFS, MAX_ACTION_WORDS_PER_TURN } from '@/lib/game-logic/constants';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
 import { ACTION_WORDS } from '@/types/game';
@@ -93,6 +95,7 @@ export default function RealmDashboard() {
   const [politicalActions, setPoliticalActions] = useState<PoliticalAction[]>([]);
   const [financialActions, setFinancialActions] = useState<FinancialAction[]>([]);
   const [savingReport, setSavingReport] = useState(false);
+  const [reportError, setReportError] = useState('');
 
   useEffect(() => {
     if (loading) {
@@ -152,7 +155,7 @@ export default function RealmDashboard() {
         if (turnData.report) {
           setTurnReport(turnData.report);
           setPoliticalActions(JSON.parse(turnData.report.politicalActions || '[]'));
-          setFinancialActions(JSON.parse(turnData.report.financialActions || '[]'));
+          setFinancialActions(normalizeFinancialActions(JSON.parse(turnData.report.financialActions || '[]')));
         }
       }
 
@@ -232,18 +235,28 @@ export default function RealmDashboard() {
     setPoliticalActions(updated);
   }
 
-  function addFinancialAction() {
-    setFinancialActions([...financialActions, { type: 'spending', description: '', cost: 0 }]);
-  }
-
   async function saveReport(status: 'Draft' | 'Submitted') {
     if (!realmId) return;
+    setReportError('');
     setSavingReport(true);
-    await fetch(`/api/game/${gameId}/turn`, {
+    const response = await fetch(`/api/game/${gameId}/turn`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ realmId, politicalActions, financialActions, status }),
     });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setReportError(body?.error || 'Failed to save report');
+      setSavingReport(false);
+      return;
+    }
+
+    const savedReport = await response.json();
+    if (Array.isArray(savedReport.financialActions)) {
+      setFinancialActions(normalizeFinancialActions(savedReport.financialActions));
+    }
+
     setSavingReport(false);
     if (status === 'Submitted') {
       window.location.reload();
@@ -581,54 +594,18 @@ export default function RealmDashboard() {
               {/* Financial Actions */}
               <div>
                 <h3 className="font-heading font-semibold mb-3">Financial Actions</h3>
-                <div className="space-y-3">
-                  {financialActions.map((action, fIdx) => (
-                    <div key={fIdx} className="grid grid-cols-3 gap-3 p-3 medieval-border rounded">
-                      <Select
-                        label="Type"
-                        options={[
-                          { value: 'build', label: 'Build' },
-                          { value: 'recruit', label: 'Recruit' },
-                          { value: 'taxChange', label: 'Tax Change' },
-                          { value: 'spending', label: 'Spending' },
-                        ]}
-                        value={action.type}
-                        onChange={e => {
-                          const updated = [...financialActions];
-                          updated[fIdx].type = e.target.value as FinancialAction['type'];
-                          setFinancialActions(updated);
-                        }}
-                        disabled={isSubmitted}
-                      />
-                      <Input
-                        label="Description"
-                        value={action.description || ''}
-                        onChange={e => {
-                          const updated = [...financialActions];
-                          updated[fIdx].description = e.target.value;
-                          setFinancialActions(updated);
-                        }}
-                        disabled={isSubmitted}
-                      />
-                      <Input
-                        label="Cost"
-                        type="number"
-                        value={String(action.cost)}
-                        onChange={e => {
-                          const updated = [...financialActions];
-                          updated[fIdx].cost = parseInt(e.target.value) || 0;
-                          setFinancialActions(updated);
-                        }}
-                        disabled={isSubmitted}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {!isSubmitted && (
-                  <Button variant="outline" size="sm" className="mt-3" onClick={addFinancialAction}>
-                    + Add Financial Action
-                  </Button>
-                )}
+                {reportError && <p className="mb-3 text-sm text-red-500">{reportError}</p>}
+                <TurnReportFinancialActionsEditor
+                  actions={financialActions}
+                  settlements={settlements.map((settlement) => ({ id: settlement.id, name: settlement.name }))}
+                  territories={territories.filter((territory) => territory.realmId === realmId).map((territory) => ({
+                    id: territory.id,
+                    name: territory.name,
+                  }))}
+                  gos={gos.map((entry) => ({ id: entry.id, name: entry.name, type: entry.type }))}
+                  isSubmitted={isSubmitted}
+                  onChange={setFinancialActions}
+                />
               </div>
 
               {/* Submit / Save */}

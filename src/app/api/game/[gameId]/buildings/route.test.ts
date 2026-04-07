@@ -15,10 +15,52 @@ const actionMocks = vi.hoisted(() => ({
   isRuleValidationError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'code' in error && 'status' in error),
 }));
 
+const dbMocks = vi.hoisted(() => ({
+  select: vi.fn(),
+}));
+
 vi.mock('@/lib/auth', () => authMocks);
 vi.mock('@/lib/rules-action-service', () => actionMocks);
+vi.mock('@/db', () => ({
+  db: {
+    select: dbMocks.select,
+  },
+}));
 
-import { POST } from './route';
+import { GET, POST } from './route';
+
+function mockSelectWhereOnce(result: unknown) {
+  const where = vi.fn().mockResolvedValue(result);
+  const from = vi.fn(() => ({ where }));
+  dbMocks.select.mockReturnValueOnce({ from });
+}
+
+describe('GET /api/game/[gameId]/buildings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('includes standalone territory buildings in the game-wide listing', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+    mockSelectWhereOnce([{ id: 'territory-1' }]);
+    mockSelectWhereOnce([{ id: 'settlement-1', territoryId: 'territory-1' }]);
+    mockSelectWhereOnce([
+      { id: 'building-1', settlementId: 'settlement-1', territoryId: 'territory-1', type: 'Theatre' },
+      { id: 'building-2', settlementId: null, territoryId: 'territory-1', type: 'Watchtower' },
+    ]);
+
+    const response = await GET(
+      new Request('http://localhost/api/game/game-1/buildings'),
+      { params: Promise.resolve({ gameId: 'game-1' }) },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([
+      { id: 'building-1', settlementId: 'settlement-1', territoryId: 'territory-1', type: 'Theatre' },
+      { id: 'building-2', settlementId: null, territoryId: 'territory-1', type: 'Watchtower' },
+    ]);
+  });
+});
 
 describe('POST /api/game/[gameId]/buildings', () => {
   beforeEach(() => {

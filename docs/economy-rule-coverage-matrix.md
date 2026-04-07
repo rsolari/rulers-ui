@@ -71,13 +71,13 @@ Ambiguity note:
 | Auto-import of missing goods | All goods a realm lacks are imported automatically | Game-level trade resolution derives import winners from realm production and active routes; persisted route exports are now cache/state output only | `implemented` | `importSelectionState` is the authoritative persisted winner state for future protections and tie stability |
 | Export bonus | Exporting settlement gains +5% wealth per exported product | `calculateTradeWealthBonus()` applies 5% per exported product | `implemented` | Current bonus is correct |
 | Mercantile tradition | Trade wealth bonus increases for mercantile realms | `calculateTradeWealthBonus()` adds `MERCANTILE_TRADE_BONUS` | `implemented` | Derived from traditions |
-| Imported resource availability | Imported resources can satisfy building/recruit/special-action requirements | Mentioned in constants via `TRADED_RESOURCE_SURCHARGE`, not enforced anywhere | `missing` | Needs validation contract for "using imported material/knowledge" |
+| Imported resource availability | Imported resources can satisfy building/recruit/special-action requirements | Rule validation resolves local vs traded resource access for building and recruitment prerequisites, including Brick Maker's stone substitution | `partial` | Building/recruit coverage exists; special-action consumption still needs its own contract |
 | Monopoly resolution | Realm imports only one source for a product | Canonical trade resolution chooses one winner per importer/product across all active routes | `implemented` | Shared resolver now owns route-level exports/imports |
 | Quality ordering | Basic/HQ/+ingredients ordering decides winner | Canonical trade resolution consumes the shared product quality tier | `implemented` | Same resolver now feeds both trade competition and economy projection |
 | Price ordering | Lowest tax wins when quality ties | Canonical trade resolution uses realm tax rate as the second ordering key | `implemented` | Applied after quality comparison during winner selection |
 | Relationship tie-break | Best relationship wins when quality and price tie | Canonical trade resolution surfaces unresolved ties and accepts a GM tie-break hook; no relationship model exists yet | `partial` | Needs a relation source before this can be fully automatic |
 | Two-season protection | New imported product is protected for 2 seasons | Canonical trade resolution persists prior winners in `importSelectionState` and applies protection windows when a winner changes | `implemented` | Route-level `protectedProducts` is now a derived cache for display/history |
-| Port requirement for water trade | Ports are required when route crosses water | `Port` exists as a building type, but route validation ignores terrain/water topology | `missing` | Needs route path metadata plus validation |
+| Port requirement for water trade | Ports are required when route crosses water | Trade-route validation requires a `Port` at both endpoint settlements for non-land paths, but does not validate the world map/topology itself | `partial` | Path metadata still needs terrain/water verification |
 
 ## Buildings
 
@@ -85,21 +85,21 @@ Ambiguity note:
 | --- | --- | --- | --- | --- |
 | Size/build time/cost/maintenance | All buildings use the common size tables | `BUILDING_SIZE_DATA` covers the size table | `implemented` | Canonical for generic economics |
 | Construction state | Building effect is inactive while under construction | `constructionTurnsRemaining > 0` suppresses upkeep-triggered effects in economy | `partial` | Construction costs are report-driven, not consistently derived from definitions |
-| Maintenance suspension | Unpaid maintenance disables building effect | Upkeep is charged, but buildings never become suspended when unpaid | `missing` | Needs operational state or resolution outcome |
-| Building slots | Normal buildings consume 1 slot | Settlement slots come from `SETTLEMENT_DATA`, occupied count uses raw building row count | `partial` | Slotless fortifications are counted incorrectly today |
-| Slot exceptions | Gatehouse/Walls/Watchtower do not consume settlement slots | No `takesBuildingSlot` field or context-aware rule exists | `missing` | Must be explicit in validation/projection contract |
-| Free-standing fortifications | Fort/Castle/Walls/Watchtower may exist outside settlements | `buildings.settlementId` is non-nullable | `missing` | Requires territory-level or world-position building locations |
+| Maintenance suspension | Unpaid maintenance disables building effect | Resolution suspends unpaid buildings and persists `maintenanceState` / `isOperational` accordingly | `implemented` | Allocation order is still deterministic engine policy because the rulebook does not define a priority |
+| Building slots | Normal buildings consume 1 slot | Settlement slots come from `SETTLEMENT_DATA`, and occupied count respects `takesBuildingSlot` | `implemented` | Canonical slot consumption now lives in rule validation and economy projection |
+| Slot exceptions | Gatehouse/Walls/Watchtower do not consume settlement slots | `takesBuildingSlot` exists and settlement-aware validation/projection respects it | `implemented` | Slotless fortifications no longer suppress food production |
+| Free-standing fortifications | Fort/Castle/Walls/Watchtower may exist outside settlements | Buildings support `territoryId`/`locationType`, and normal building/settlement reads surface territory-level fortifications | `implemented` | The model is territory-level rather than free-form world coordinates |
 | Material-sensitive fortifications | Timber/Stone changes fortification characteristics | `buildings.material` exists | `partial` | Material is stored but not validated against building type or used beyond carry-through |
 | Bank allotment | Bank must be allotted to a Guild and enables annual borrowing | `isGuildOwned`/`guildId` exist, but loan state and annual borrowing limits do not | `partial` | Needs loan state, borrowing schedule, and ownership validation |
 | Academy/College/University | Allotted to a Society; provides Society income | GOS income is stored on the GOS record, not derived from buildings | `partial` | Needs explicit `allottedGosId` and derived income contribution |
 | Chapel/Church/Cathedral | Allotted to an Order; provides Order income | Same as above | `partial` | Same contract gap as Society buildings |
 | Coliseum/Theatre | Modify turmoil and unlock events | Some turmoil values are hard-coded in `BUILDING_DEFS`, but not resolved through turmoil state | `partial` | Event unlocks and ongoing turmoil effects need a separate rule surface |
-| Port | Enables water trade traversal | Building exists, but no route validation uses it | `missing` | Depends on trade path validation |
-| Brick Maker's | Clay can substitute for Stone | `BrickMakers` exists in constants only | `missing` | Needs validation-time substitution logic |
+| Port | Enables water trade traversal | Trade-route validation checks for `Port` on non-land routes | `partial` | Still depends on route/path topology data for full enforcement |
+| Brick Maker's | Clay can substitute for Stone | Rule validation resolves Clay + Brick Maker's as satisfying Stone prerequisites | `implemented` | Applies to both local and traded access checks |
 | Bowyer/Weaponsmith/Armoursmith/Stables | Unlock recruitment options | Troop definitions reference required buildings | `implemented` | This should stay in validation, not economy projection |
-| Stables food requirement | Stables require Food | No prerequisite validation exists | `missing` | Needs rule-aware build validation |
-| Gunsmith/Cannon Foundry technical knowledge | Requires Ore and Technical Knowledge | `TechnicalKnowledge` appears only as a string prerequisite in constants | `missing` | Needs realm knowledge state and surcharge rules |
-| Technical Knowledge from trade | Can be borrowed from a partner at +25% cost | No realm knowledge graph or surcharge application exists | `missing` | Needs explicit validation + cost adjustment contract |
+| Stables food requirement | Stables require Food | Rule validation now requires the realm to have current food production available under territory caps before Stables can be built | `implemented` | Food is still derived state, not a separately persisted spendable input |
+| Gunsmith/Cannon Foundry technical knowledge | Requires Ore and Technical Knowledge | Validation and economy resolution match keyed technical knowledge entries instead of treating any knowledge as equivalent | `implemented` | Knowledge is still stored as string keys rather than a richer typed/source-tracked model |
+| Technical Knowledge from trade | Can be borrowed from a partner at +25% cost | Keyed traded technical knowledge unlocks the prerequisite and the economy path applies the 25% surcharge | `implemented` | Source tracking is still implicit in current trade access, not persisted as a separate graph |
 | Siege Weapon Workshop | Only one siege weapon type may be built at a time | No queue or exclusivity model exists | `missing` | Needs per-building production state |
 | Custom buildings | GM may define custom buildings and sizes/effects | No typed custom-building registry exists | `missing` | Needs a GM-authored definition layer, not free-form notes |
 

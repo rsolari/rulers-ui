@@ -319,6 +319,9 @@ export const troops = sqliteTable('troops', {
   condition: text('condition').default('Healthy').notNull(),
   armyId: text('army_id').references(() => armies.id),
   garrisonSettlementId: text('garrison_settlement_id').references(() => settlements.id),
+  recruitmentSettlementId: text('recruitment_settlement_id').references(() => settlements.id),
+  recruitmentYear: integer('recruitment_year'),
+  recruitmentSeason: text('recruitment_season'),
   recruitmentTurnsRemaining: integer('recruitment_turns_remaining').default(0).notNull(),
 });
 

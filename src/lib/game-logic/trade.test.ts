@@ -8,6 +8,7 @@ import {
 import type { EconomyRealmInput } from './economy';
 import { createProductSource } from '@/__tests__/helpers/test-factories';
 import { createEconomyRealmFixture, createProtectedImportFixture } from '@/__tests__/fixtures/economy-regression-fixtures';
+import type { ResourceType } from '@/types/game';
 
 function createRealm(overrides?: Partial<EconomyRealmInput>): EconomyRealmInput {
   return createEconomyRealmFixture({
@@ -26,7 +27,7 @@ describe('detectExportedProducts', () => {
     { producerProducts: [], partnerProducts: ['Ore'], expected: [] },
     { producerProducts: [], partnerProducts: [], expected: [] },
   ])('returns the unmatched products for %#', ({ producerProducts, partnerProducts, expected }) => {
-    expect(detectExportedProducts(producerProducts, partnerProducts)).toEqual(expected);
+    expect(detectExportedProducts(producerProducts as ResourceType[], partnerProducts as ResourceType[])).toEqual(expected);
   });
 });
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
+import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
 
 const mocks = vi.hoisted(() => {
   const operations: Array<{
@@ -296,6 +296,108 @@ describe('POST /api/game/[gameId]/setup', () => {
     await expect(response.json()).resolves.toEqual({
       territories: 1,
       npcRealms: 1,
+      playerSlots: 0,
+      claimCodes: [],
+      success: true,
+    });
+  });
+
+  it('adds wooden fortifications to initial towns and stone fortifications to initial cities', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+    authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'gm_world_setup' });
+
+    let uuidCounter = 0;
+    uuidMock.mockImplementation(() => `uuid-${++uuidCounter}`);
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        territories: [{
+          name: 'Neutral Territory',
+          type: 'Neutral',
+          resources: [{
+            resourceType: 'Ore',
+            rarity: 'Common',
+            settlement: { name: 'Market Town', size: 'Town' },
+          }, {
+            resourceType: 'Gold',
+            rarity: 'Luxury',
+            settlement: { name: 'Old Capital', size: 'City' },
+          }],
+        }],
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    const fortificationOperations = mocks.operations.filter((operation) => operation.table === buildings);
+    expect(fortificationOperations).toEqual([
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-4',
+          settlementId: 'uuid-2',
+          territoryId: 'uuid-1',
+          locationType: 'settlement',
+          type: 'Walls',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Timber',
+          takesBuildingSlot: false,
+        },
+      },
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-5',
+          settlementId: 'uuid-2',
+          territoryId: 'uuid-1',
+          locationType: 'settlement',
+          type: 'Gatehouse',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Timber',
+          takesBuildingSlot: false,
+        },
+      },
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-8',
+          settlementId: 'uuid-6',
+          territoryId: 'uuid-1',
+          locationType: 'settlement',
+          type: 'Walls',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Stone',
+          takesBuildingSlot: false,
+        },
+      },
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-9',
+          settlementId: 'uuid-6',
+          territoryId: 'uuid-1',
+          locationType: 'settlement',
+          type: 'Gatehouse',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Stone',
+          takesBuildingSlot: false,
+        },
+      },
+    ]);
+
+    await expect(response.json()).resolves.toEqual({
+      territories: 1,
+      npcRealms: 0,
       playerSlots: 0,
       claimCodes: [],
       success: true,

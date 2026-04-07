@@ -5,6 +5,7 @@ import {
   calculateFoodNeeded,
   calculateFortificationFoodNeed,
   calculateRealmFoodBalance,
+  distributeTerritoryFoodProduction,
 } from './food';
 
 describe('calculateFoodProduced', () => {
@@ -32,6 +33,20 @@ describe('calculateTerritoryFoodProduced', () => {
 
   it('accepts a custom cap parameter', () => {
     expect(calculateTerritoryFoodProduced(20, 10)).toBe(10);
+  });
+});
+
+describe('distributeTerritoryFoodProduction', () => {
+  it('distributes capped food output deterministically across settlements', () => {
+    const result = distributeTerritoryFoodProduction([
+      { settlementId: 'settlement-b', uncappedFoodProduced: 4 },
+      { settlementId: 'settlement-a', uncappedFoodProduced: 4 },
+    ], 5);
+
+    expect([...result.entries()]).toEqual([
+      ['settlement-a', 3],
+      ['settlement-b', 2],
+    ]);
   });
 });
 
@@ -150,5 +165,21 @@ describe('calculateRealmFoodBalance', () => {
     expect(result.produced).toBe(5);
     expect(result.needed).toBe(3);
     expect(result.surplus).toBe(2);
+  });
+
+  it('applies territory caps before realm totals are calculated', () => {
+    const result = calculateRealmFoodBalance({
+      settlements: [
+        { id: 'settlement-1', territoryId: 'territory-1', size: 'Village', occupiedSlots: 0, totalSlots: 4 },
+        { id: 'settlement-2', territoryId: 'territory-1', size: 'Village', occupiedSlots: 0, totalSlots: 4 },
+      ],
+      territoryCaps: { 'territory-1': 5 },
+      standaloneForts: 0,
+      standaloneCastles: 0,
+    });
+
+    expect(result.produced).toBe(5);
+    expect(result.needed).toBe(2);
+    expect(result.surplus).toBe(3);
   });
 });

@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
+import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
 import { generateGameCode, isAuthError, requireGM, requireInitState } from '@/lib/auth';
+import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
 import type { GovernmentType, ResourceRarity, ResourceType, SettlementSize, Tradition } from '@/types/game';
 
 type OwnershipKind = 'player' | 'npc' | 'neutral';
@@ -170,6 +171,20 @@ export async function POST(
             name: resource.settlement.name,
             size: settlementSize,
           }).run();
+
+          for (const fortification of getStartingSettlementFortifications(settlementSize)) {
+            tx.insert(buildings).values({
+              id: uuid(),
+              settlementId,
+              territoryId,
+              locationType: 'settlement',
+              type: fortification.type,
+              category: fortification.category,
+              size: fortification.size,
+              material: fortification.material,
+              takesBuildingSlot: fortification.takesBuildingSlot,
+            }).run();
+          }
 
           tx.insert(resourceSites).values({
             id: resourceSiteId,

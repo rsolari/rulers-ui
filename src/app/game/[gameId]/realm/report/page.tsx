@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
+import { TurnReportFinancialActionsEditor } from '@/components/turn-report-financial-actions-editor';
+import { normalizeFinancialActions } from '@/lib/financial-actions';
 import { ACTION_WORDS } from '@/types/game';
 import type { PoliticalAction, FinancialAction, ActionWord } from '@/types/game';
 import { MAX_ACTION_WORDS_PER_TURN } from '@/lib/game-logic/constants';
@@ -26,6 +27,23 @@ interface TurnReport {
   politicalActions: string;
 }
 
+interface Settlement {
+  id: string;
+  name: string;
+}
+
+interface Territory {
+  id: string;
+  name: string;
+  realmId: string | null;
+}
+
+interface Gos {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export default function ReportPage() {
   const params = useParams();
   const gameId = params.gameId as string;
@@ -34,18 +52,41 @@ export default function ReportPage() {
   const [report, setReport] = useState<TurnReport | null>(null);
   const [politicalActions, setPoliticalActions] = useState<PoliticalAction[]>([]);
   const [financialActions, setFinancialActions] = useState<FinancialAction[]>([]);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [territories, setTerritories] = useState<Territory[]>([]);
+  const [gos, setGos] = useState<Gos[]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!realmId) return;
-    fetch(`/api/game/${gameId}/turn?realmId=${realmId}`).then(r => r.json()).then(data => {
-      setGame(data.game);
-      if (data.report) {
-        setReport(data.report);
-        setPoliticalActions(JSON.parse(data.report.politicalActions || '[]'));
-        setFinancialActions(JSON.parse(data.report.financialActions || '[]'));
+
+    async function loadReport() {
+      const [turnResponse, settlementsResponse, territoriesResponse, gosResponse] = await Promise.all([
+        fetch(`/api/game/${gameId}/turn?realmId=${realmId}`),
+        fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
+        fetch(`/api/game/${gameId}/territories`),
+        fetch(`/api/game/${gameId}/gos?realmId=${realmId}`),
+      ]);
+
+      const turnData = await turnResponse.json();
+      setGame(turnData.game);
+      setSettlements(settlementsResponse.ok ? await settlementsResponse.json() : []);
+      setTerritories(
+        territoriesResponse.ok
+          ? (await territoriesResponse.json()).filter((territory: Territory) => territory.realmId === realmId)
+          : [],
+      );
+      setGos(gosResponse.ok ? await gosResponse.json() : []);
+
+      if (turnData.report) {
+        setReport(turnData.report);
+        setPoliticalActions(JSON.parse(turnData.report.politicalActions || '[]'));
+        setFinancialActions(normalizeFinancialActions(JSON.parse(turnData.report.financialActions || '[]')));
       }
-    });
+    }
+
+    void loadReport();
   }, [gameId, realmId]);
 
   const usedActionWords = politicalActions.reduce((sum, a) => sum + a.actionWords.length, 0);
@@ -72,14 +113,11 @@ export default function ReportPage() {
     setPoliticalActions(updated);
   }
 
-  function addFinancialAction() {
-    setFinancialActions([...financialActions, { type: 'spending', description: '', cost: 0 }]);
-  }
-
   async function saveReport(status: 'Draft' | 'Submitted') {
     if (!realmId) return;
+    setError('');
     setSaving(true);
-    await fetch(`/api/game/${gameId}/turn`, {
+    const response = await fetch(`/api/game/${gameId}/turn`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -89,6 +127,19 @@ export default function ReportPage() {
         status,
       }),
     });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setError(body?.error || 'Failed to save report');
+      setSaving(false);
+      return;
+    }
+
+    const savedReport = await response.json();
+    if (Array.isArray(savedReport.financialActions)) {
+      setFinancialActions(normalizeFinancialActions(savedReport.financialActions));
+    }
+
     setSaving(false);
     if (status === 'Submitted') {
       window.location.reload();
@@ -118,6 +169,8 @@ export default function ReportPage() {
           </CardContent>
         </Card>
       )}
+
+      {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
 
       {/* Political Actions */}
       <Card className="mb-6">
@@ -167,54 +220,14 @@ export default function ReportPage() {
       <Card className="mb-6">
         <CardHeader><CardTitle>Financial Actions</CardTitle></CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {financialActions.map((action, fIdx) => (
-              <div key={fIdx} className="grid grid-cols-3 gap-3 p-3 medieval-border rounded">
-                <Select
-                  label="Type"
-                  options={[
-                    { value: 'build', label: 'Build' },
-                    { value: 'recruit', label: 'Recruit' },
-                    { value: 'taxChange', label: 'Tax Change' },
-                    { value: 'spending', label: 'Spending' },
-                  ]}
-                  value={action.type}
-                  onChange={e => {
-                    const updated = [...financialActions];
-                    updated[fIdx].type = e.target.value as FinancialAction['type'];
-                    setFinancialActions(updated);
-                  }}
-                  disabled={isSubmitted}
-                />
-                <Input
-                  label="Description"
-                  value={action.description || ''}
-                  onChange={e => {
-                    const updated = [...financialActions];
-                    updated[fIdx].description = e.target.value;
-                    setFinancialActions(updated);
-                  }}
-                  disabled={isSubmitted}
-                />
-                <Input
-                  label="Cost"
-                  type="number"
-                  value={String(action.cost)}
-                  onChange={e => {
-                    const updated = [...financialActions];
-                    updated[fIdx].cost = parseInt(e.target.value) || 0;
-                    setFinancialActions(updated);
-                  }}
-                  disabled={isSubmitted}
-                />
-              </div>
-            ))}
-          </div>
-          {!isSubmitted && (
-            <Button variant="outline" size="sm" className="mt-3" onClick={addFinancialAction}>
-              + Add Financial Action
-            </Button>
-          )}
+          <TurnReportFinancialActionsEditor
+            actions={financialActions}
+            settlements={settlements}
+            territories={territories}
+            gos={gos}
+            isSubmitted={isSubmitted}
+            onChange={setFinancialActions}
+          />
         </CardContent>
       </Card>
 

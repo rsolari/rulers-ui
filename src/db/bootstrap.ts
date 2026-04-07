@@ -185,10 +185,14 @@ function createBaseSchema(database: Database.Database) {
       condition text NOT NULL DEFAULT 'Healthy',
       army_id text,
       garrison_settlement_id text,
+      recruitment_settlement_id text,
+      recruitment_year integer,
+      recruitment_season text,
       recruitment_turns_remaining integer NOT NULL DEFAULT 0,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (garrison_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (garrison_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (recruitment_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS siege_units (
@@ -638,6 +642,9 @@ function ensureEconomySchema(database: Database.Database) {
   addColumnIfMissing(database, 'buildings', "maintenance_state text DEFAULT 'active' NOT NULL", 'maintenance_state');
   addColumnIfMissing(database, 'buildings', 'allotted_gos_id text', 'allotted_gos_id');
   addColumnIfMissing(database, 'buildings', 'custom_definition_id text', 'custom_definition_id');
+  addColumnIfMissing(database, 'troops', 'recruitment_settlement_id text', 'recruitment_settlement_id');
+  addColumnIfMissing(database, 'troops', 'recruitment_year integer', 'recruitment_year');
+  addColumnIfMissing(database, 'troops', 'recruitment_season text', 'recruitment_season');
 
   database.exec(`
     UPDATE buildings

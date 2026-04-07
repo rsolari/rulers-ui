@@ -21,6 +21,8 @@ export interface SettlementEconomyBreakdownDto {
   foodWealth: number;
   totalWealth: number;
   tradeBonusRate: number;
+  taxRate: number;
+  taxRevenue: number;
   foodProduced: number;
   foodNeeded: number;
   emptyBuildingSlots: number;

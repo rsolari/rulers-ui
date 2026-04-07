@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -114,6 +115,9 @@ export default function ArmyPage() {
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
+      <nav className="mb-4 text-sm text-ink-300">
+        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+      </nav>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Armies & Troops</h1>
         <Button variant="accent" onClick={() => setCreateArmyOpen(true)}>+ New Army</Button>

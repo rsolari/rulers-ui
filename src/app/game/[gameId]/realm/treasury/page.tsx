@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useRole } from '@/hooks/use-role';
@@ -34,6 +35,9 @@ export default function TreasuryPage() {
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
+      <nav className="mb-4 text-sm text-ink-300">
+        <Link href={`/game/${gameId}/realm`} className="hover:text-ink-100">← Realm</Link>
+      </nav>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold">Treasury</h1>
@@ -105,7 +109,7 @@ export default function TreasuryPage() {
                 {revenueEntries.map((entry, index) => (
                   <TableRow key={`${entry.category}-${index}`}>
                     <TableCell>{entry.label}</TableCell>
-                    <TableCell className="text-right">{entry.amount.toLocaleString()}gc</TableCell>
+                    <TableCell className="text-right text-green-700">{entry.amount.toLocaleString()}gc</TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
@@ -131,7 +135,7 @@ export default function TreasuryPage() {
                 {costEntries.map((entry, index) => (
                   <TableRow key={`${entry.category}-${index}`}>
                     <TableCell>{entry.label}</TableCell>
-                    <TableCell className="text-right">{entry.amount.toLocaleString()}gc</TableCell>
+                    <TableCell className="text-right text-red-700">{entry.amount.toLocaleString()}gc</TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
@@ -153,10 +157,12 @@ export default function TreasuryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Settlement</TableHead>
-                <TableHead className="text-right">Resources</TableHead>
-                <TableHead className="text-right">Food Wealth</TableHead>
+                <TableHead className="text-right">Resource GDP</TableHead>
+                <TableHead className="text-right">Food GDP</TableHead>
                 <TableHead className="text-right">Trade Bonus</TableHead>
-                <TableHead className="text-right">Total Wealth</TableHead>
+                <TableHead className="text-right">Total GDP</TableHead>
+                <TableHead className="text-right">Tax Rate</TableHead>
+                <TableHead className="text-right">Tax Income</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -167,6 +173,8 @@ export default function TreasuryPage() {
                   <TableCell className="text-right">{settlement.foodWealth.toLocaleString()}gc</TableCell>
                   <TableCell className="text-right">{(settlement.tradeBonusRate * 100).toFixed(0)}%</TableCell>
                   <TableCell className="text-right font-bold">{settlement.totalWealth.toLocaleString()}gc</TableCell>
+                  <TableCell className="text-right">{(settlement.taxRate * 100).toFixed(0)}%</TableCell>
+                  <TableCell className="text-right text-green-700">{settlement.taxRevenue.toLocaleString()}gc</TableCell>
                 </TableRow>
               ))}
             </TableBody>

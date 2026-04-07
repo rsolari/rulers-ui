@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { nobleFamilies, nobles, realms } from '@/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 

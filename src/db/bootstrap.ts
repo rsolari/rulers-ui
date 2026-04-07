@@ -144,6 +144,7 @@ function createBaseSchema(database: Database.Database) {
       borrowed_amount integer NOT NULL DEFAULT 0,
       loan_repayment_per_season integer NOT NULL DEFAULT 0,
       loan_repayment_seasons_remaining integer NOT NULL DEFAULT 0,
+      turmoil integer NOT NULL DEFAULT 0,
       turmoil_sources text NOT NULL DEFAULT '[]',
       FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (ruler_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
@@ -1298,6 +1299,14 @@ export function initializeDatabaseSchema(database: Database.Database) {
     createIndexes(database);
   } finally {
     database.pragma('foreign_keys = ON');
+  }
+
+  if (settlementsRealmIdIsNotNull(database)) {
+    migrateSettlementsRealmIdToNullable(database);
+  }
+
+  if (buildingsSettlementIdIsNotNull(database)) {
+    migrateBuildingsToSupportStandaloneLocations(database);
   }
 
   ensureEconomySchema(database);

@@ -6,7 +6,7 @@ import { nobleFamilies, nobles, realms } from '@/db/schema';
 import { isAuthError, requireInitState, requireRealmOwner, resolveSessionFromCookies } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { appointRuler } from '@/lib/game-logic/governance';
-import { GovernanceError, isGovernanceError } from '@/lib/game-logic/nobles';
+import { isGovernanceError } from '@/lib/game-logic/nobles';
 
 async function getRulerByRealmId(realmId: string) {
   return db.select({

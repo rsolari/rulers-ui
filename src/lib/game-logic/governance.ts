@@ -646,7 +646,7 @@ export function resolveSuccession(
   const newRuler = requireRealmNoble(database, input.realmId, input.newRulerNobleId);
   assertNobleCanHoldOffice(newRuler, input.realmId, 'the throne');
 
-  let newHeirId = input.newHeirNobleId ?? null;
+  const newHeirId = input.newHeirNobleId ?? null;
   if (newHeirId) {
     if (newHeirId === newRuler.id) {
       throw new GovernanceError('The heir cannot be the new ruler', 400);

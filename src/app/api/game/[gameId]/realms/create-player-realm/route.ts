@@ -53,7 +53,6 @@ export async function POST(
         isNPC: false,
         treasury: 0,
         taxType: 'Tribute',
-        turmoil: 0,
         turmoilSources: '[]',
       }).run();
 

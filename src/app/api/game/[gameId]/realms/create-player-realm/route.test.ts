@@ -116,7 +116,6 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
           isNPC: false,
           treasury: 0,
           taxType: 'Tribute',
-          turmoil: 0,
           turmoilSources: '[]',
         },
       },

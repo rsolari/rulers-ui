@@ -47,9 +47,11 @@ interface Realm {
   name: string;
   governmentType: string;
   treasury: number;
-  turmoil: number;
   isNPC: boolean;
   traditions: string;
+  projectedTurmoil?: number | null;
+  openTurmoilEventId?: string | null;
+  winterUnrestPending?: boolean;
 }
 
 interface Territory {
@@ -673,9 +675,22 @@ export default function GMDashboard() {
                         Projected {economyOverview[realm.id].projectedTreasury.toLocaleString()}gc
                       </span>
                     )}
-                    <Badge variant={realm.turmoil > 5 ? 'red' : realm.turmoil > 2 ? 'gold' : 'green'}>
-                      Turmoil {realm.turmoil}
+                    <Badge
+                      variant={
+                        (realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0) > 5
+                          ? 'red'
+                          : (realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0) > 2
+                            ? 'gold'
+                            : 'green'
+                      }
+                    >
+                      Turmoil {realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0}
                     </Badge>
+                    {realm.openTurmoilEventId ? (
+                      <Badge variant={realm.winterUnrestPending ? 'red' : 'gold'}>
+                        {realm.winterUnrestPending ? 'Winter unrest' : 'Review open'}
+                      </Badge>
+                    ) : null}
                     {economyOverview[realm.id]?.warningCount ? (
                       <Badge variant="gold">{economyOverview[realm.id].warningCount} warnings</Badge>
                     ) : null}

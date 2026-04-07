@@ -407,7 +407,6 @@ describe('createTroopRecruitment', () => {
       governmentType: 'Monarch',
       treasury,
       taxType: 'Tribute',
-      turmoil: 0,
       turmoilSources: '[]',
     }).run();
 

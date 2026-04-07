@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
+import { TurmoilSummaryCard } from '@/components/turmoil/turmoil-summary-card';
 import { PlayerTurnReportPanel } from '@/components/turn-actions/player-turn-report-panel';
 import type { GovernmentType, Tradition } from '@/types/game';
 
@@ -44,9 +45,11 @@ interface Realm {
   name: string;
   governmentType: string;
   treasury: number;
-  turmoil: number;
   taxType: string;
   traditions: string;
+  projectedTurmoil?: number | null;
+  openTurmoilEventId?: string | null;
+  winterUnrestPending?: boolean;
 }
 
 interface Territory {
@@ -319,10 +322,26 @@ export default function RealmDashboard() {
             </div>
             <div className="flex items-center justify-between">
               <span>Turmoil</span>
-              <Badge variant={realm.turmoil > 5 ? 'red' : realm.turmoil > 2 ? 'gold' : 'green'}>
-                {realm.turmoil}
+              <Badge
+                variant={
+                  (economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0) > 5
+                    ? 'red'
+                    : (economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0) > 2
+                      ? 'gold'
+                      : 'green'
+                }
+              >
+                {economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0}
               </Badge>
             </div>
+            {economyProjection?.openTurmoilEventId ? (
+              <div className="flex items-center justify-between">
+                <span>Incident</span>
+                <Badge variant={economyProjection.winterUnrestPending ? 'red' : 'gold'}>
+                  {economyProjection.winterUnrestPending ? 'Winter unrest pending' : 'Turmoil review open'}
+                </Badge>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
               <span>Settlements</span>
               <strong>{settlements.length}</strong>
@@ -386,6 +405,15 @@ export default function RealmDashboard() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <TurmoilSummaryCard
+          title="Realm Turmoil"
+          projectedTurmoil={economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0}
+          turmoilBreakdown={economyProjection?.turmoilBreakdown ?? []}
+          incidentLabel={economyProjection?.winterUnrestPending ? 'Winter unrest pending' : economyProjection?.openTurmoilEventId ? 'Turmoil review open' : null}
+        />
       </div>
 
       <Card className="mt-6">

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
+import { buildings, games, playerSlots, realms, resourceSites, settlements, territories, troops } from '@/db/schema';
 
 const mocks = vi.hoisted(() => {
   const operations: Array<{
@@ -54,6 +54,21 @@ vi.mock('@/lib/auth', () => authMocks);
 
 const mapMocks = vi.hoisted(() => ({
   DEFAULT_CURATED_MAP_KEY: 'world-v1',
+  getCuratedMapDefinition: vi.fn(() => ({
+    key: 'world-v1',
+    name: 'World V1',
+    version: 1,
+    territories: [{
+      key: 'kingdom-1',
+      name: 'Kingdom 1',
+      description: 'Map Description',
+    }],
+    hexes: [
+      { q: 0, r: 0, kind: 'land', terrainType: 'plains', territoryKey: 'kingdom-1' },
+      { q: 1, r: 0, kind: 'land', terrainType: 'plains', territoryKey: 'kingdom-1' },
+      { q: 2, r: 0, kind: 'land', terrainType: 'plains', territoryKey: 'kingdom-1' },
+    ],
+  })),
   getActiveCuratedMapTerritories: vi.fn(() => [{
     key: 'kingdom-1',
     name: 'Kingdom 1',
@@ -83,6 +98,7 @@ describe('POST /api/game/[gameId]/setup', () => {
     mocks.operations.length = 0;
     uuidMock.mockReset();
     authMocks.generateGameCode.mockReset();
+    mapMocks.getCuratedMapDefinition.mockClear();
     mapMocks.getActiveCuratedMapTerritories.mockClear();
     mapMocks.importCuratedGameMap.mockClear();
   });
@@ -221,11 +237,8 @@ describe('POST /api/game/[gameId]/setup', () => {
     authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
     authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'gm_world_setup' });
 
-    uuidMock
-      .mockReturnValueOnce('realm-1')
-      .mockReturnValueOnce('territory-1')
-      .mockReturnValueOnce('settlement-1')
-      .mockReturnValueOnce('resource-1');
+    let uuidCounter = 0;
+    uuidMock.mockImplementation(() => `uuid-${++uuidCounter}`);
 
     const response = await POST(new Request('http://localhost/api/game/game-1/setup', {
       method: 'POST',
@@ -258,7 +271,7 @@ describe('POST /api/game/[gameId]/setup', () => {
         kind: 'insert',
         table: realms,
         values: {
-          id: 'realm-1',
+          id: 'uuid-1',
           gameId: 'game-1',
           name: 'NPC Realm',
           governmentType: 'Monarch',
@@ -278,21 +291,21 @@ describe('POST /api/game/[gameId]/setup', () => {
         kind: 'insert',
         table: territories,
         values: {
-          id: 'territory-1',
+          id: 'uuid-2',
           gameId: 'game-1',
           name: 'NPC Territory',
           description: 'Map Description',
-          realmId: 'realm-1',
+          realmId: 'uuid-1',
         },
       },
       {
         kind: 'insert',
         table: settlements,
         values: {
-          id: 'settlement-1',
-          territoryId: 'territory-1',
+          id: 'uuid-3',
+          territoryId: 'uuid-2',
           hexId: 'hex-1',
-          realmId: 'realm-1',
+          realmId: 'uuid-1',
           name: 'S1',
           size: 'Village',
         },
@@ -301,11 +314,139 @@ describe('POST /api/game/[gameId]/setup', () => {
         kind: 'insert',
         table: resourceSites,
         values: {
-          id: 'resource-1',
-          territoryId: 'territory-1',
-          settlementId: 'settlement-1',
+          id: 'uuid-4',
+          territoryId: 'uuid-2',
+          settlementId: 'uuid-3',
           resourceType: 'Ore',
           rarity: 'Common',
+        },
+      },
+      {
+        kind: 'insert',
+        table: settlements,
+        values: {
+          id: 'uuid-5',
+          territoryId: 'uuid-2',
+          hexId: 'hex-2',
+          realmId: 'uuid-1',
+          name: 'NPC Realm Capital',
+          size: 'Town',
+          isCapital: true,
+          governingNobleId: null,
+        },
+      },
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-6',
+          settlementId: 'uuid-5',
+          territoryId: 'uuid-2',
+          hexId: 'hex-2',
+          locationType: 'settlement',
+          type: 'Walls',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Timber',
+          takesBuildingSlot: false,
+        },
+      },
+      {
+        kind: 'insert',
+        table: buildings,
+        values: {
+          id: 'uuid-7',
+          settlementId: 'uuid-5',
+          territoryId: 'uuid-2',
+          hexId: 'hex-2',
+          locationType: 'settlement',
+          type: 'Gatehouse',
+          category: 'Fortification',
+          size: 'Small',
+          material: 'Timber',
+          takesBuildingSlot: false,
+        },
+      },
+      {
+        kind: 'insert',
+        table: troops,
+        values: {
+          id: 'uuid-8',
+          realmId: 'uuid-1',
+          type: 'Spearmen',
+          class: 'Basic',
+          armourType: 'Light',
+          condition: 'Healthy',
+          armyId: null,
+          garrisonSettlementId: 'uuid-5',
+          recruitmentTurnsRemaining: 0,
+        },
+      },
+      {
+        kind: 'insert',
+        table: troops,
+        values: {
+          id: 'uuid-9',
+          realmId: 'uuid-1',
+          type: 'Spearmen',
+          class: 'Basic',
+          armourType: 'Light',
+          condition: 'Healthy',
+          armyId: null,
+          garrisonSettlementId: 'uuid-5',
+          recruitmentTurnsRemaining: 0,
+        },
+      },
+      {
+        kind: 'insert',
+        table: troops,
+        values: {
+          id: 'uuid-10',
+          realmId: 'uuid-1',
+          type: 'Spearmen',
+          class: 'Basic',
+          armourType: 'Light',
+          condition: 'Healthy',
+          armyId: null,
+          garrisonSettlementId: 'uuid-5',
+          recruitmentTurnsRemaining: 0,
+        },
+      },
+      {
+        kind: 'insert',
+        table: troops,
+        values: {
+          id: 'uuid-11',
+          realmId: 'uuid-1',
+          type: 'Spearmen',
+          class: 'Basic',
+          armourType: 'Light',
+          condition: 'Healthy',
+          armyId: null,
+          garrisonSettlementId: 'uuid-5',
+          recruitmentTurnsRemaining: 0,
+        },
+      },
+      {
+        kind: 'insert',
+        table: troops,
+        values: {
+          id: 'uuid-12',
+          realmId: 'uuid-1',
+          type: 'Spearmen',
+          class: 'Basic',
+          armourType: 'Light',
+          condition: 'Healthy',
+          armyId: null,
+          garrisonSettlementId: 'uuid-5',
+          recruitmentTurnsRemaining: 0,
+        },
+      },
+      {
+        kind: 'update',
+        table: realms,
+        values: {
+          capitalSettlementId: 'uuid-5',
         },
       },
       {

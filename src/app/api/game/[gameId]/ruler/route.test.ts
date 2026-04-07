@@ -250,6 +250,7 @@ describe('POST /api/game/[gameId]/ruler', () => {
           id: 'ruler-1',
           realmId: 'realm-player',
           originRealmId: 'realm-player',
+          estateLevel: 'Luxurious',
         }),
       },
       {
@@ -398,6 +399,7 @@ describe('POST /api/game/[gameId]/ruler', () => {
           race: 'Human',
           backstory: 'A veteran of the eastern campaign.',
           personality: 'Confident and Charismatic',
+          estateLevel: 'Luxurious',
         }),
       },
       {
@@ -496,6 +498,7 @@ describe('POST /api/game/[gameId]/ruler', () => {
           id: 'ruler-1',
           familyId: 'family-new',
           realmId: 'realm-1',
+          estateLevel: 'Luxurious',
         }),
       },
     ]));

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
+import type { TaxType } from '@/types/game';
 import { TurmoilSummaryCard } from '@/components/turmoil/turmoil-summary-card';
 import { PlayerTurnReportPanel } from '@/components/turn-actions/player-turn-report-panel';
 import type { GovernmentType, Tradition } from '@/types/game';
@@ -428,6 +429,7 @@ export default function RealmDashboard() {
           title="Realm Turmoil"
           projectedTurmoil={economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0}
           turmoilBreakdown={economyProjection?.turmoilBreakdown ?? []}
+          taxType={(economyProjection?.realm.taxTypeApplied ?? realm.taxType) as TaxType}
           incidentLabel={economyProjection?.winterUnrestPending ? 'Winter unrest pending' : economyProjection?.openTurmoilEventId ? 'Turmoil review open' : null}
         />
       </div>

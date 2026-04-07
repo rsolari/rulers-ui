@@ -139,7 +139,7 @@ export async function POST(
         valuedObject: body.valuedObject ?? null,
         valuedPerson: body.valuedPerson ?? null,
         greatestDesire: body.greatestDesire ?? null,
-        estateLevel: body.estateLevel ?? 'Meagre',
+        estateLevel: 'Luxurious',
         reasonSkill: body.reasonSkill ?? 0,
         cunningSkill: body.cunningSkill ?? 0,
         isAlive: true,

@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { resourceSites, territories } from '@/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { isAuthError, requireGM } from '@/lib/auth';
 import { createResourceSite, isRuleValidationError } from '@/lib/rules-action-service';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ gameId: string }> }
 ) {
   const { gameId } = await params;
-  const terrs = await db.select().from(territories).where(eq(territories.gameId, gameId));
+  const url = new URL(request.url);
+  const realmId = url.searchParams.get('realmId');
+
+  const condition = realmId
+    ? and(eq(territories.gameId, gameId), eq(territories.realmId, realmId))
+    : eq(territories.gameId, gameId);
+
+  const terrs = await db.select().from(territories).where(condition);
   const terrIds = terrs.map(t => t.id);
 
   if (terrIds.length === 0) return NextResponse.json([]);

@@ -81,6 +81,7 @@ export const realms = sqliteTable('realms', {
   loanRepaymentPerSeason: integer('loan_repayment_per_season').default(0).notNull(),
   loanRepaymentSeasonsRemaining: integer('loan_repayment_seasons_remaining').default(0).notNull(),
   turmoilSources: text('turmoil_sources').default('[]').notNull(), // JSON array
+  capitalSettlementId: text('capital_settlement_id'),
 });
 
 export const realmsRelations = relations(realms, ({ one, many }) => ({

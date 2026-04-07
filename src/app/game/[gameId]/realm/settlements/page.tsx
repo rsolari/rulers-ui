@@ -19,6 +19,7 @@ interface Settlement {
     type: string;
     category: string;
     size: string;
+    takesBuildingSlot?: boolean;
     constructionTurnsRemaining: number;
   }>;
 }
@@ -50,7 +51,7 @@ export default function SettlementsPage() {
       <div className="space-y-6">
         {settlements.map((settlement) => {
           const data = SETTLEMENT_DATA[settlement.size];
-          const usedSlots = settlement.buildings?.length || 0;
+          const usedSlots = settlement.buildings?.filter((building) => building.takesBuildingSlot !== false).length ?? 0;
 
           return (
             <Card key={settlement.id} variant="gold">

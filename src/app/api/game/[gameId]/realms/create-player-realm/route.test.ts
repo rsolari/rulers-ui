@@ -241,6 +241,13 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
       },
       {
         kind: 'update',
+        table: realms,
+        values: {
+          capitalSettlementId: 'uuid-2',
+        },
+      },
+      {
+        kind: 'update',
         table: settlements,
         values: {
           realmId: 'uuid-1',

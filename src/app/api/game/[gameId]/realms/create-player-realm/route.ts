@@ -96,6 +96,11 @@ export async function POST(
         }).run();
       }
 
+      tx.update(realms)
+        .set({ capitalSettlementId: townId })
+        .where(eq(realms.id, realmId))
+        .run();
+
       tx.update(settlements)
         .set({ realmId })
         .where(eq(settlements.territoryId, territory.id))

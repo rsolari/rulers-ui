@@ -111,6 +111,7 @@ function createBaseSchema(database: Database.Database) {
       loan_repayment_per_season integer NOT NULL DEFAULT 0,
       loan_repayment_seasons_remaining integer NOT NULL DEFAULT 0,
       turmoil_sources text NOT NULL DEFAULT '[]',
+      capital_settlement_id text,
       FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action
     );
 
@@ -549,6 +550,12 @@ function createBaseSchema(database: Database.Database) {
   `);
 }
 
+function migrateSchema(database: Database.Database) {
+  if (tableExists(database, 'realms') && !columnExists(database, 'realms', 'capital_settlement_id')) {
+    database.exec('ALTER TABLE realms ADD COLUMN capital_settlement_id text;');
+  }
+}
+
 function createIndexes(database: Database.Database) {
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS game_maps_game_id_unique
@@ -601,6 +608,7 @@ export function initializeDatabaseSchema(database: Database.Database) {
     }
 
     createBaseSchema(database);
+    migrateSchema(database);
     createIndexes(database);
   } finally {
     database.pragma('foreign_keys = ON');

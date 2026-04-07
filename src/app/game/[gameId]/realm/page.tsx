@@ -50,6 +50,7 @@ interface Realm {
   projectedTurmoil?: number | null;
   openTurmoilEventId?: string | null;
   winterUnrestPending?: boolean;
+  capitalSettlementId?: string | null;
 }
 
 interface Territory {
@@ -119,7 +120,7 @@ export default function RealmDashboard() {
         fetch(`/api/game/${gameId}/territories`),
         fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/ruler?realmId=${realmId}`),
-        fetch(`/api/game/${gameId}/resources`),
+        fetch(`/api/game/${gameId}/resources?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/armies?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/gos?realmId=${realmId}`),
@@ -441,6 +442,9 @@ export default function RealmDashboard() {
                                 <div className="flex items-center gap-3">
                                   <span>{settlement.name}</span>
                                   <Badge>{settlement.size}</Badge>
+                                  {settlement.id === realm.capitalSettlementId && (
+                                    <Badge variant="gold">&#9733; Capital</Badge>
+                                  )}
                                 </div>
                                 <span className="text-sm text-ink-300">{settlement.buildings?.length || 0} buildings</span>
                               </div>

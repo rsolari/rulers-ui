@@ -1,26 +1,26 @@
 # Guilds, Orders & Societies
 
-The Ruler is not the only politically motivated individual in your Realm. Other Nobles, Knights, and Lords wish to increase their holdings, or their power. Religious Orders want to spread the word of their faith, Guilds want more trade to fill their coffers, while Societies dream of creating their magnum opus.
+The [Ruler](12-creating-your-ruler.md) is not the only politically motivated individual in your Realm. Other [Nobles](16-nobles.md), Knights, and Lords wish to increase their holdings, or their power. Religious Orders want to spread the word of their faith, Guilds want more [trade](25-trade.md) to fill their coffers, while Societies dream of creating their magnum opus.
 
-Guilds, Orders and Societies are political entities within the Realm which will pursue their own goals. They have their own income, separate from the income of the Realm or the Wealth of cities. They can use these finances to construct their own Buildings and recruit their own Troops. These organisations may also buy or own Buildings, Resource Sites and Industries in their home Realm, and in Realms further afield. This is the basis of their income.
+Guilds, Orders and Societies are political entities within the Realm which will pursue their own goals. They have their own income, separate from the income of the Realm or the Wealth of cities. They can use these finances to construct their own [Buildings](26-buildings.md) and recruit their own [Troops](27-armies.md). These organisations may also buy or own Buildings, Resource Sites and [Industries](24-resources-and-industries.md) in their home Realm, and in Realms further afield. This is the basis of their income.
 
-Most Guilds, Orders or Societies are founded during the creation of your Realm. However, a new G.O.S. may be founded if the Ruler constructs a Building that requires a G.O.S., such as a Church or a University. All Troops and Buildings owned by a Guild, Order or Society have the normal Construction/Recruitment and Maintenance/Upkeep costs.
+Most Guilds, Orders or Societies are founded during the [creation of your Realm](10-character-creation.md). However, a new G.O.S. may be founded if the Ruler constructs a Building that requires a G.O.S., such as a [Church](26-buildings.md#chapel-church-cathedral) or a [University](26-buildings.md#academies-colleges-and-universities). All Troops and Buildings owned by a Guild, Order or Society have the normal Construction/Recruitment and Maintenance/Upkeep costs.
 
-Many Traditions chosen at Character Creation come with a Guild, Order or Society. In each case they will be granted a Building which will be their first source of income. They will never have to pay maintenance for this one Building.
+Many [Traditions](13-traditions.md) chosen at Character Creation come with a Guild, Order or Society. In each case they will be granted a Building which will be their first source of income. They will never have to pay maintenance for this one Building.
 
 To create a new Guild, Order or Society, they must be granted a starting Building by their Ruler. There is no limit on how many Guilds, Orders or Societies a Realm may have, but it is in the interest of the N.O. to keep these numbers down for their own sanity.
 
 ## Guilds
 
-A Guild is a collective of artisans and professionals who want to expand their profit margins. Their primary goals are to increase their profits and expand their business. Each Guild has a monopoly over a certain product, such as a Guild of Brewers, Jewellers or Potters. Whatever a Guild controls must be produced by an Industry or a Building.
+A Guild is a collective of artisans and professionals who want to expand their profit margins. Their primary goals are to increase their profits and expand their business. Each Guild has a monopoly over a certain product, such as a Guild of Brewers, Jewellers or Potters. Whatever a Guild controls must be produced by an [Industry](24-resources-and-industries.md) or a Building.
 
-The Guild will buy Resource Sites relevant to their monopoly, as well as Industries in other Realms. For each Industry and Resource Site which falls under their monopoly, or which they have bought, they are paid a membership fee of 10% of its base value. This does not generate Turmoil.
+The Guild will buy [Resource](08-territories-and-resources.md) Sites relevant to their monopoly, as well as Industries in other Realms. For each Industry and Resource Site which falls under their monopoly, or which they have bought, they are paid a membership fee of 10% of its base value. This does not generate [Turmoil](21-turmoil.md).
 
 | Wealth Generator | Guild Income |
 |---|---|
 | Common Resource | 1,200g |
 | Luxury Resource | 1,500g |
-| Food | 200g (per Food Produced) |
+| [Food](20-food-for-the-people.md) | 200g (per Food Produced) |
 
 A Guild will hire Troops to defend trade routes, their property, and possibly forcibly acquire new property if they are feeling particularly bold.
 
@@ -30,7 +30,7 @@ An Order has a moral or political ambition they are trying to achieve. They are 
 
 Their primary objective is to see their goal(s) realised, but it may be impossible to ever truly complete it, such as the conversion of every individual to their faith. An Order therefore will continue to work towards their goal(s), but may largely be content to see their influence grow.
 
-An Order has Alcoves of Power — these are Buildings which increase their influence and their income. For a Religious Order, these would naturally be Churches, or Temples. For other Orders, they are free to be defined by the Player and the N.O. However, they must be defined for all Building sizes when the Order is created. Both the Player and N.O. may agree that some Building sizes are inappropriate for the Order in question.[^26]
+An Order has Alcoves of Power — these are Buildings which increase their influence and their income. For a Religious Order, these would naturally be [Churches, or Temples](26-buildings.md#chapel-church-cathedral). For other Orders, they are free to be defined by the Player and the N.O. However, they must be defined for all [Building sizes](26-buildings.md) when the Order is created. Both the Player and N.O. may agree that some Building sizes are inappropriate for the Order in question.[^26]
 
 | Alcove of Power Size | Order Income |
 |---|---|
@@ -50,7 +50,7 @@ A Society is interested in Art for Art's sake. Their focus is on one area of aca
 
 A Society's objective is to expand their knowledge in their chosen field. A Society will also want to offer education in their field, as a means of supporting themselves. However, many Societies will resent their direct competitors as they may be a threat to their income. As a result, they will likely view their field as the most important.
 
-They will try to acquire patronage from their Ruler to expand their efforts, and construct more Centres of Study. These may be Academies, Universities, Theatres or even Coliseums, especially for the more athletic Societies. What Buildings are relevant to a Society are defined when it is created. Remember that Maintenance for these Buildings has to be paid (outside of their first one).
+They will try to acquire patronage from their Ruler to expand their efforts, and construct more Centres of Study. These may be [Academies, Universities](26-buildings.md#academies-colleges-and-universities), Theatres or even [Coliseums](26-buildings.md#coliseum), especially for the more athletic Societies. What Buildings are relevant to a Society are defined when it is created. Remember that Maintenance for these Buildings has to be paid (outside of their first one).
 
 | Centres of Study | Society Income |
 |---|---|

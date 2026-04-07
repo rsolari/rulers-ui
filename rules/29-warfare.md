@@ -1,8 +1,8 @@
 # Warfare
 
-Wars can be fought to protect the Realm, or to expand it, but like any war, it is down to the soldiers on the frontline to interpret their orders as best they can. Each Troop is led by a Knight, and any collective group of Troops form an Army, which must itself be led by a Noble. This Noble is then considered a General. A General is given orders by their Ruler (which they may or may not follow).
+Wars can be fought to protect the Realm, or to expand it, but like any war, it is down to the soldiers on the frontline to interpret their orders as best they can. Each [Troop](27-armies.md) is led by a Knight, and any collective group of Troops form an Army, which must itself be led by a [Noble](16-nobles.md). This Noble is then considered a General. A General is given orders by their [Ruler](12-creating-your-ruler.md) (which they may or may not follow).
 
-When an Army attempts to fulfil its orders (quelling a rebellion, routing bandits, defending a pass, capturing a city etc.) then it is up to the N.O. to decide what level of combat needs to be played out.
+When an Army attempts to fulfil its orders (quelling a [rebellion](22-down-with-the-king.md), routing bandits, defending a pass, capturing a city etc.) then it is up to the N.O. to decide what level of combat needs to be played out.
 
 There are three levels of combat: **Automatic**, **Quick Resolve**, and **Full Combat**.
 
@@ -26,7 +26,7 @@ If however, the defenders had a battalion of the legendary Onor'Tok on their sid
 
 ## Battles — Quick Combat
 
-> *A number of Shadowfox Light Cavalrymen are sent to scout a Bandit camp, which has been launching attacks against trade wagons passing through a nearby valley. When they get there, they are ambushed by a smattering of crossbowmen and thugs. This battle should be decided quickly, but it's an even fight.*
+> *A number of Shadowfox Light Cavalrymen are sent to scout a Bandit camp, which has been launching attacks against [trade](25-trade.md) wagons passing through a nearby valley. When they get there, they are ambushed by a smattering of crossbowmen and thugs. This battle should be decided quickly, but it's an even fight.*
 
 Quick Resolve is used to decide battles where the outcome is less certain, but in the interest of time, are not worth playing out in Full Combat.
 
@@ -54,7 +54,7 @@ Each Army has a moment to describe its position on the Battlefield, with the Def
 
 ### Troop Actions & Initiative
 
-Once the scene of the battle has been set, the Defenders are given the initiative to act first. This process is largely descriptive, and Troops may act as is reasonable for them to do so. Each Troop may **Move**, **Act** or **Ready** an action on their turn. Depending on the Armour or Weapon Type of the Troop, they may be able to Move and Act on their turn.[^34] Once all of the Defenders' Troops have acted, it is then the turn of the Attackers, and so on.
+Once the scene of the battle has been set, the Defenders are given the initiative to act first. This process is largely descriptive, and Troops may act as is reasonable for them to do so. Each Troop may **Move**, **Act** or **Ready** an action on their turn. Depending on the [Armour](28-siege-units.md#armour-types) or Weapon Type of the Troop, they may be able to Move and Act on their turn.[^34] Once all of the Defenders' Troops have acted, it is then the turn of the Attackers, and so on.
 
 ### Resolving Dice Rolls
 
@@ -116,7 +116,7 @@ The Amethysians roll 4, 1, 5, 6, 2. The 5 and the 6 are successes. The Mords rol
 
 The Amethysians win the combat roll by 1 Success. Normally, this would only Wound a Troop, but because the Mord Troop is already at Wound 2, they advance into Routed. They must now make a Morale roll to stay on the battlefield.
 
-Mord Nobles have a proud Chivalric Tradition, and so their Elite have a +1 to Morale rolls, but they are now at −2 Dice because they are at Routed 1. They will roll 5d6 (6d6 − 2 + 1 = 5d6) against the 1 Success from the Amethysian Harlequins.
+Mord Nobles have a proud [Chivalric Tradition](13-traditions.md#chivalric), and so their Elite have a +1 to Morale rolls, but they are now at −2 Dice because they are at Routed 1. They will roll 5d6 (6d6 − 2 + 1 = 5d6) against the 1 Success from the Amethysian Harlequins.
 
 The Mord Swordsmen roll 1, 5, 3, 4, 4. They pass the Morale roll just barely and with a tremendous roar they continue to charge through the hail of lead shot.
 
@@ -124,7 +124,7 @@ They crash into the Harlequins in a flurry of steel. They are at −2 for Routed
 
 The gunline is Routed, and now must pass a Morale save. They have yet to be wounded, so they roll their base dice pool of 4d6; they need 3 successes. They roll 2, 6, 3 for 1 success. The Harlequins have failed their Morale check and are Routed! Against the terrifying might of the Mord swordsmen, they begin to flee for their lives.
 
-In Full Combat, the battle is over when one side concedes defeat, or if all of an Army's Troops have been Routed or Defeated. Alternatively, the Players and the N.O. can agree on an objective that decides the battle, such as the capture of a Gatehouse, or the defeat of the General.
+In Full Combat, the battle is over when one side concedes defeat, or if all of an Army's Troops have been Routed or Defeated. Alternatively, the Players and the N.O. can agree on an objective that decides the battle, such as the capture of a [Gatehouse](26-buildings.md#gatehouse), or the defeat of the General.
 
 [^34]: This is largely the case for Melee troops, but not Ranged ones.
 [^35]: Archers firing from a Settlement Wall against an entirely Melee Army cannot be Wounded. However, the N.O. may deem it appropriate for them to be Routed if, say, the Gate is breached and the Archers are about to be overrun.

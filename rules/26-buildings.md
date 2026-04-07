@@ -1,6 +1,6 @@
 # Buildings
 
-Buildings are structures in your Realm which provide a passive effect. An Apothecary's can keep the population healthy with medicine, while a Gunsmith's will allow for Harquebus Troops to be Recruited.
+Buildings are structures in your Realm which provide a passive effect. An Apothecary's can keep the population healthy with medicine, while a [Gunsmith's](#gunsmith) will allow for Harquebus [Troops](27-armies.md) to be Recruited.
 
 Every Building has a Size. This determines how long it takes to build and how much it costs. In addition to this, each Building has a maintenance cost each Season. If the maintenance cost cannot be paid, then the effect of the Building ends until the Maintenance cost is paid again.
 
@@ -12,13 +12,13 @@ Every Building also takes time to Build. During construction the Building does n
 | Build Cost | 375g | 750g | 1,500g | 3,000g | 6,000g |
 | Maintenance (p/Season) | 250g | 500g | 1,000g | 2,000g | 4,000g |
 
-Certain Buildings may require specific Resources, or have other prerequisites, in order to operate, while others may provide Resources to allow other Buildings or Industries to function.
+Certain Buildings may require specific [Resources](08-territories-and-resources.md), or have other prerequisites, in order to operate, while others may provide Resources to allow other Buildings or [Industries](24-resources-and-industries.md) to function.
 
-Once construction is initiated, it has to be defined by the Ruler where the building is being constructed. This is typically a Settlement, but the N.O. may allow certain buildings to be built freely, such as Castles or Monasteries. Their location must still be defined.
+Once construction is initiated, it has to be defined by the [Ruler](12-creating-your-ruler.md) where the building is being constructed. This is typically a [Settlement](19-settlements.md), but the N.O. may allow certain buildings to be built freely, such as [Castles](#castle) or Monasteries. Their location must still be defined.
 
 ## Building Slots
 
-Each building, regardless of its size, takes up 1 Building Slot in a Settlement. Every Building must be in a Building slot in a Settlement, unless specified otherwise. A Settlement has Building slots according to its size — refer to Settlements for full details.
+Each building, regardless of its size, takes up 1 Building Slot in a [Settlement](19-settlements.md). Every Building must be in a Building slot in a Settlement, unless specified otherwise. A Settlement has Building slots according to its size — refer to [Settlements](19-settlements.md#building-slots) for full details.
 
 ---
 
@@ -27,91 +27,91 @@ Each building, regardless of its size, takes up 1 Building Slot in a Settlement.
 ### Civic Buildings
 
 #### Bank
-**Size:** Medium | **Requirements:** Allotted to a Guild
+**Size:** Medium | **Requirements:** Allotted to a [Guild](18-guilds-orders-and-societies.md#guilds)
 
 > *"Neither a borrower nor a lender be, unless you are a Banker, in which case that is an excellent idea!"* — Shadowfox Rule of Business #29
 
 This sturdy building allows the Rulers to borrow money from the Guild it is owned by. The Ruler can borrow up to half their income. This can be done once a year. The loan is to be paid back over 1 Year, and this begins the Season after the loan was taken out. The Guild does not need to have the funds to offer the loan, but they will receive the payment back.
 
 #### Coliseum
-**Size:** Large | **Effect:** −4 Turmoil, allows the Realm to host Sporting events and festivals | **Requirements:** —
+**Size:** Large | **Effect:** −4 [Turmoil](21-turmoil.md), allows the Realm to host Sporting events and festivals | **Requirements:** —
 
 Let the games begin! This huge construction allows everyone a spectacular view of the sport most popular in the Realm. A Coliseum has the immediate effect of reducing Turmoil in the Realm.
 
-In addition to this, once a year, a sporting event of immense significance is held. This is an event which draws the best athletes and the most fashionable nobles from around the world. Any Ruler would be unwise to miss such an event.
+In addition to this, once a year, a sporting event of immense significance is held. This is an event which draws the best athletes and the most fashionable [nobles](16-nobles.md) from around the world. Any Ruler would be unwise to miss such an event.
 
 - For 2,000g, this event can also spark a New Fashion.
 - For 4,000g, the event is so elaborate that it provides an additional −2 Turmoil for 2 Seasons.
 
 #### Port
-**Size:** Medium | **Effect:** Allows Trade Routes to traverse water | **Requirements:** —
+**Size:** Medium | **Effect:** Allows [Trade Routes](25-trade.md) to traverse water | **Requirements:** —
 
 Riverboats and Carracks, Barges and Galleons, all pass through the Port to sell their wares. This Building allows for Trade Routes to travel by sea and by rivers, instead of by land. This does not alter the speed of Trade or the Wealth it generates.
 
 #### Theatre
-**Size:** Medium | **Effect:** −2 Turmoil, allows the Realm to host Theatrical events | **Requirements:** —
+**Size:** Medium | **Effect:** −2 [Turmoil](21-turmoil.md), allows the Realm to host Theatrical events | **Requirements:** —
 
 > *"All the world's a stage, we have our entrances and our exits... some more memorable than others."* — Grand Inquisitor Jarlstor Von Faulsten upon beheading Emperor Wilbur Von Tatten.
 
 The play's the thing, and it's the thing that keeps both the commoners and the nobles entertained with its regular performances. A Realm with this Building has −2 Turmoil and can also put on special theatrical events that draw the attention of the other Realms of the World.
 
 #### Academies, Colleges, and Universities
-**Size:** Small / Medium / Large | **Effect:** Provides income to a Society | **Requirements:** Allotted to a Society
+**Size:** Small / Medium / Large | **Effect:** Provides income to a [Society](18-guilds-orders-and-societies.md#societies) | **Requirements:** Allotted to a Society
 
-An Academy, College or University allows for the study of a subject associated with a Society. This could be Art or Science, Theatre or Calligraphy. Once built, they immediately become the property of the Society they were allotted to, and increase its income (see Guilds, Orders and Societies).
+An Academy, College or University allows for the study of a subject associated with a Society. This could be Art or Science, Theatre or Calligraphy. Once built, they immediately become the property of the Society they were allotted to, and increase its income (see [Guilds, Orders and Societies](18-guilds-orders-and-societies.md)).
 
 #### Chapel, Church, Cathedral
-**Size:** Small / Medium / Large | **Effect:** Provides income to an Order | **Requirements:** Allotted to an Order
+**Size:** Small / Medium / Large | **Effect:** Provides income to an [Order](18-guilds-orders-and-societies.md#orders) | **Requirements:** Allotted to an Order
 
-A Chapel, Church or Cathedral — which can just as easily be called a Shrine, Temple and Temple Complex — are places of worship and theological learning. Once built, they immediately become the property of the Order they were allotted to, and increase its income (see Guilds, Orders and Societies).
+A Chapel, Church or Cathedral — which can just as easily be called a Shrine, Temple and Temple Complex — are places of worship and theological learning. Once built, they immediately become the property of the Order they were allotted to, and increase its income (see [Guilds, Orders and Societies](18-guilds-orders-and-societies.md)).
 
 ---
 
 ### Industrial Buildings
 
 #### Brick Maker's
-**Size:** Medium | **Effect:** Provides Bricks which can substitute Stone | **Requirements:** Clay Resource
+**Size:** Medium | **Effect:** Provides Bricks which can substitute Stone | **Requirements:** Clay [Resource](08-territories-and-resources.md)
 
-The kilns burn all through the day, and all through the night as Clay is fired and becomes bricks. A Brick Maker's allows the Realm to construct Buildings that would normally require Stone, without having access to the Stone Resource. A Brick Maker requires access to a Clay Resource, either from within the Realm, or via Trade.
+The kilns burn all through the day, and all through the night as Clay is fired and becomes bricks. A Brick Maker's allows the Realm to construct Buildings that would normally require Stone, without having access to the Stone Resource. A Brick Maker requires access to a Clay Resource, either from within the Realm, or via [Trade](25-trade.md).
 
 ---
 
 ### Military Buildings
 
 #### Armoursmith
-**Size:** Medium | **Effect:** Allows for the recruitment of Armoured Troops | **Requirements:** —
+**Size:** Medium | **Effect:** Allows for the recruitment of Armoured [Troops](27-armies.md) | **Requirements:** —
 
 Many Troops will provide their own equipment, and can get a Leather Jerkin or Chainmail from a local craftsman. But, for the more elaborate pieces of Armour, they will need to go to an Armoursmith. Having an Armoursmith in your Realm allows for "Armoured" Troops to be Recruited. A Troop will say if it requires an Armoursmith to be recruited.
 
 #### Bowyer
-**Size:** Small | **Effect:** Allows for the recruitment of Crossbowmen | **Requirements:** Timber Resource
+**Size:** Small | **Effect:** Allows for the recruitment of [Crossbowmen](27-armies.md) | **Requirements:** Timber [Resource](08-territories-and-resources.md)
 
 While it takes a skilled craftsman to carve a bow, the complex mechanical parts of a Crossbow require a different set of skills. Often the two artisans get into arguments over whose trade requires the greater skill. Once built, this building allows for the recruitment of Crossbowmen, otherwise known as Quarrellers.
 
 #### Cannon Foundry
-**Size:** Large | **Effect:** Allows for the construction of Cannons (Siege Weapon) | **Requirements:** Ore Resource, Technical Knowledge
+**Size:** Large | **Effect:** Allows for the construction of [Cannons](28-siege-units.md#cannon) (Siege Weapon) | **Requirements:** Ore Resource, [Technical Knowledge](#gaining-technical-knowledge)
 
-This large foundry smelts ore and pours the molten metal into moulds for cannon. These large, heavy and cumbersome contraptions can blast Castle Walls with terrifying force, and can shake the morale of a garrison to its very foundation. Once built, this building allows for the construction of Cannons as a Siege Weapon. This process is different to Recruitment — consult the rules on Siege Weapon Troops for details.
+This large foundry smelts ore and pours the molten metal into moulds for cannon. These large, heavy and cumbersome contraptions can blast [Castle](#castle) Walls with terrifying force, and can shake the morale of a garrison to its very foundation. Once built, this building allows for the construction of Cannons as a Siege Weapon. This process is different to Recruitment — consult the rules on [Siege Weapon Troops](28-siege-units.md) for details.
 
 #### Gunsmith
-**Size:** Medium | **Effect:** Allows for the recruitment of Harquebusiers | **Requirements:** Ore Resource, Technical Knowledge
+**Size:** Medium | **Effect:** Allows for the recruitment of [Harquebusiers](27-armies.md) | **Requirements:** Ore Resource, [Technical Knowledge](#gaining-technical-knowledge)
 
 The Realms of the world are still coming to a consensus on the harquebus.[^31] While it is very easy to train anyone to use one, they are considerably harder to make than a Crossbow, and less accurate. This building allows the Realm to recruit Harquebusiers.
 
 #### Siege Weapon Workshop
-**Size:** Large | **Effect:** Allows for the Construction of Siege Weapons | **Requirements:** Timber Resource
+**Size:** Large | **Effect:** Allows for the Construction of [Siege Weapons](28-siege-units.md) | **Requirements:** Timber Resource
 
-The engineers in this workshop are able to construct imposing weapons of war, designed to take down enemy Fortifications. This building allows for the Construction of Catapults, Ballistae, Battering Rams and Trebuchets. Only one type can be Constructed at a time.
+The engineers in this workshop are able to construct imposing weapons of war, designed to take down enemy [Fortifications](#fortifications). This building allows for the Construction of [Catapults, Ballistae, Battering Rams and Trebuchets](28-siege-units.md). Only one type can be Constructed at a time.
 
 #### Stables
-**Size:** Medium | **Effect:** Allows for the recruitment of Cavalry | **Requirements:** Food
+**Size:** Medium | **Effect:** Allows for the recruitment of [Cavalry](27-armies.md) | **Requirements:** [Food](20-food-for-the-people.md)
 
 > *"The smell of damp hay and manure may be... pungent, but these majestic beasts are definitely worth the trouble."* — Emperor Von Brasa the First, upon seeing horses.
 
 This building is a home for the preferred mounts of your Realm. Unless otherwise specified, we assume these are horses. Once completed, these Stables allow for the Recruitment of Light Cavalry and Heavy Cavalry.
 
 #### Weaponsmith
-**Size:** Medium | **Effect:** Allows for the recruitment of certain Troops | **Requirements:** Ore Resource
+**Size:** Medium | **Effect:** Allows for the recruitment of certain [Troops](27-armies.md) | **Requirements:** Ore [Resource](08-territories-and-resources.md)
 
 Many Troops will provide their own equipment, and can get a spear or crossbow from a local craftsman. But, for more deadly Weapons, they will need the services of a Weaponsmith. Having a Weaponsmith in your Realm allows for certain Troops that require one to be Recruited. A Troop will say if it requires a Weaponsmith to be recruited.
 
@@ -119,9 +119,9 @@ Many Troops will provide their own equipment, and can get a spear or crossbow fr
 
 ## Fortifications
 
-Fortifications often operate differently to other Buildings, as some do not take up Building slots in Settlements, and others do not require Settlements at all. The defensive capability of Fortifications depends on the type of Fortification and the Material involved.
+Fortifications often operate differently to other Buildings, as some do not take up Building slots in [Settlements](19-settlements.md), and others do not require Settlements at all. The defensive capability of Fortifications depends on the type of Fortification and the Material involved.
 
-When rolling Dice Pools to deflect hits, Wooden Fortifications are treated as Basic Troops, while Stone Fortifications have the dice pool of Elite Troops.
+When rolling Dice Pools to deflect hits, Wooden Fortifications are treated as Basic [Troops](27-armies.md), while Stone Fortifications have the dice pool of Elite Troops.
 
 | Fortification | Defence Rating |
 |---|---|
@@ -135,9 +135,9 @@ When rolling Dice Pools to deflect hits, Wooden Fortifications are treated as Ba
 | Castle | 8 |
 
 #### Castle
-**Size:** Large | **Can be built outside a Settlement:** Yes | **Takes up a Building Slot:** Yes | **Requirements:** Stone Resource
+**Size:** Large | **Can be built outside a Settlement:** Yes | **Takes up a Building Slot:** Yes | **Requirements:** Stone [Resource](08-territories-and-resources.md)
 
-This formidable structure is the height of fortified technology. Only a mighty army with specialised weapons of war could possibly hope to tear through its towering walls. If built in a Settlement, this Fortification takes up one building slot. Otherwise, it can be built as a free-standing structure, anywhere that it is reasonable for it to be constructed in the Realm. It comes with Stone Walls, a Stone Gatehouse and a Stone Keep.
+This formidable structure is the height of fortified technology. Only a mighty [army](27-armies.md) with specialised weapons of war could possibly hope to tear through its towering walls. If built in a Settlement, this Fortification takes up one building slot. Otherwise, it can be built as a free-standing structure, anywhere that it is reasonable for it to be constructed in the Realm. It comes with Stone [Walls](#walls), a Stone [Gatehouse](#gatehouse) and a Stone Keep.
 
 #### Fort
 **Size:** Medium | **Can be built outside a Settlement:** Yes | **Takes up a Building Slot:** Yes | **Requirements:** Timber Resource
@@ -162,7 +162,7 @@ A Stone Gatehouse also comes with an iron portcullis that can be lowered for add
 
 Walls are... well, they're walls. You know what that is. Moving on.
 
-If constructed in a Settlement, the Walls will encircle the entire Settlement once built. The size cost depends on the size of the Settlement:
+If constructed in a [Settlement](19-settlements.md), the Walls will encircle the entire Settlement once built. The size cost depends on the size of the Settlement:
 
 - Village = Small
 - Town = Medium
@@ -185,14 +185,14 @@ If built inside a Settlement, a Watchtower does not take up a Building slot. A W
 
 Players or the N.O. may be interested in creating their own Buildings for their Rulers game. However, first check to see if there is a Building which already serves your purposes if it were just renamed.
 
-If you wish to create your own Building, simply choose what size it would be to determine its costs. Then agree with the N.O. what bonuses the Building may grant, and what Resources it may create or might need to operate. Remember that Building 'size' may also reflect the complexity and cost of the services the Building provides. Once the new Building has been agreed, it is set in the size agreed for the rest of the game.
+If you wish to create your own Building, simply choose what size it would be to determine its costs. Then agree with the N.O. what bonuses the Building may grant, and what [Resources](08-territories-and-resources.md) it may create or might need to operate. Remember that Building 'size' may also reflect the complexity and cost of the services the Building provides. Once the new Building has been agreed, it is set in the size agreed for the rest of the game.
 
 The N.O. may agree that a smaller version of the same Building is acceptable, or not, depending on how complex or demanding the Building's cost may be.
 
 ## Gaining Technical Knowledge
 
-Certain Buildings, or Troops, may need Technical Knowledge in order to be constructed or recruited. This Technical Knowledge represents a high degree of mastery for a given skill, or a special process, which is necessary to create or operate the thing in question.
+Certain Buildings, or [Troops](27-armies.md), may need Technical Knowledge in order to be constructed or recruited. This Technical Knowledge represents a high degree of mastery for a given skill, or a special process, which is necessary to create or operate the thing in question.
 
-To obtain Technical Knowledge, a Realm can trade with a Realm that already has the necessary knowledge. Buildings or Troops constructed or recruited in this manner cost an **additional 25%** during the construction or recruiting phase, to represent the hiring of a foreign expert. The N.O. can decide if certain events can also trigger the acquisition of Technical Knowledge, although what this knowledge might be can vary dramatically.
+To obtain Technical Knowledge, a Realm can [trade](25-trade.md) with a Realm that already has the necessary knowledge. Buildings or Troops constructed or recruited in this manner cost an **additional 25%** during the construction or recruiting phase, to represent the hiring of a foreign expert. The N.O. can decide if certain events can also trigger the acquisition of Technical Knowledge, although what this knowledge might be can vary dramatically.
 
 [^31]: A harquebus is a smoothbore gun with a matchlock firing mechanism that pre-dates early muskets. It has an accurate range of about 50 yards.

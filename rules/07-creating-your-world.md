@@ -10,8 +10,8 @@ We are going to roll dice on a series of tables to create a rough idea of what o
 
 **A finished world should have:**
 - A Map
-- Territories
-- Resources
+- [Territories](08-territories-and-resources.md)
+- [Resources](08-territories-and-resources.md#generating-resources)
 - A Narrative Setting
 
 ## Step 1: Creating Climates

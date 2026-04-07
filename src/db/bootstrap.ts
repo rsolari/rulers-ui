@@ -147,6 +147,7 @@ function createBaseSchema(database: Database.Database) {
       loan_repayment_seasons_remaining integer NOT NULL DEFAULT 0,
       turmoil integer NOT NULL DEFAULT 0,
       turmoil_sources text NOT NULL DEFAULT '[]',
+      capital_settlement_id text,
       FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (ruler_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (heir_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
@@ -648,6 +649,12 @@ function createBaseSchema(database: Database.Database) {
       FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action
     );
   `);
+}
+
+function migrateSchema(database: Database.Database) {
+  if (tableExists(database, 'realms') && !columnExists(database, 'realms', 'capital_settlement_id')) {
+    database.exec('ALTER TABLE realms ADD COLUMN capital_settlement_id text;');
+  }
 }
 
 function settlementsRealmIdIsNotNull(database: Database.Database) {
@@ -1297,6 +1304,7 @@ export function initializeDatabaseSchema(database: Database.Database) {
     }
 
     createBaseSchema(database);
+    migrateSchema(database);
     if (!columnExists(database, 'realms', 'immortals_troop_id')) {
       database.exec('ALTER TABLE realms ADD COLUMN immortals_troop_id text;');
     }

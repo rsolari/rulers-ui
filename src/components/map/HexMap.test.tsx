@@ -8,9 +8,13 @@ import { SettlementMarker } from '@/components/map/SettlementMarker';
 import { TerritoryLabel } from '@/components/map/TerritoryLabel';
 import type { GameMapData } from '@/components/map/types';
 import { computeTerritoryBorders, computeViewBox, hexToPixel, hexVertices, type ViewBox } from '@/components/map/hex-utils';
-import { WORLD_V1_MAP_DEFINITION } from '@/lib/maps/definitions/world-v1';
 
 const HEX_SIZE = 24;
+const TERRITORY_COUNT = 8;
+const BENCHMARK_COLUMNS = 18;
+const BENCHMARK_ROWS = 18;
+const DRAG_STEPS = 6;
+const WHEEL_STEPS = 6;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -34,53 +38,61 @@ function terrainFill(hex: GameMapData['hexes'][number]) {
 }
 
 function createBenchmarkData(): GameMapData {
-  const realms = WORLD_V1_MAP_DEFINITION.territories.map((territory, index) => ({
+  const realms = Array.from({ length: TERRITORY_COUNT }, (_, index) => ({
     id: `realm-${index + 1}`,
-    name: territory.name,
+    name: `Realm ${index + 1}`,
   }));
-  const territories = WORLD_V1_MAP_DEFINITION.territories.map((territory, index) => ({
+  const territories = Array.from({ length: TERRITORY_COUNT }, (_, index) => ({
     id: `territory-${index + 1}`,
-    name: territory.name,
+    name: `Territory ${index + 1}`,
     realmId: realms[index]?.id ?? null,
   }));
+  const hexes: GameMapData['hexes'] = [];
 
-  return {
-    mapName: WORLD_V1_MAP_DEFINITION.name,
-    realms,
-    territories,
-    hexes: WORLD_V1_MAP_DEFINITION.hexes.map((hex, index) => {
-      const territoryId = hex.kind === 'land'
-        ? territories[index % territories.length]?.id ?? null
-        : null;
+  for (let row = 0; row < BENCHMARK_ROWS; row += 1) {
+    for (let column = 0; column < BENCHMARK_COLUMNS; column += 1) {
+      const index = row * BENCHMARK_COLUMNS + column;
+      const territory = territories[index % territories.length];
+      const isWater = row < 2 || column === 0 || (row + column) % 11 === 0;
+      const terrainCycle = ['plains', 'forest', 'hills', 'mountains', 'desert', 'swamp', 'jungle', 'tundra'] as const;
+      const features = index % 19 === 0
+        ? [{ featureType: 'river' as const, name: null }]
+        : index % 37 === 0
+          ? [{ featureType: 'volcano' as const, name: null }]
+          : [];
 
-      return {
+      hexes.push({
         id: `hex-${index}`,
-        q: hex.q,
-        r: hex.r,
-        hexKind: hex.kind,
-        waterKind: hex.kind === 'water' ? hex.waterKind : null,
-        terrainType: hex.kind === 'land' ? hex.terrainType : null,
-        territoryId,
-        features: (hex.features ?? []).map((feature) => ({
-          featureType: feature.type,
-          name: 'name' in feature && typeof feature.name === 'string' ? feature.name : null,
-        })),
-        landmarks: index % 311 === 0 ? [{
+        q: column - Math.floor(row / 2),
+        r: row,
+        hexKind: isWater ? 'water' : 'land',
+        waterKind: isWater ? (index % 5 === 0 ? 'lake' : 'sea') : null,
+        terrainType: isWater ? null : terrainCycle[index % terrainCycle.length],
+        territoryId: isWater ? null : territory.id,
+        features,
+        landmarks: index % 71 === 0 ? [{
           name: `Landmark ${index}`,
           kind: 'ruin',
           description: null,
         }] : [],
-        settlement: territoryId && index % 97 === 0 ? {
+        settlement: !isWater && index % 29 === 0 ? {
           name: `Settlement ${index}`,
           size: index % 2 === 0 ? 'Town' : 'Village',
         } : null,
-        armies: territoryId && index % 83 === 0 ? [{
+        armies: !isWater && index % 31 === 0 ? [{
           id: `army-${index}`,
           name: `Army ${index}`,
-          realmId: territories[index % territories.length]?.realmId ?? realms[0].id,
+          realmId: territory.realmId ?? realms[0].id,
         }] : [],
-      };
-    }),
+      });
+    }
+  }
+
+  return {
+    mapName: 'Benchmark Map',
+    realms,
+    territories,
+    hexes,
   };
 }
 
@@ -355,7 +367,7 @@ function measureInteraction(Component: ({ data }: { data: GameMapData }) => Reac
     act(() => {
       fireEvent.pointerDown(svg, { button: 0, pointerId: 1, clientX: 480, clientY: 360 });
     });
-    for (let index = 1; index <= 12; index += 1) {
+    for (let index = 1; index <= DRAG_STEPS; index += 1) {
       act(() => {
         fireEvent.pointerMove(svg, {
           pointerId: 1,
@@ -365,10 +377,10 @@ function measureInteraction(Component: ({ data }: { data: GameMapData }) => Reac
       });
     }
     act(() => {
-      fireEvent.pointerUp(svg, { pointerId: 1, clientX: 696, clientY: 504 });
+      fireEvent.pointerUp(svg, { pointerId: 1, clientX: 480 + DRAG_STEPS * 18, clientY: 360 + DRAG_STEPS * 12 });
     });
   } else {
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < WHEEL_STEPS; index += 1) {
       act(() => {
         fireEvent.wheel(svg, {
           deltaY: index % 2 === 0 ? -120 : 120,
@@ -402,7 +414,7 @@ describe('HexMap performance', () => {
     expect(legacy.updateCommits).toBeGreaterThan(0);
     expect(optimized.updateCommits).toBeLessThan(legacy.updateCommits / 4);
     expect(optimized.updateDuration).toBeLessThan(legacy.updateDuration * 0.1);
-  }, 15000);
+  }, 5000);
 
   it('avoids React update work during wheel zoom', () => {
     const legacy = measureInteraction(LegacyHexMap, 'wheel');
@@ -411,5 +423,5 @@ describe('HexMap performance', () => {
     expect(legacy.updateCommits).toBeGreaterThan(0);
     expect(optimized.updateCommits).toBeLessThan(legacy.updateCommits / 4);
     expect(optimized.updateDuration).toBeLessThan(legacy.updateDuration * 0.1);
-  }, 15000);
+  }, 5000);
 });

@@ -16,17 +16,16 @@ function cleanHeadingId(value: string) {
 }
 
 function extractText(children: React.ReactNode): string {
-  return React.Children.toArray(children).reduce((text, child) => {
-    if (typeof child === 'string') return `${text}${child}`;
-    if (typeof child === 'number') return `${text}${child}`;
-    if (React.isValidElement(child) && child.props && 'children' in child.props) {
+  return React.Children.toArray(children).reduce<string>((text, child) => {
+    if (typeof child === 'string' || typeof child === 'number' || typeof child === 'bigint') return `${text}${child}`;
+    if (React.isValidElement<{ children?: React.ReactNode }>(child)) {
       return `${text}${extractText(child.props.children)}`;
     }
     return text;
   }, '');
 }
 
-function normalizeRuleLinkHref(href: string): string {
+function normalizeRuleLinkHref(href?: string | null): string {
   if (
     !href ||
     href.startsWith('#') ||
@@ -35,7 +34,7 @@ function normalizeRuleLinkHref(href: string): string {
     href.startsWith('mailto:') ||
     href.startsWith('tel:')
   ) {
-    return href;
+    return href ?? '';
   }
 
   return href.replace(/\.md(?=(#|\?|$))/gi, '');
@@ -56,34 +55,44 @@ export function MarkdownContent({ content }: { content: string }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        a: ({ href, children, ...props }) => (
-          <a {...props} href={normalizeRuleLinkHref(href || '')}>
-            {children}
-          </a>
-          ),
-        h1: ({ children, ...props }) => {
-          const id = headingProps(children);
-          return <h1 id={id} {...props}>{children}</h1>;
+        a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+          const { href, children, ...anchorProps } = props;
+
+          return (
+            <a {...anchorProps} href={normalizeRuleLinkHref(href)}>
+              {children}
+            </a>
+          );
         },
-        h2: ({ children, ...props }) => {
+        h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => {
+          const { children, ...headingAttrs } = props;
           const id = headingProps(children);
-          return <h2 id={id} {...props}>{children}</h2>;
+          return <h1 id={id} {...headingAttrs}>{children}</h1>;
         },
-        h3: ({ children, ...props }) => {
+        h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => {
+          const { children, ...headingAttrs } = props;
           const id = headingProps(children);
-          return <h3 id={id} {...props}>{children}</h3>;
+          return <h2 id={id} {...headingAttrs}>{children}</h2>;
         },
-        h4: ({ children, ...props }) => {
+        h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => {
+          const { children, ...headingAttrs } = props;
           const id = headingProps(children);
-          return <h4 id={id} {...props}>{children}</h4>;
+          return <h3 id={id} {...headingAttrs}>{children}</h3>;
         },
-        h5: ({ children, ...props }) => {
+        h4: (props: React.HTMLAttributes<HTMLHeadingElement>) => {
+          const { children, ...headingAttrs } = props;
           const id = headingProps(children);
-          return <h5 id={id} {...props}>{children}</h5>;
+          return <h4 id={id} {...headingAttrs}>{children}</h4>;
         },
-        h6: ({ children, ...props }) => {
+        h5: (props: React.HTMLAttributes<HTMLHeadingElement>) => {
+          const { children, ...headingAttrs } = props;
           const id = headingProps(children);
-          return <h6 id={id} {...props}>{children}</h6>;
+          return <h5 id={id} {...headingAttrs}>{children}</h5>;
+        },
+        h6: (props: React.HTMLAttributes<HTMLHeadingElement>) => {
+          const { children, ...headingAttrs } = props;
+          const id = headingProps(children);
+          return <h6 id={id} {...headingAttrs}>{children}</h6>;
         },
       }}
     >

@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { guildsOrdersSocieties, nobles } from '@/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -57,8 +57,8 @@ export async function POST(
 ) {
   try {
     const { gameId } = await params;
-    await requireGM(gameId);
     const body = await request.json();
+    await requireOwnedRealmAccess(gameId, body.realmId);
 
     const id = uuid();
     await db.insert(guildsOrdersSocieties).values({

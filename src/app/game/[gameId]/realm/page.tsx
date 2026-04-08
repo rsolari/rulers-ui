@@ -14,7 +14,8 @@ import type { EconomyProjectionDto } from '@/lib/economy-dto';
 import type { TaxType } from '@/types/game';
 import { TurmoilSummaryCard } from '@/components/turmoil/turmoil-summary-card';
 import { PlayerTurnReportPanel } from '@/components/turn-actions/player-turn-report-panel';
-import type { GovernmentType, Tradition } from '@/types/game';
+import type { GovernmentType, Tradition, PlayerSetupState } from '@/types/game';
+import type { PlayerSetupChecklist } from '@/lib/game-init-state';
 
 const GOVERNMENT_OPTIONS = [
   { value: 'Monarch', label: 'Monarch' },
@@ -95,8 +96,10 @@ export default function RealmDashboard() {
   const [gos, setGos] = useState<Array<{ id: string; name: string; type: string; focus: string | null }>>([]);
   const [form, setForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
   const [saving, setSaving] = useState(false);
-  const [gosOpen, setGosOpen] = useState(false);
   const [economyProjection, setEconomyProjection] = useState<EconomyProjectionDto | null>(null);
+  const [setupChecklist, setSetupChecklist] = useState<PlayerSetupChecklist | null>(null);
+  const [setupState, setSetupState] = useState<PlayerSetupState | null>(null);
+  const [finalizingSetup, setFinalizingSetup] = useState(false);
 
   useEffect(() => {
     if (loading) {
@@ -165,6 +168,28 @@ export default function RealmDashboard() {
     void loadRealm();
   }, [gameId, realmId]);
 
+  useEffect(() => {
+    if (!realmId || isGmManaging) {
+      return;
+    }
+
+    const isSetupPhase = initState === 'parallel_final_setup' || initState === 'ready_to_start';
+    if (!isSetupPhase) {
+      return;
+    }
+
+    async function loadChecklist() {
+      const response = await fetch(`/api/game/${gameId}/setup/player-checklist`);
+      if (response.ok) {
+        const data = await response.json();
+        setSetupChecklist(data.checklist);
+        setSetupState(data.setupState);
+      }
+    }
+
+    void loadChecklist();
+  }, [gameId, realmId, initState, isGmManaging]);
+
   function toggleTradition(tradition: Tradition) {
     setForm((current) => {
       if (current.traditions.includes(tradition)) {
@@ -205,6 +230,21 @@ export default function RealmDashboard() {
     setSaving(false);
   }
 
+  async function finalizeSetup() {
+    setFinalizingSetup(true);
+    const response = await fetch(`/api/game/${gameId}/setup/finalize-player`, { method: 'POST' });
+    const data = await response.json();
+    if (response.ok) {
+      setSetupChecklist(data.checklist);
+      setSetupState(data.setupState);
+    } else {
+      if (data.checklist) {
+        setSetupChecklist(data.checklist);
+      }
+    }
+    setFinalizingSetup(false);
+  }
+
   if (!game || !realm) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -240,6 +280,64 @@ export default function RealmDashboard() {
           <CardContent>
             <p className="text-sm text-ink-300 pt-4">Your Claim Code</p>
             <p className="font-mono text-2xl">{claimCode}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {setupChecklist && !isGmManaging && (
+        <Card className="mb-6" variant="gold">
+          <CardHeader>
+            <CardTitle>{setupState === 'ready' ? 'Setup Complete' : 'Setup Checklist'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-ink-300 mb-2">
+              {setupState === 'ready'
+                ? 'Your realm is ready. Waiting for the GM and other players to finalize.'
+                : 'Complete these steps to prepare your realm for the game.'}
+            </p>
+            <ul className="space-y-2">
+              {([
+                { key: 'realmCreated', label: 'Create your realm', link: null },
+                { key: 'rulerCreated', label: 'Create your ruler', link: `/game/${gameId}/realm/ruler/create` },
+                { key: 'nobleSetupCompleted', label: 'Recruit at least one supporting noble', link: `/game/${gameId}/realm/nobles` },
+                { key: 'guildOrderSocietySetupCompleted', label: 'Establish a Guild, Order, or Society', link: `/game/${gameId}/realm/gos` },
+                { key: 'startingArmyPresent', label: 'Raise a starting army', link: `/game/${gameId}/realm/army` },
+                { key: 'settlementsPlacedNamed', label: 'Name your settlements (including a Town capital)', link: `/game/${gameId}/realm/settlements` },
+                { key: 'economyInitialized', label: 'Set up your economy (tax policy & treasury)', link: `/game/${gameId}/realm/treasury` },
+              ] as const).map((item) => {
+                const done = setupChecklist[item.key];
+                return (
+                  <li key={item.key} className="flex items-center gap-3">
+                    <span className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs ${done ? 'bg-green-600 border-green-600 text-white' : 'border-ink-200'}`}>
+                      {done ? '\u2713' : ''}
+                    </span>
+                    {!done && item.link ? (
+                      <Link href={item.link} className="text-sm hover:underline text-gold-700">
+                        {item.label}
+                      </Link>
+                    ) : (
+                      <span className={`text-sm ${done ? 'text-ink-300 line-through' : ''}`}>{item.label}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {setupState === 'ready' ? (
+              <div className="pt-2">
+                <Badge variant="green">Ready</Badge>
+              </div>
+            ) : (
+              <div className="pt-2 flex items-center gap-4">
+                <p className="text-xs text-ink-300">
+                  {Object.values(setupChecklist).filter(Boolean).length} of {Object.values(setupChecklist).length} complete
+                </p>
+                {Object.values(setupChecklist).every(Boolean) && (
+                  <Button variant="accent" onClick={() => void finalizeSetup()} disabled={finalizingSetup}>
+                    {finalizingSetup ? 'Finalizing...' : 'Finalize Setup'}
+                  </Button>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -404,17 +502,14 @@ export default function RealmDashboard() {
               <strong>{resources.length}</strong>
             </Link>
             <div>
-              <div
-                className="flex items-center justify-between cursor-pointer hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors"
-                onClick={() => setGosOpen(!gosOpen)}
+              <Link
+                href={`/game/${gameId}/realm/gos${realmLinkSuffix}`}
+                className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors"
               >
-                <span className="inline-flex items-center gap-2">
-                  <span className={`inline-block text-xs transition-transform ${gosOpen ? 'rotate-90' : ''}`}>&#9654;</span>
-                  Guilds, Orders & Societies
-                </span>
+                <span>Guilds, Orders & Societies</span>
                 <strong>{gos.length}</strong>
-              </div>
-              {gosOpen && gos.length > 0 && (
+              </Link>
+              {gos.length > 0 && (
                 <div className="mt-1 ml-4 space-y-1">
                   {gos.map((g) => (
                     <div key={g.id} className="flex items-center justify-between text-sm">
@@ -423,9 +518,6 @@ export default function RealmDashboard() {
                     </div>
                   ))}
                 </div>
-              )}
-              {gosOpen && gos.length === 0 && (
-                <p className="mt-1 ml-4 text-sm text-ink-300">None yet.</p>
               )}
             </div>
           </CardContent>
@@ -496,6 +588,11 @@ export default function RealmDashboard() {
                 {ruler ? 'Ruler & Nobles' : 'Create Ruler'}
               </p>
             </CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/gos${realmLinkSuffix}`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Guilds, Orders & Societies</p></CardContent>
           </Card>
         </Link>
         <Link href={`/game/${gameId}/realm/settlements${realmLinkSuffix}`}>

@@ -103,17 +103,11 @@ describe('calculateNobleUpkeep', () => {
     ])).toBe(375); // 125 + 250
   });
 
-  it('includes rulers when their estates are paid explicitly', () => {
+  it('skips nobles without governed estates', () => {
     expect(calculateNobleUpkeep([
-      { estateLevel: 'Luxurious' },
+      { estateLevel: null },
       { estateLevel: 'Meagre' },
-    ])).toBe(2125);
-  });
-
-  it('returns estate cost even for a single ruler', () => {
-    expect(calculateNobleUpkeep([
-      { estateLevel: 'Luxurious' },
-    ])).toBe(2000);
+    ])).toBe(125);
   });
 
   it('uses correct estate costs', () => {

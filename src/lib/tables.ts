@@ -1,4 +1,4 @@
-import { rollD10, rollDice } from './dice';
+import { countSuccesses, rollD10, rollDice } from './dice';
 import {
   PERSONALITY_TABLE, RELATIONSHIP_TABLE, BELIEF_TABLE,
   VALUED_OBJECT_TABLE, VALUED_PERSON_TABLE, GREATEST_DESIRE_TABLE,
@@ -44,4 +44,8 @@ export function generateFamilyMemberCount(): number {
 
 export function generateChildCount(): number {
   return rollDice(4, 1)[0];
+}
+
+export function generateNobleSkill(): number {
+  return countSuccesses(rollDice(6, 5));
 }

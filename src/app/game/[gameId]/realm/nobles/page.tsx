@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { NobleActivityBadge } from '@/components/governance/NobleActivityBadge';
 import { useRole } from '@/hooks/use-role';
-import { ESTATE_COSTS } from '@/lib/game-logic/constants';
 import { deriveNobleActivity } from '@/lib/noble-activity';
 
 interface NobleFamily {
@@ -37,7 +36,9 @@ interface Noble {
   valuedPerson: string | null;
   greatestDesire: string | null;
   title: string | null;
-  estateLevel: string;
+  governs: string[];
+  estateLevel: string | null;
+  estateCost: number;
   reasonSkill: number;
   cunningSkill: number;
   isPrisoner: boolean;
@@ -132,16 +133,20 @@ export default function NoblesPage() {
                   {members.map(noble => (
                     <div
                       key={noble.id}
-                      className="flex items-center justify-between p-3 medieval-border rounded cursor-pointer hover:bg-parchment-100"
+                      className="flex cursor-pointer flex-col gap-2 rounded p-3 medieval-border hover:bg-parchment-100 md:flex-row md:items-center md:justify-between"
                       onClick={() => setSelectedNoble(noble)}
                     >
                       <div className="flex items-center gap-3">
                         <span className="font-heading font-bold">{noble.name}</span>
                         <NobleActivityBadge noble={noble} />
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-3 md:justify-end">
+                        <span className="text-sm text-ink-300">{noble.governs.join(', ')}</span>
+                        <div className="flex items-center gap-2 text-sm text-ink-300">
+                          <span>Reason {noble.reasonSkill}</span>
+                          <span>Cunning {noble.cunningSkill}</span>
+                        </div>
                         <span className="text-sm text-ink-300">{noble.gender}, {noble.age}</span>
-                        <Badge>{noble.estateLevel}</Badge>
                       </div>
                     </div>
                   ))}
@@ -175,7 +180,12 @@ export default function NoblesPage() {
                 <p><strong>Gender:</strong> {selectedNoble.gender}</p>
                 <p><strong>Age:</strong> {selectedNoble.age}</p>
                 <p><strong>Race:</strong> {selectedNoble.race || 'Unknown'}</p>
-                <p><strong>Estate:</strong> {selectedNoble.estateLevel} ({ESTATE_COSTS[selectedNoble.estateLevel as keyof typeof ESTATE_COSTS]?.toLocaleString()}gc /season)</p>
+                <p><strong>Governs:</strong> {selectedNoble.governs.join(', ')}</p>
+                <p><strong>Estate:</strong> {selectedNoble.estateLevel
+                  ? selectedNoble.isRuler
+                    ? `${selectedNoble.estateLevel} (no upkeep)`
+                    : `${selectedNoble.estateLevel} (${selectedNoble.estateCost.toLocaleString()}gc /season)`
+                  : 'None (at court)'}</p>
                 <p><strong>Reason:</strong> {selectedNoble.reasonSkill}</p>
                 <p><strong>Cunning:</strong> {selectedNoble.cunningSkill}</p>
               </div>

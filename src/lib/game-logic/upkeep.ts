@@ -39,10 +39,11 @@ export function calculateSiegeUpkeep(
 }
 
 export function calculateNobleUpkeep(
-  nobles: Array<{ estateLevel: EstateLevel }>,
+  nobles: Array<{ estateLevel: EstateLevel | null }>,
 ): number {
   let total = 0;
   for (const n of nobles) {
+    if (!n.estateLevel) continue;
     total += ESTATE_COSTS[n.estateLevel];
   }
   return total;

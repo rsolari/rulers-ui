@@ -8,7 +8,6 @@ import type {
   AgeCategory,
   BuildingSize,
   FortificationMaterial,
-  EstateLevel,
   GameInitState,
   GamePhase,
   Gender,
@@ -386,10 +385,6 @@ export const nobles = sqliteTable('nobles', {
   valuedObject: text('valued_object'),
   valuedPerson: text('valued_person'),
   greatestDesire: text('greatest_desire'),
-
-  // Estate
-  estateLevel: text('estate_level').$type<EstateLevel>().default('Meagre').notNull(),
-
   // Skills
   reasonSkill: integer('reason_skill').default(0).notNull(),
   cunningSkill: integer('cunning_skill').default(0).notNull(),

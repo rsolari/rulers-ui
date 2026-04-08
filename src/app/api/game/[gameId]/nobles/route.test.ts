@@ -55,6 +55,24 @@ vi.mock('@/lib/game-init-state', () => ({
   recomputeGameInitState: recomputeGameInitStateMock,
 }));
 
+const tablesMocks = vi.hoisted(() => ({
+  generateNobleAge: vi.fn(() => 'Adult'),
+  generateNobleGender: vi.fn(() => 'Female'),
+  generateNoblePersonality: vi.fn(() => ({
+    personality: 'Jovial and Friendly',
+    relationshipWithRuler: 'Admiration',
+    belief: 'Trust in others and they will trust in you',
+    valuedObject: 'A Weapon',
+    valuedPerson: 'A Mentor',
+    greatestDesire: 'Glory',
+  })),
+  generateNobleSkill: vi.fn()
+    .mockReturnValueOnce(3)
+    .mockReturnValueOnce(2),
+}));
+
+vi.mock('@/lib/tables', () => tablesMocks);
+
 import { GET, POST } from './route';
 
 describe('GET /api/game/[gameId]/nobles', () => {
@@ -66,6 +84,7 @@ describe('GET /api/game/[gameId]/nobles', () => {
 
   it('returns nobles with gm status text and derived title flags', async () => {
     dbMocks.getResults.push({
+      name: 'Stonevale',
       rulerNobleId: 'noble-1',
       heirNobleId: 'noble-2',
       actingRulerNobleId: null,
@@ -102,7 +121,10 @@ describe('GET /api/game/[gameId]/nobles', () => {
         isRuler: true,
         isHeir: false,
         isActingRuler: false,
-        title: 'Stonewatch Governor',
+        title: 'Ruler',
+        governs: ['Ruler', 'Stonewatch Governor'],
+        estateLevel: 'Luxurious',
+        estateCost: 0,
       },
       {
         id: 'noble-2',
@@ -113,6 +135,9 @@ describe('GET /api/game/[gameId]/nobles', () => {
         isHeir: true,
         isActingRuler: false,
         title: 'First Army General',
+        governs: ['First Army General'],
+        estateLevel: null,
+        estateCost: 0,
       },
     ]);
   });
@@ -127,6 +152,10 @@ describe('POST /api/game/[gameId]/nobles', () => {
     uuidMock.mockReset();
     authMocks.requireOwnedRealmAccess.mockReset();
     recomputeGameInitStateMock.mockReset();
+    tablesMocks.generateNobleSkill.mockReset();
+    tablesMocks.generateNobleSkill
+      .mockReturnValueOnce(3)
+      .mockReturnValueOnce(2);
   });
 
   it('allows a player to add a noble to a family in their own realm', async () => {
@@ -171,6 +200,8 @@ describe('POST /api/game/[gameId]/nobles', () => {
         valuedObject: null,
         valuedPerson: null,
         greatestDesire: null,
+        reasonSkill: 3,
+        cunningSkill: 2,
         gmStatusText: null,
       }),
     });
@@ -183,6 +214,8 @@ describe('POST /api/game/[gameId]/nobles', () => {
       realmId: 'realm-player',
       name: 'Sir Rowan',
       gmStatusText: null,
+      reasonSkill: 3,
+      cunningSkill: 2,
     }));
   });
 

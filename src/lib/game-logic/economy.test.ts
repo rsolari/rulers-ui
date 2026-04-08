@@ -609,22 +609,21 @@ describe('resolveEconomyForRealm', () => {
       }],
       nobles: [
         {
-          id: 'noble-ruler',
-          name: 'Ruler',
-          estateLevel: 'Meagre',
-          requiredEstateLevel: 'Luxurious',
+          id: 'noble-governor',
+          name: 'Governor',
+          estateLevel: 'Comfortable',
           isPrisoner: false,
         },
         {
           id: 'noble-guest',
           name: 'Guest Lord',
-          estateLevel: 'Comfortable',
+          estateLevel: null,
           isPrisoner: true,
         },
       ],
     }), 1, 'Summer');
 
-    expect(result.totalCosts).toBe(3000);
+    expect(result.totalCosts).toBe(2875);
     expect(result.ledgerEntries).toEqual(expect.arrayContaining([
       expect.objectContaining({ category: 'troop-upkeep', amount: 1000 }),
       expect.objectContaining({ category: 'siege-upkeep', amount: 1500 }),

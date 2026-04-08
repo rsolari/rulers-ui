@@ -9,7 +9,7 @@ import { MapLegend } from '@/components/map/MapLegend';
 import { SettlementMarker } from '@/components/map/SettlementMarker';
 import { TerritoryLabel } from '@/components/map/TerritoryLabel';
 import type { GameMapData, HoveredHexData, MapHexData } from '@/components/map/types';
-import { computeTerritoryBorders, computeViewBox, hexToPixel, hexVertices, type PixelPoint, type ViewBox } from '@/components/map/hex-utils';
+import { computeTerritoryBorderSegments, computeViewBox, hexToPixel, hexVertices, type PixelPoint, type ViewBox } from '@/components/map/hex-utils';
 
 const HEX_SIZE = 24;
 const MIN_ZOOM_FACTOR = 0.45;
@@ -126,7 +126,7 @@ export function HexMap({ data }: HexMapProps) {
   );
   const {
     baseViewBox,
-    territoryBorders,
+    territoryBorderSegs,
     territoryLabels,
     hexRenderData,
     hexDetails,
@@ -135,7 +135,7 @@ export function HexMap({ data }: HexMapProps) {
     const hexPixels = new Map<string, PixelPoint>(
       data.hexes.map((hex) => [hex.id, hexToPixel(hex.q, hex.r, HEX_SIZE)])
     );
-    const territoryBorders = computeTerritoryBorders(data.hexes, hexPixels, HEX_SIZE);
+    const territoryBorderSegs = computeTerritoryBorderSegments(data.hexes, hexPixels, HEX_SIZE);
     const positions = new Map<string, { x: number; y: number; count: number }>();
     const hexRenderData: HexRenderData[] = [];
     const hexDetails: HexDetailData[] = [];
@@ -194,7 +194,7 @@ export function HexMap({ data }: HexMapProps) {
 
     return {
       baseViewBox,
-      territoryBorders,
+      territoryBorderSegs: territoryBorderSegs,
       territoryLabels,
       hexRenderData,
       hexDetails,
@@ -309,19 +309,24 @@ export function HexMap({ data }: HexMapProps) {
     ))
   ), [handleHexClick, handleHexEnter, handleHexLeave, handleHexMove, hexRenderData]);
   const territoryBorderPaths = useMemo(() => (
-    territoryBorders.map((path, index) => (
-      <path
-        key={`${path}-${index}`}
-        d={path}
-        fill="none"
-        stroke="#3a2a1e"
-        strokeOpacity={0.7}
-        strokeWidth={2.1}
-        vectorEffect="non-scaling-stroke"
-        pointerEvents="none"
-      />
-    ))
-  ), [territoryBorders]);
+    territoryBorderSegs.map((segment, index) => {
+      const territory = segment.territoryId ? territoryById.get(segment.territoryId) : null;
+      const realmColor = territory?.realmId ? realmColorById.get(territory.realmId) : null;
+
+      return (
+        <path
+          key={`${segment.path}-${index}`}
+          d={segment.path}
+          fill="none"
+          stroke={realmColor ?? '#3a2a1e'}
+          strokeOpacity={realmColor ? 0.85 : 0.7}
+          strokeWidth={2.4}
+          vectorEffect="non-scaling-stroke"
+          pointerEvents="none"
+        />
+      );
+    })
+  ), [territoryBorderSegs, territoryById, realmColorById]);
   const territoryLabelNodes = useMemo(() => (
     territoryLabels.map((territory) => (
       <TerritoryLabel key={territory.id} x={territory.x} y={territory.y} name={territory.name} />
@@ -460,7 +465,7 @@ export function HexMap({ data }: HexMapProps) {
       ref={wrapperRef}
       className="relative min-h-[560px] overflow-hidden rounded-2xl border border-ink-200 bg-[radial-gradient(circle_at_top,_rgba(253,248,240,0.92),_rgba(236,220,184,0.96))] shadow-[inset_0_0_0_1px_rgba(201,160,102,0.25),0_20px_60px_rgba(74,55,40,0.14)]"
     >
-      <MapLegend terrainColors={TERRAIN_COLORS} />
+      <MapLegend terrainColors={TERRAIN_COLORS} realms={data.realms.map((realm, index) => ({ name: realm.name, color: REALM_COLORS[index % REALM_COLORS.length] }))} />
       <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-ink-200 bg-parchment-50/90 px-3 py-2 text-sm text-ink-300 backdrop-blur-sm">
         Drag to pan. Scroll to zoom. Click a hex to highlight it.
       </div>

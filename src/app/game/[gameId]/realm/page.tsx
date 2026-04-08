@@ -377,6 +377,14 @@ export default function RealmDashboard() {
                 <strong>{economyProjection.projectedTreasury.toLocaleString()}gc</strong>
               </div>
             )}
+            {economyProjection && (
+              <div className="flex items-center justify-between">
+                <span>Food Balance</span>
+                <strong className={economyProjection.foodSurplus >= 0 ? 'text-green-700' : 'text-red-700'}>
+                  {economyProjection.foodSurplus >= 0 ? '+' : ''}{economyProjection.foodSurplus}
+                </strong>
+              </div>
+            )}
             {economyProjection && economyProjection.warnings.length > 0 && (
               <div className="flex items-center justify-between">
                 <span>Warnings</span>

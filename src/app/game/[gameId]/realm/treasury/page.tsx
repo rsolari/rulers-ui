@@ -54,7 +54,7 @@ export default function TreasuryPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 mb-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 mb-6 md:grid-cols-2">
         <Card variant="gold">
           <CardContent>
             <p className="text-sm text-ink-300 pt-4">Current Treasury</p>
@@ -63,23 +63,9 @@ export default function TreasuryPage() {
         </Card>
         <Card>
           <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Projected Treasury</p>
-            <p className="text-3xl font-bold font-heading">{projection.projectedTreasury.toLocaleString()}gc</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
             <p className="text-sm text-ink-300 pt-4">Net Change / Season</p>
             <p className={`text-3xl font-bold font-heading ${projection.netChange >= 0 ? 'text-green-700' : 'text-red-700'}`}>
               {projection.netChange >= 0 ? '+' : ''}{projection.netChange.toLocaleString()}gc
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Food Balance</p>
-            <p className={`text-3xl font-bold font-heading ${projection.foodSurplus >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-              {projection.foodSurplus >= 0 ? '+' : ''}{projection.foodSurplus}
             </p>
           </CardContent>
         </Card>
@@ -164,7 +150,7 @@ export default function TreasuryPage() {
                 <TableHead className="text-right">Resource GDP</TableHead>
                 <TableHead className="text-right">Food GDP</TableHead>
                 <TableHead className="text-right">Trade Bonus</TableHead>
-                <TableHead className="text-right">Total GDP</TableHead>
+                <TableHead className="text-right">Settlement GDP</TableHead>
                 <TableHead className="text-right">Tax Rate</TableHead>
                 <TableHead className="text-right">Tax Income</TableHead>
               </TableRow>

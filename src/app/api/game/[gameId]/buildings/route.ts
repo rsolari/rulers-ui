@@ -110,8 +110,8 @@ export async function PATCH(
     if (body.isOperational !== undefined) updates.isOperational = body.isOperational;
     if (body.maintenanceState !== undefined) updates.maintenanceState = body.maintenanceState;
     if (body.constructionTurnsRemaining !== undefined) updates.constructionTurnsRemaining = body.constructionTurnsRemaining;
-    if (body.isGuildOwned !== undefined) updates.isGuildOwned = body.isGuildOwned;
-    if (body.guildId !== undefined) updates.guildId = body.guildId;
+    if (body.ownerGosId !== undefined) updates.ownerGosId = body.ownerGosId;
+    if (body.allottedGosId !== undefined) updates.allottedGosId = body.allottedGosId;
     if (body.settlementId !== undefined) updates.settlementId = body.settlementId;
     if (body.territoryId !== undefined) updates.territoryId = body.territoryId;
 

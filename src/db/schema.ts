@@ -294,9 +294,8 @@ export const buildings = sqliteTable('buildings', {
   isOperational: integer('is_operational', { mode: 'boolean' }).default(true).notNull(),
   maintenanceState: text('maintenance_state').$type<BuildingMaintenanceState>().default('active').notNull(),
   constructionTurnsRemaining: integer('construction_turns_remaining').default(0).notNull(),
-  isGuildOwned: integer('is_guild_owned', { mode: 'boolean' }).default(false).notNull(),
-  guildId: text('guild_id'),
-  allottedGosId: text('allotted_gos_id'),
+  ownerGosId: text('owner_gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
+  allottedGosId: text('allotted_gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
   customDefinitionId: text('custom_definition_id'),
 });
 
@@ -304,8 +303,16 @@ export const buildingsRelations = relations(buildings, ({ one }) => ({
   settlement: one(settlements, { fields: [buildings.settlementId], references: [settlements.id] }),
   territory: one(territories, { fields: [buildings.territoryId], references: [territories.id] }),
   hex: one(mapHexes, { fields: [buildings.hexId], references: [mapHexes.id] }),
-  guild: one(guildsOrdersSocieties, { fields: [buildings.guildId], references: [guildsOrdersSocieties.id] }),
-  allottedGos: one(guildsOrdersSocieties, { fields: [buildings.allottedGosId], references: [guildsOrdersSocieties.id] }),
+  ownerGos: one(guildsOrdersSocieties, {
+    fields: [buildings.ownerGosId],
+    references: [guildsOrdersSocieties.id],
+    relationName: 'gos_owner_buildings',
+  }),
+  allottedGos: one(guildsOrdersSocieties, {
+    fields: [buildings.allottedGosId],
+    references: [guildsOrdersSocieties.id],
+    relationName: 'gos_allotted_buildings',
+  }),
 }));
 
 // ============================================================
@@ -319,11 +326,17 @@ export const resourceSites = sqliteTable('resource_sites', {
   resourceType: text('resource_type').$type<ResourceType>().notNull(),
   rarity: text('rarity').$type<ResourceRarity>().notNull(),
   industryCapacity: integer('industry_capacity').default(1).notNull(),
+  ownerGosId: text('owner_gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
 });
 
 export const resourceSitesRelations = relations(resourceSites, ({ one, many }) => ({
   territory: one(territories, { fields: [resourceSites.territoryId], references: [territories.id] }),
   settlement: one(settlements, { fields: [resourceSites.settlementId], references: [settlements.id] }),
+  ownerGos: one(guildsOrdersSocieties, {
+    fields: [resourceSites.ownerGosId],
+    references: [guildsOrdersSocieties.id],
+    relationName: 'gos_owner_resource_sites',
+  }),
   industries: many(industries),
 }));
 
@@ -339,12 +352,16 @@ export const industries = sqliteTable('industries', {
   ingredients: text('ingredients').default('[]').notNull(), // JSON array of resource types
   isOperational: integer('is_operational', { mode: 'boolean' }).default(true).notNull(),
   wealthGenerated: integer('wealth_generated').default(0).notNull(),
-  guildId: text('guild_id').references(() => guildsOrdersSocieties.id),
+  ownerGosId: text('owner_gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
 });
 
 export const industriesRelations = relations(industries, ({ one }) => ({
   resourceSite: one(resourceSites, { fields: [industries.resourceSiteId], references: [resourceSites.id] }),
-  guild: one(guildsOrdersSocieties, { fields: [industries.guildId], references: [guildsOrdersSocieties.id] }),
+  ownerGos: one(guildsOrdersSocieties, {
+    fields: [industries.ownerGosId],
+    references: [guildsOrdersSocieties.id],
+    relationName: 'gos_owner_industries',
+  }),
 }));
 
 // ============================================================
@@ -442,6 +459,7 @@ export const noblesRelations = relations(nobles, ({ one, many }) => ({
 export const armies = sqliteTable('armies', {
   id: text('id').primaryKey(),
   realmId: text('realm_id').notNull().references(() => realms.id),
+  gosId: text('gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
   name: text('name').notNull(),
   generalId: text('general_id').references(() => nobles.id),
   locationTerritoryId: text('location_territory_id').notNull().references(() => territories.id),
@@ -453,6 +471,11 @@ export const armies = sqliteTable('armies', {
 
 export const armiesRelations = relations(armies, ({ one, many }) => ({
   realm: one(realms, { fields: [armies.realmId], references: [realms.id] }),
+  gos: one(guildsOrdersSocieties, {
+    fields: [armies.gosId],
+    references: [guildsOrdersSocieties.id],
+    relationName: 'gos_armies',
+  }),
   general: one(nobles, { fields: [armies.generalId], references: [nobles.id], relationName: 'army_general' }),
   locationTerritory: one(territories, { fields: [armies.locationTerritoryId], references: [territories.id] }),
   locationHex: one(mapHexes, {
@@ -478,6 +501,7 @@ export const armiesRelations = relations(armies, ({ one, many }) => ({
 export const troops = sqliteTable('troops', {
   id: text('id').primaryKey(),
   realmId: text('realm_id').notNull().references(() => realms.id),
+  gosId: text('gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
   type: text('type').notNull(),
   class: text('class').notNull(), // Basic | Elite
   armourType: text('armour_type').notNull(),
@@ -492,6 +516,11 @@ export const troops = sqliteTable('troops', {
 
 export const troopsRelations = relations(troops, ({ one }) => ({
   realm: one(realms, { fields: [troops.realmId], references: [realms.id] }),
+  gos: one(guildsOrdersSocieties, {
+    fields: [troops.gosId],
+    references: [guildsOrdersSocieties.id],
+    relationName: 'gos_troops',
+  }),
   army: one(armies, { fields: [troops.armyId], references: [armies.id] }),
   garrisonSettlement: one(settlements, { fields: [troops.garrisonSettlementId], references: [settlements.id] }),
 }));
@@ -549,7 +578,12 @@ export const guildsOrdersSocieties = sqliteTable('guilds_orders_societies', {
   type: text('type').$type<GOSType>().notNull(),
   focus: text('focus'),
   leaderId: text('leader_id').references(() => nobles.id),
-  income: integer('income').default(0).notNull(),
+  treasury: integer('treasury').default(0).notNull(),
+  creationSource: text('creation_source'),
+  monopolyProduct: text('monopoly_product').$type<ResourceType>(),
+  alcoveNames: text('alcove_names'),
+  centreNames: text('centre_names'),
+  firstBuildingId: text('first_building_id').references((): AnySQLiteColumn => buildings.id),
 });
 
 export const guildsOrdersSocietiesRelations = relations(guildsOrdersSocieties, ({ one, many }) => ({
@@ -559,6 +593,16 @@ export const guildsOrdersSocietiesRelations = relations(guildsOrdersSocieties, (
     references: [nobles.id],
     relationName: 'gos_leader',
   }),
+  firstBuilding: one(buildings, {
+    fields: [guildsOrdersSocieties.firstBuildingId],
+    references: [buildings.id],
+  }),
+  ownedBuildings: many(buildings, { relationName: 'gos_owner_buildings' }),
+  allottedBuildings: many(buildings, { relationName: 'gos_allotted_buildings' }),
+  ownedResourceSites: many(resourceSites, { relationName: 'gos_owner_resource_sites' }),
+  ownedIndustries: many(industries, { relationName: 'gos_owner_industries' }),
+  troops: many(troops, { relationName: 'gos_troops' }),
+  armies: many(armies, { relationName: 'gos_armies' }),
   nobleTitles: many(nobleTitles),
   governanceEvents: many(governanceEvents),
 }));
@@ -678,8 +722,7 @@ export const turnActions = sqliteTable('turn_actions', {
   territoryId: text('territory_id'),
   material: text('material').$type<FortificationMaterial>(),
   wallSize: text('wall_size').$type<BuildingSize>(),
-  isGuildOwned: integer('is_guild_owned', { mode: 'boolean' }),
-  guildId: text('guild_id'),
+  ownerGosId: text('owner_gos_id'),
   allottedGosId: text('allotted_gos_id'),
   locationType: text('location_type').$type<BuildingLocationType>(),
   buildingSize: text('building_size').$type<BuildingSize>(),

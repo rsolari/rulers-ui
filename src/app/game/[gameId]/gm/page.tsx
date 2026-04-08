@@ -118,6 +118,35 @@ interface PlayerSlot {
   displayName: string | null;
   status: 'claimed' | 'unclaimed';
   setupState: string;
+  checklist: {
+    realmCreated: boolean;
+    rulerCreated: boolean;
+    nobleSetupCompleted: boolean;
+    guildOrderSocietySetupCompleted: boolean;
+    startingArmyPresent: boolean;
+    settlementsPlacedNamed: boolean;
+    economyInitialized: boolean;
+  } | null;
+  missingRequirements: string[];
+}
+
+function formatSetupStateLabel(setupState: string) {
+  return setupState
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getSetupStateBadgeVariant(setupState: string): 'default' | 'gold' | 'green' {
+  if (setupState === 'ready') {
+    return 'green';
+  }
+
+  if (setupState === 'claimed' || setupState === 'realm_created' || setupState === 'ruler_created') {
+    return 'gold';
+  }
+
+  return 'default';
 }
 
 async function getErrorMessage(response: Response, fallback: string) {
@@ -487,6 +516,7 @@ export default function GMDashboard() {
   const playerCount = realms.filter((realm) => !realm.isNPC).length;
   const allPlayersReady = playerSlots.length > 0 && playerSlots.every((slot) => slot.setupState === 'ready');
   const canStartGame = game.initState === 'ready_to_start' || (game.gmSetupState === 'ready' && allPlayersReady);
+  const claimedPlayerSlots = playerSlots.filter((slot) => slot.status === 'claimed');
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
@@ -575,6 +605,57 @@ export default function GMDashboard() {
               </div>
             ))}
             {playerSlots.length === 0 && <p className="text-ink-300 text-sm">No player slots yet.</p>}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Claimed Player Progress</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {claimedPlayerSlots.map((slot) => {
+              const completedChecklistItems = slot.checklist
+                ? Object.values(slot.checklist).filter(Boolean).length
+                : 0;
+
+              return (
+                <div key={slot.id} className="rounded border border-card-border bg-parchment-100/40 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-heading font-semibold">{slot.displayName || slot.territoryName || 'Claimed slot'}</p>
+                      <p className="text-sm text-ink-300">
+                        {slot.territoryName || slot.territoryId}
+                        {slot.realmId ? ` · realm created` : ' · realm not created yet'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant={getSetupStateBadgeVariant(slot.setupState)}>
+                        {formatSetupStateLabel(slot.setupState)}
+                      </Badge>
+                      <p className="mt-1 text-xs text-ink-300">
+                        {slot.checklist ? `${completedChecklistItems}/7 setup items complete` : 'Awaiting setup data'}
+                      </p>
+                    </div>
+                  </div>
+                  {slot.missingRequirements.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {slot.missingRequirements.map((requirement) => (
+                        <Badge key={`${slot.id}-${requirement}`} variant="default">
+                          Missing: {requirement}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-green-700">All player setup requirements are complete.</p>
+                  )}
+                </div>
+              );
+            })}
+            {claimedPlayerSlots.length === 0 && (
+              <p className="text-sm text-ink-300">No player slots have been claimed yet.</p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -718,11 +799,20 @@ export default function GMDashboard() {
                       <Badge variant="gold">{economyOverview[realm.id].warningCount} warnings</Badge>
                     ) : null}
                     {!realm.isNPC && slotForRealm && (
-                      <Badge variant={slotForRealm.setupState === 'ready' ? 'green' : 'default'}>
-                        {slotForRealm.setupState}
+                      <Badge variant={getSetupStateBadgeVariant(slotForRealm.setupState)}>
+                        {formatSetupStateLabel(slotForRealm.setupState)}
                       </Badge>
                     )}
                   </div>
+                  {!realm.isNPC && slotForRealm && slotForRealm.missingRequirements.length > 0 && (
+                    <div className="flex flex-wrap gap-2 text-sm text-ink-300">
+                      {slotForRealm.missingRequirements.map((requirement) => (
+                        <Badge key={`${realm.id}-${requirement}`} variant="default">
+                          Missing: {requirement}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                   {realmTerritories.length > 0 && (
                     <div className="flex items-center gap-2 text-sm text-ink-300">
                       <span>Territories:</span>

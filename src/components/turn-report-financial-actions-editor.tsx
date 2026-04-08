@@ -96,7 +96,6 @@ export function TurnReportFinancialActionsEditor({
         const filteredGos = requiredAllotmentType
           ? gos.filter((entry) => entry.type === requiredAllotmentType)
           : [];
-        const guildOptions = gos.filter((entry) => entry.type === 'Guild');
 
         return (
           <div key={`${action.type}-${index}`} className="space-y-4 rounded p-3 medieval-border">
@@ -254,36 +253,28 @@ export function TurnReportFinancialActionsEditor({
 
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="flex items-center gap-2 rounded border-2 border-input-border bg-input-bg px-4 py-3 text-sm text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(action.isGuildOwned)}
-                      onChange={(event) => updateAction(index, {
-                        ...action,
-                        isGuildOwned: event.target.checked,
-                        guildId: event.target.checked ? action.guildId ?? null : null,
-                        cost: undefined,
-                      })}
-                      disabled={isSubmitted}
-                    />
-                    Guild-owned building
+                    G.O.S. owner is optional and controls upkeep/accounting.
                   </label>
-                  {action.isGuildOwned ? (
-                    <Select
-                      label="Guild Owner"
-                      options={guildOptions.map((entry) => ({ value: entry.id, label: entry.name }))}
-                      value={action.guildId ?? ''}
-                      placeholder="Select guild"
-                      onChange={(event) => updateAction(index, {
+                  <Select
+                    label="G.O.S. Owner"
+                    options={gos.map((entry) => ({ value: entry.id, label: entry.name }))}
+                    value={action.ownerGosId ?? ''}
+                    placeholder="Select owner"
+                    onChange={(event) => {
+                      const nextOwnerGosId = event.target.value || null;
+                      const nextOwner = gos.find((entry) => entry.id === nextOwnerGosId) ?? null;
+
+                      updateAction(index, {
                         ...action,
-                        guildId: event.target.value || null,
-                        allottedGosId: requiredAllotmentType === 'Guild' && !action.allottedGosId
-                          ? event.target.value || null
+                        ownerGosId: nextOwnerGosId,
+                        allottedGosId: requiredAllotmentType === 'Guild' && !action.allottedGosId && nextOwner?.type === 'Guild'
+                          ? nextOwner.id
                           : action.allottedGosId ?? null,
                         cost: undefined,
-                      })}
-                      disabled={isSubmitted}
-                    />
-                  ) : <div />}
+                      });
+                    }}
+                    disabled={isSubmitted}
+                  />
                   {requiredAllotmentType ? (
                     <Select
                       label={`${requiredAllotmentType} Allotment`}

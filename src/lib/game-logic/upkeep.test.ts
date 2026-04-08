@@ -25,7 +25,7 @@ describe('calculateBuildingUpkeep', () => {
 
   it('skips GOS first-free buildings', () => {
     expect(calculateBuildingUpkeep([
-      { size: 'Medium', isComplete: true, gosFirstFree: true },
+      { size: 'Medium', isComplete: true, isUpkeepExempt: true },
       { size: 'Small', isComplete: true },
     ])).toBe(500);
   });

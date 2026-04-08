@@ -29,7 +29,7 @@ function withPreparedBuildingFields(
     settlementId: prepared.row.settlementId ?? null,
     territoryId: prepared.row.territoryId ?? null,
     material: (prepared.row.material ?? null) as BuildFinancialAction['material'],
-    guildId: prepared.row.guildId ?? null,
+    ownerGosId: prepared.row.ownerGosId ?? null,
     allottedGosId: prepared.row.allottedGosId ?? null,
     locationType: prepared.row.locationType,
     buildingSize: prepared.effectiveSize,
@@ -75,8 +75,7 @@ export function prepareTurnReportFinancialActions(
         territoryId: action.territoryId ?? null,
         type: action.buildingType,
         material: action.material ?? null,
-        isGuildOwned: action.isGuildOwned ?? false,
-        guildId: action.guildId ?? null,
+        ownerGosId: action.ownerGosId ?? null,
         allottedGosId: action.allottedGosId ?? null,
         wallSize: action.wallSize ?? null,
       }, { database });

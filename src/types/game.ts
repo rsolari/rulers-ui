@@ -99,6 +99,15 @@ export type GovernanceEventType =
 // GOS Types
 export type GOSType = 'Guild' | 'Order' | 'Society';
 
+export interface GOSMetadata {
+  treasury: number;
+  creationSource?: string | null;
+  monopolyProduct?: ResourceType | null;
+  alcoveNames?: string[] | null;
+  centreNames?: string[] | null;
+  firstBuildingId?: string | null;
+}
+
 // Turn Report Status
 export type ReportStatus = 'draft' | 'submitted' | 'resolved';
 export type ActionKind = 'political' | 'financial';
@@ -194,8 +203,7 @@ export interface BuildFinancialAction {
   territoryId?: string | null;
   material?: FortificationMaterial | null;
   wallSize?: BuildingSize | null;
-  isGuildOwned?: boolean;
-  guildId?: string | null;
+  ownerGosId?: string | null;
   allottedGosId?: string | null;
   locationType?: BuildingLocationType;
   buildingSize?: BuildingSize;
@@ -266,8 +274,7 @@ export interface TurnActionRecord {
   territoryId: string | null;
   material: FortificationMaterial | null;
   wallSize: BuildingSize | null;
-  isGuildOwned: boolean | null;
-  guildId: string | null;
+  ownerGosId: string | null;
   allottedGosId: string | null;
   locationType: BuildingLocationType | null;
   buildingSize: BuildingSize | null;
@@ -330,8 +337,7 @@ export interface TurnActionCreateDto {
   territoryId?: string | null;
   material?: FortificationMaterial | null;
   wallSize?: BuildingSize | null;
-  isGuildOwned?: boolean | null;
-  guildId?: string | null;
+  ownerGosId?: string | null;
   allottedGosId?: string | null;
   locationType?: BuildingLocationType | null;
   buildingSize?: BuildingSize | null;
@@ -355,8 +361,7 @@ export interface TurnActionUpdateDto {
   territoryId?: string | null;
   material?: FortificationMaterial | null;
   wallSize?: BuildingSize | null;
-  isGuildOwned?: boolean | null;
-  guildId?: string | null;
+  ownerGosId?: string | null;
   allottedGosId?: string | null;
   locationType?: BuildingLocationType | null;
   buildingSize?: BuildingSize | null;

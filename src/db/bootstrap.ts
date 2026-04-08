@@ -74,14 +74,13 @@ function createBuildingsTable(database: Database.Database, tableName: string) {
       is_operational integer NOT NULL DEFAULT true,
       maintenance_state text NOT NULL DEFAULT 'active',
       construction_turns_remaining integer NOT NULL DEFAULT 0,
-      is_guild_owned integer NOT NULL DEFAULT false,
-      guild_id text,
+      owner_gos_id text,
       allotted_gos_id text,
       custom_definition_id text,
       FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (guild_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (owner_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (allotted_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
   `);
@@ -248,8 +247,10 @@ function createBaseSchema(database: Database.Database) {
       resource_type text NOT NULL,
       rarity text NOT NULL,
       industry_capacity integer NOT NULL DEFAULT 1,
+      owner_gos_id text,
       FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (owner_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS noble_families (
@@ -303,6 +304,7 @@ function createBaseSchema(database: Database.Database) {
     CREATE TABLE IF NOT EXISTS armies (
       id text PRIMARY KEY NOT NULL,
       realm_id text NOT NULL,
+      gos_id text,
       name text NOT NULL,
       general_id text,
       location_territory_id text NOT NULL,
@@ -311,6 +313,7 @@ function createBaseSchema(database: Database.Database) {
       destination_hex_id text,
       movement_turns_remaining integer NOT NULL DEFAULT 0,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (general_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (location_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (destination_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
@@ -321,6 +324,7 @@ function createBaseSchema(database: Database.Database) {
     CREATE TABLE IF NOT EXISTS troops (
       id text PRIMARY KEY NOT NULL,
       realm_id text NOT NULL,
+      gos_id text,
       type text NOT NULL,
       class text NOT NULL,
       armour_type text NOT NULL,
@@ -332,6 +336,7 @@ function createBaseSchema(database: Database.Database) {
       recruitment_season text,
       recruitment_turns_remaining integer NOT NULL DEFAULT 0,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (garrison_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (recruitment_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
@@ -363,14 +368,13 @@ function createBaseSchema(database: Database.Database) {
       is_operational integer NOT NULL DEFAULT true,
       maintenance_state text NOT NULL DEFAULT 'active',
       construction_turns_remaining integer NOT NULL DEFAULT 0,
-      is_guild_owned integer NOT NULL DEFAULT false,
-      guild_id text,
+      owner_gos_id text,
       allotted_gos_id text,
       custom_definition_id text,
       FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (guild_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (owner_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (allotted_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
 
@@ -401,9 +405,15 @@ function createBaseSchema(database: Database.Database) {
       type text NOT NULL,
       focus text,
       leader_id text,
-      income integer NOT NULL DEFAULT 0,
+      treasury integer NOT NULL DEFAULT 0,
+      creation_source text,
+      monopoly_product text,
+      alcove_names text,
+      centre_names text,
+      first_building_id text,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (leader_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (leader_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (first_building_id) REFERENCES buildings(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS noble_titles (
@@ -463,9 +473,9 @@ function createBaseSchema(database: Database.Database) {
       ingredients text NOT NULL DEFAULT '[]',
       is_operational integer NOT NULL DEFAULT true,
       wealth_generated integer NOT NULL DEFAULT 0,
-      guild_id text,
+      owner_gos_id text,
       FOREIGN KEY (resource_site_id) REFERENCES resource_sites(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (guild_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (owner_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS turn_reports (
@@ -503,8 +513,7 @@ function createBaseSchema(database: Database.Database) {
       territory_id text,
       material text,
       wall_size text,
-      is_guild_owned integer,
-      guild_id text,
+      owner_gos_id text,
       allotted_gos_id text,
       location_type text,
       building_size text,
@@ -890,8 +899,7 @@ function migrateBuildingsToSupportStandaloneLocations(database: Database.Databas
         is_operational,
         maintenance_state,
         construction_turns_remaining,
-        is_guild_owned,
-        guild_id,
+        owner_gos_id,
         allotted_gos_id,
         custom_definition_id
       )
@@ -912,7 +920,6 @@ function migrateBuildingsToSupportStandaloneLocations(database: Database.Databas
         1,
         'active',
         construction_turns_remaining,
-        is_guild_owned,
         guild_id,
         guild_id,
         NULL
@@ -1305,8 +1312,20 @@ function ensureEconomySchema(database: Database.Database) {
   addColumnIfMissing(database, 'buildings', 'takes_building_slot integer DEFAULT 1 NOT NULL', 'takes_building_slot');
   addColumnIfMissing(database, 'buildings', 'is_operational integer DEFAULT 1 NOT NULL', 'is_operational');
   addColumnIfMissing(database, 'buildings', "maintenance_state text DEFAULT 'active' NOT NULL", 'maintenance_state');
+  addColumnIfMissing(database, 'buildings', 'owner_gos_id text', 'owner_gos_id');
   addColumnIfMissing(database, 'buildings', 'allotted_gos_id text', 'allotted_gos_id');
   addColumnIfMissing(database, 'buildings', 'custom_definition_id text', 'custom_definition_id');
+  addColumnIfMissing(database, 'resource_sites', 'owner_gos_id text', 'owner_gos_id');
+  addColumnIfMissing(database, 'industries', 'owner_gos_id text', 'owner_gos_id');
+  addColumnIfMissing(database, 'troops', 'gos_id text', 'gos_id');
+  addColumnIfMissing(database, 'armies', 'gos_id text', 'gos_id');
+  addColumnIfMissing(database, 'turn_actions', 'owner_gos_id text', 'owner_gos_id');
+  addColumnIfMissing(database, 'guilds_orders_societies', 'treasury integer DEFAULT 0 NOT NULL', 'treasury');
+  addColumnIfMissing(database, 'guilds_orders_societies', 'creation_source text', 'creation_source');
+  addColumnIfMissing(database, 'guilds_orders_societies', 'monopoly_product text', 'monopoly_product');
+  addColumnIfMissing(database, 'guilds_orders_societies', 'alcove_names text', 'alcove_names');
+  addColumnIfMissing(database, 'guilds_orders_societies', 'centre_names text', 'centre_names');
+  addColumnIfMissing(database, 'guilds_orders_societies', 'first_building_id text', 'first_building_id');
   addColumnIfMissing(database, 'troops', 'recruitment_settlement_id text', 'recruitment_settlement_id');
   addColumnIfMissing(database, 'troops', 'recruitment_year integer', 'recruitment_year');
   addColumnIfMissing(database, 'troops', 'recruitment_season text', 'recruitment_season');
@@ -1320,11 +1339,50 @@ function ensureEconomySchema(database: Database.Database) {
     WHERE location_type = 'settlement';
   `);
 
-  database.exec(`
-    UPDATE buildings
-    SET allotted_gos_id = COALESCE(allotted_gos_id, guild_id)
-    WHERE allotted_gos_id IS NULL;
-  `);
+  if (columnExists(database, 'buildings', 'guild_id')) {
+    database.exec(`
+      UPDATE buildings
+      SET allotted_gos_id = COALESCE(allotted_gos_id, guild_id)
+      WHERE allotted_gos_id IS NULL;
+    `);
+  } else {
+    database.exec(`
+      UPDATE buildings
+      SET allotted_gos_id = COALESCE(allotted_gos_id, owner_gos_id)
+      WHERE allotted_gos_id IS NULL;
+    `);
+  }
+
+  if (columnExists(database, 'buildings', 'guild_id')) {
+    database.exec(`
+      UPDATE buildings
+      SET owner_gos_id = COALESCE(owner_gos_id, guild_id)
+      WHERE owner_gos_id IS NULL;
+    `);
+  }
+
+  if (columnExists(database, 'industries', 'guild_id')) {
+    database.exec(`
+      UPDATE industries
+      SET owner_gos_id = COALESCE(owner_gos_id, guild_id)
+      WHERE owner_gos_id IS NULL;
+    `);
+  }
+
+  if (columnExists(database, 'turn_actions', 'guild_id')) {
+    database.exec(`
+      UPDATE turn_actions
+      SET owner_gos_id = COALESCE(owner_gos_id, guild_id)
+      WHERE owner_gos_id IS NULL;
+    `);
+  }
+
+  if (columnExists(database, 'guilds_orders_societies', 'income')) {
+    database.exec(`
+      UPDATE guilds_orders_societies
+      SET treasury = COALESCE(treasury, income, 0);
+    `);
+  }
 
   backfillResourceIndustryState(database);
 }

@@ -76,8 +76,7 @@ export interface EconomyBuildingInput {
   takesBuildingSlot?: boolean;
   isOperational?: boolean;
   maintenanceState?: BuildingMaintenanceState;
-  isGuildOwned?: boolean;
-  guildId?: string | null;
+  ownerGosId?: string | null;
   allottedGosId?: string | null;
   material?: string | null;
 }
@@ -89,8 +88,7 @@ export interface EconomyStandaloneBuildingInput {
   constructionTurnsRemaining: number;
   territoryId: string;
   territoryName: string;
-  isGuildOwned?: boolean;
-  guildId?: string | null;
+  ownerGosId?: string | null;
   allottedGosId?: string | null;
   material?: string | null;
 }
@@ -151,7 +149,13 @@ export interface EconomyGOSInput {
   id: string;
   name: string;
   type: 'Guild' | 'Order' | 'Society';
-  income: number;
+  treasury: number;
+  creationSource?: string | null;
+  monopolyProduct?: ResourceType | null;
+  alcoveNames?: string[] | null;
+  centreNames?: string[] | null;
+  firstBuildingId?: string | null;
+  income?: number;
 }
 
 export interface EconomyReportInput {
@@ -221,9 +225,8 @@ export interface EconomyPendingBuilding {
   size: BuildingSize;
   takesBuildingSlot: boolean;
   material?: string | null;
-  guildId?: string | null;
+  ownerGosId?: string | null;
   allottedGosId?: string | null;
-  isGuildOwned: boolean;
   constructionTurnsRemaining: number;
   reportId?: string | null;
 }
@@ -560,13 +563,14 @@ function createGOSRevenueEntries(goses: EconomyGOSInput[]) {
   let total = 0;
 
   for (const gos of goses) {
-    if (gos.income <= 0) continue;
+    const income = gos.income ?? 0;
+    if (income <= 0) continue;
 
-    total += gos.income;
+    total += income;
     entries.push(createRevenueEntry({
       category: 'gos-income',
       label: `${gos.name} income`,
-      amount: gos.income,
+      amount: income,
       metadata: { gosId: gos.id, gosType: gos.type },
     }));
   }
@@ -729,26 +733,25 @@ export function calculateRealmEconomy(
     ...building,
     settlementId: null,
     settlementName: building.territoryName,
-    isGuildOwned: building.isGuildOwned ?? false,
-    guildId: building.guildId ?? null,
+    ownerGosId: building.ownerGosId ?? null,
   }));
   const allBuildings = [...completeBuildings, ...standaloneBuildings];
 
-  const chargeableGuildBuildingIds = new Set<string>();
-  const seenGuildIds = new Set<string>();
+  const chargeableGosBuildingIds = new Set<string>();
+  const seenOwnerGosIds = new Set<string>();
   for (const building of allBuildings) {
     if (building.constructionTurnsRemaining > 0) continue;
-    if (!building.isGuildOwned || !building.guildId) {
-      chargeableGuildBuildingIds.add(building.id);
+    if (!building.ownerGosId) {
+      chargeableGosBuildingIds.add(building.id);
       continue;
     }
 
-    if (seenGuildIds.has(building.guildId)) {
-      chargeableGuildBuildingIds.add(building.id);
+    if (seenOwnerGosIds.has(building.ownerGosId)) {
+      chargeableGosBuildingIds.add(building.id);
       continue;
     }
 
-    seenGuildIds.add(building.guildId);
+    seenOwnerGosIds.add(building.ownerGosId);
   }
 
   const troopUpkeep = calculateTroopUpkeep(
@@ -833,9 +836,8 @@ export function calculateRealmEconomy(
           size: action.buildingSize ?? BUILDING_DEFS[action.buildingType].size,
           takesBuildingSlot: action.takesBuildingSlot ?? (BUILDING_DEFS[action.buildingType].takesBuildingSlot ?? true),
           material: action.material ?? null,
-          guildId: action.guildId ?? null,
+          ownerGosId: action.ownerGosId ?? null,
           allottedGosId: action.allottedGosId ?? null,
-          isGuildOwned: action.isGuildOwned ?? false,
           constructionTurnsRemaining: action.constructionTurns
             ?? BUILDING_SIZE_DATA[action.buildingSize ?? BUILDING_DEFS[action.buildingType].size].buildTime,
           reportId: realm.report?.id ?? null,
@@ -917,9 +919,8 @@ export function calculateRealmEconomy(
 
   for (const building of sortedCompleteBuildings) {
     const isChargeable =
-      !building.isGuildOwned ||
-      !building.guildId ||
-      chargeableGuildBuildingIds.has(building.id);
+      !building.ownerGosId ||
+      chargeableGosBuildingIds.has(building.id);
     const upkeepCost = isChargeable ? BUILDING_SIZE_DATA[building.size].maintenance : 0;
     const upkeepPaid = upkeepCost === 0 || availableTreasuryForBuildings >= upkeepCost;
 
@@ -960,11 +961,7 @@ export function calculateRealmEconomy(
     allBuildings.map((building) => ({
       size: building.size,
       isComplete: building.constructionTurnsRemaining <= 0,
-      gosFirstFree: Boolean(
-        building.isGuildOwned &&
-        building.guildId &&
-        !chargeableGuildBuildingIds.has(building.id),
-      ),
+      isUpkeepExempt: Boolean(building.ownerGosId && !chargeableGosBuildingIds.has(building.id)),
     })),
   );
 

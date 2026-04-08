@@ -215,8 +215,7 @@ export interface CreateBuildingInput {
   technicalKnowledgeKey?: string | null;
   material?: string | null;
   instant?: boolean;
-  isGuildOwned?: boolean;
-  guildId?: string | null;
+  ownerGosId?: string | null;
   allottedGosId?: string | null;
   wallSize?: BuildingSize | null;
 }
@@ -422,18 +421,18 @@ function resolveAllottedRequirement(buildingType: BuildingType) {
   return null;
 }
 
-function validateGuildOwner(
-  guildId: string | null | undefined,
+function validateOwnerGos(
+  ownerGosId: string | null | undefined,
   gos: GosReference[],
 ) {
-  if (!guildId) {
-    throw new RuleValidationError('guildId is required for guild-owned buildings', 400, 'guild_owner_required');
+  if (!ownerGosId) {
+    throw new RuleValidationError('ownerGosId is required for G.O.S.-owned buildings', 400, 'owner_gos_required');
   }
 
-  const guild = gos.find((entry) => entry.id === guildId);
-  if (!guild || guild.type !== 'Guild') {
-    throw new RuleValidationError('Guild owner must belong to this realm and be a Guild', 404, 'guild_owner_invalid', {
-      guildId,
+  const owner = gos.find((entry) => entry.id === ownerGosId);
+  if (!owner) {
+    throw new RuleValidationError('G.O.S. owner must belong to this realm', 404, 'owner_gos_invalid', {
+      ownerGosId,
     });
   }
 }
@@ -552,12 +551,12 @@ export function prepareBuildingCreation(
     }
   }
 
-  if (input.isGuildOwned) {
-    validateGuildOwner(input.guildId, context.gos);
+  if (input.ownerGosId) {
+    validateOwnerGos(input.ownerGosId, context.gos);
   }
 
   const requiredAllotment = resolveAllottedRequirement(buildingType);
-  const effectiveAllottedGosId = input.allottedGosId ?? (requiredAllotment === 'Guild' ? input.guildId ?? null : null);
+  const effectiveAllottedGosId = input.allottedGosId ?? (requiredAllotment === 'Guild' ? input.ownerGosId ?? null : null);
   if (requiredAllotment) {
     validateAllottedGos(requiredAllotment, effectiveAllottedGosId, context.gos);
   }
@@ -602,8 +601,7 @@ export function prepareBuildingCreation(
       isOperational: true,
       maintenanceState: 'active',
       constructionTurnsRemaining: constructionTurns,
-      isGuildOwned: Boolean(input.isGuildOwned),
-      guildId: input.isGuildOwned ? input.guildId ?? null : null,
+      ownerGosId: input.ownerGosId ?? null,
       allottedGosId: effectiveAllottedGosId ?? null,
       customDefinitionId: null,
     },

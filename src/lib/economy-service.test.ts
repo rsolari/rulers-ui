@@ -861,7 +861,7 @@ describe('createEconomyService.advanceGameTurn', () => {
       realmId: 'realm-growth',
       name: 'Stonefield Guild',
       type: 'Guild',
-      income: 0,
+      treasury: 0,
     }).run();
 
     db.insert(schema.buildings).values([
@@ -916,8 +916,7 @@ describe('createEconomyService.advanceGameTurn', () => {
       financialType: 'build',
       buildingType: 'Bank',
       settlementId: 'settlement-growth',
-      isGuildOwned: true,
-      guildId: 'guild-growth',
+      ownerGosId: 'guild-growth',
       cost: 1500,
       createdAt: new Date('2025-01-01T00:00:00Z'),
       updatedAt: new Date('2025-01-01T00:00:00Z'),

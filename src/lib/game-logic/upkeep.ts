@@ -5,12 +5,12 @@ import {
 } from './constants';
 
 export function calculateBuildingUpkeep(
-  buildings: Array<{ size: BuildingSize; isComplete: boolean; gosFirstFree?: boolean }>,
+  buildings: Array<{ size: BuildingSize; isComplete: boolean; isUpkeepExempt?: boolean }>,
 ): number {
   let total = 0;
   for (const b of buildings) {
     if (!b.isComplete) continue;
-    if (b.gosFirstFree) continue;
+    if (b.isUpkeepExempt) continue;
     total += BUILDING_SIZE_DATA[b.size].maintenance;
   }
   return total;

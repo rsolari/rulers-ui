@@ -252,9 +252,9 @@ export function TurnReportFinancialActionsEditor({
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <label className="flex items-center gap-2 rounded border-2 border-input-border bg-input-bg px-4 py-3 text-sm text-foreground">
+                  <div className="flex items-center gap-2 rounded border-2 border-input-border bg-input-bg px-4 py-3 text-sm text-foreground">
                     G.O.S. owner is optional and controls upkeep/accounting.
-                  </label>
+                  </div>
                   <Select
                     label="G.O.S. Owner"
                     options={gos.map((entry) => ({ value: entry.id, label: entry.name }))}

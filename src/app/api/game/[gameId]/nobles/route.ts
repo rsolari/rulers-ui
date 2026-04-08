@@ -34,6 +34,7 @@ export async function GET(
     db.select({
       id: settlements.id,
       name: settlements.name,
+      size: settlements.size,
       governingNobleId: settlements.governingNobleId,
     }).from(settlements).where(eq(settlements.realmId, realmId)),
     db.select({

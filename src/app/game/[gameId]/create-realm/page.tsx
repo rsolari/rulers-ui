@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import type { GameMapData } from '@/components/map/types';
 import { TerritoryHexMap, type TerritoryMapPlacement } from '@/components/map/TerritoryHexMap';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -306,19 +307,39 @@ export default function CreateRealmPage() {
             </div>
 
             <div>
-              <p className="mb-2 font-heading text-sm font-medium text-ink-500">Traditions ({traditions.length}/3)</p>
-              <div className="flex flex-wrap gap-2">
-                {TRADITION_OPTIONS.map((option) => (
-                  <Badge
-                    key={option.value}
-                    variant={traditions.includes(option.value as Tradition) ? 'gold' : 'default'}
-                    className="cursor-pointer"
-                    onClick={() => toggleTradition(option.value as Tradition)}
-                    title={TRADITION_DEFS[option.value as Tradition].effect}
-                  >
-                    {option.label}
-                  </Badge>
-                ))}
+              <div className="mb-2 flex items-baseline justify-between">
+                <p className="font-heading text-sm font-medium text-ink-500">Traditions ({traditions.length}/3)</p>
+                <Link href="/rules/13-traditions" target="_blank" className="text-xs text-ink-300 underline hover:text-ink-500">
+                  Rules: Traditions
+                </Link>
+              </div>
+              <div className="space-y-1.5">
+                {TRADITION_OPTIONS.map((option) => {
+                  const def = TRADITION_DEFS[option.value as Tradition];
+                  const selected = traditions.includes(option.value as Tradition);
+                  const disabled = !selected && traditions.length >= 3;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`w-full text-left rounded-md border px-3 py-2 transition-colors ${
+                        selected
+                          ? 'border-gold-500 bg-gold-500/10'
+                          : disabled
+                            ? 'border-ink-200/40 bg-parchment-50/30 opacity-50 cursor-not-allowed'
+                            : 'border-ink-200/70 bg-parchment-50/70 hover:border-ink-300 cursor-pointer'
+                      }`}
+                      onClick={() => toggleTradition(option.value as Tradition)}
+                      disabled={disabled}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-heading text-sm font-medium">{def.displayName}</span>
+                        <Badge variant="default" className="text-[10px] px-1.5 py-0">{def.category}</Badge>
+                      </div>
+                      <p className="mt-0.5 text-xs text-ink-300">{def.effect}</p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

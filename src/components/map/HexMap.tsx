@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent, type WheelEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { ArmyMarker } from '@/components/map/ArmyMarker';
 import { FeatureIndicator } from '@/components/map/FeatureIndicator';
 import { HexTile } from '@/components/map/HexTile';
@@ -10,6 +10,7 @@ import { SettlementMarker } from '@/components/map/SettlementMarker';
 import { TerritoryLabel } from '@/components/map/TerritoryLabel';
 import type { GameMapData, HoveredHexData, MapHexData } from '@/components/map/types';
 import { computeTerritoryBorderSegments, computeViewBox, hexToPixel, hexVertices, type PixelPoint, type ViewBox } from '@/components/map/hex-utils';
+import { computeRiverPaths, type RiverHexInput } from '@/components/map/river-utils';
 
 const HEX_SIZE = 24;
 const MIN_ZOOM_FACTOR = 0.45;
@@ -131,6 +132,7 @@ export function HexMap({ data }: HexMapProps) {
     hexRenderData,
     hexDetails,
     hexPointsById,
+    riverPaths,
   } = useMemo(() => {
     const hexPixels = new Map<string, PixelPoint>(
       data.hexes.map((hex) => [hex.id, hexToPixel(hex.q, hex.r, HEX_SIZE)])
@@ -140,6 +142,7 @@ export function HexMap({ data }: HexMapProps) {
     const hexRenderData: HexRenderData[] = [];
     const hexDetails: HexDetailData[] = [];
     const hexPointsById = new Map<string, string>();
+    const riverHexInputs: RiverHexInput[] = [];
 
     for (const hex of data.hexes) {
       const center = hexPixels.get(hex.id);
@@ -166,6 +169,19 @@ export function HexMap({ data }: HexMapProps) {
         armies: hex.armies,
       });
 
+      for (const feature of hex.features) {
+        if (feature.featureType === 'river' && feature.riverIndex != null) {
+          riverHexInputs.push({
+            id: hex.id,
+            q: hex.q,
+            r: hex.r,
+            centerX: center.x,
+            centerY: center.y,
+            riverIndex: feature.riverIndex,
+          });
+        }
+      }
+
       if (!hex.territoryId) {
         continue;
       }
@@ -191,6 +207,7 @@ export function HexMap({ data }: HexMapProps) {
       }];
     });
     const baseViewBox = computeViewBox([...hexPixels.values()], HEX_SIZE);
+    const riverPaths = computeRiverPaths(riverHexInputs);
 
     return {
       baseViewBox,
@@ -199,6 +216,7 @@ export function HexMap({ data }: HexMapProps) {
       hexRenderData,
       hexDetails,
       hexPointsById,
+      riverPaths,
     };
   }, [data.hexes, data.territories, realmColorById, territoryById]);
 
@@ -332,10 +350,34 @@ export function HexMap({ data }: HexMapProps) {
       <TerritoryLabel key={territory.id} x={territory.x} y={territory.y} name={territory.name} />
     ))
   ), [territoryLabels]);
+  const riverPathNodes = useMemo(() => (
+    riverPaths.map((river) => (
+      <g key={`river-${river.riverIndex}-${river.path.slice(0, 20)}`} pointerEvents="none">
+        <path
+          d={river.path}
+          fill="none"
+          stroke="#1a3a5a"
+          strokeWidth={4.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeOpacity={0.3}
+        />
+        <path
+          d={river.path}
+          fill="none"
+          stroke="#4a90c4"
+          strokeWidth={2.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeOpacity={0.85}
+        />
+      </g>
+    ))
+  ), [riverPaths]);
   const hexDetailNodes = useMemo(() => (
     hexDetails.map((hex) => (
       <g key={`${hex.id}-details`} pointerEvents="none">
-        {hex.features.slice(0, 3).map((feature, index) => (
+        {hex.features.filter((f) => f.featureType !== 'river').slice(0, 3).map((feature, index) => (
           <FeatureIndicator
             key={`${hex.id}-${feature.featureType}-${index}`}
             x={hex.centerX - 7 + index * 7}
@@ -433,32 +475,34 @@ export function HexMap({ data }: HexMapProps) {
     }
   }
 
-  function handleWheel(event: WheelEvent<SVGSVGElement>) {
-    event.preventDefault();
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (event: globalThis.WheelEvent) => {
+      event.preventDefault();
 
-    const bounds = svgRef.current?.getBoundingClientRect();
-    if (!bounds) {
-      return;
-    }
+      const bounds = el.getBoundingClientRect();
+      const pointerRatioX = (event.clientX - bounds.left) / bounds.width;
+      const pointerRatioY = (event.clientY - bounds.top) / bounds.height;
+      const zoomScale = event.deltaY < 0 ? 0.88 : 1.12;
+      const minWidth = baseViewBox.width * MIN_ZOOM_FACTOR;
+      const maxWidth = baseViewBox.width * MAX_ZOOM_FACTOR;
+      const currentViewBox = viewBoxRef.current;
+      const nextWidth = clamp(currentViewBox.width * zoomScale, minWidth, maxWidth);
+      const nextHeight = nextWidth * (currentViewBox.height / currentViewBox.width);
+      const worldX = currentViewBox.x + pointerRatioX * currentViewBox.width;
+      const worldY = currentViewBox.y + pointerRatioY * currentViewBox.height;
 
-    const pointerRatioX = (event.clientX - bounds.left) / bounds.width;
-    const pointerRatioY = (event.clientY - bounds.top) / bounds.height;
-    const zoomScale = event.deltaY < 0 ? 0.88 : 1.12;
-    const minWidth = baseViewBox.width * MIN_ZOOM_FACTOR;
-    const maxWidth = baseViewBox.width * MAX_ZOOM_FACTOR;
-    const currentViewBox = viewBoxRef.current;
-    const nextWidth = clamp(currentViewBox.width * zoomScale, minWidth, maxWidth);
-    const nextHeight = nextWidth * (currentViewBox.height / currentViewBox.width);
-    const worldX = currentViewBox.x + pointerRatioX * currentViewBox.width;
-    const worldY = currentViewBox.y + pointerRatioY * currentViewBox.height;
-
-    scheduleViewBoxUpdate({
-      x: worldX - pointerRatioX * nextWidth,
-      y: worldY - pointerRatioY * nextHeight,
-      width: nextWidth,
-      height: nextHeight,
-    });
-  }
+      scheduleViewBoxUpdate({
+        x: worldX - pointerRatioX * nextWidth,
+        y: worldY - pointerRatioY * nextHeight,
+        width: nextWidth,
+        height: nextHeight,
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [baseViewBox, scheduleViewBoxUpdate]);
 
   return (
     <div
@@ -478,7 +522,7 @@ export function HexMap({ data }: HexMapProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={finishPointer}
         onPointerCancel={finishPointer}
-        onWheel={handleWheel}
+
         style={{ cursor: 'grab' }}
       >
         {hexTiles}
@@ -504,6 +548,8 @@ export function HexMap({ data }: HexMapProps) {
             pointerEvents="none"
           />
         ) : null}
+
+        {riverPathNodes}
 
         {territoryBorderPaths}
 

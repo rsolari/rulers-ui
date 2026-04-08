@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { SettlementMarker } from '@/components/map/SettlementMarker';
 import { computeTerritoryBorderSegments, computeViewBox, hexToPixel, hexVertices } from '@/components/map/hex-utils';
 import type { TerritoryMapData } from '@/lib/maps/territory-map';
@@ -106,6 +106,51 @@ export function TerritoryHexMap({
     };
   }, [data.hexes, hexSize, showContext]);
 
+  const MIN_ZOOM = 1;
+  const MAX_ZOOM = 4;
+  const ZOOM_STEP = 0.3;
+
+  const [zoom, setZoom] = useState(MIN_ZOOM);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0 });
+  const panOrigin = useRef({ x: 0, y: 0 });
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    setZoom((prev) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev - e.deltaY * 0.003)));
+  }, []);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (zoom <= MIN_ZOOM) return;
+    isPanning.current = true;
+    panStart.current = { x: e.clientX, y: e.clientY };
+    panOrigin.current = { ...pan };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [zoom, pan]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isPanning.current) return;
+    setPan({
+      x: panOrigin.current.x + (e.clientX - panStart.current.x),
+      y: panOrigin.current.y + (e.clientY - panStart.current.y),
+    });
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    isPanning.current = false;
+  }, []);
+
+  const zoomIn = useCallback(() => setZoom((prev) => Math.min(MAX_ZOOM, prev + ZOOM_STEP)), []);
+  const zoomOut = useCallback(() => {
+    setZoom((prev) => {
+      const next = Math.max(MIN_ZOOM, prev - ZOOM_STEP);
+      if (next <= MIN_ZOOM) setPan({ x: 0, y: 0 });
+      return next;
+    });
+  }, []);
+  const resetZoom = useCallback(() => { setZoom(MIN_ZOOM); setPan({ x: 0, y: 0 }); }, []);
+
   if (data.hexes.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-ink-200/70 bg-parchment-50/70 px-4 py-6 text-center text-sm text-ink-300">
@@ -116,16 +161,48 @@ export function TerritoryHexMap({
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border border-ink-200/80 bg-[radial-gradient(circle_at_top,_rgba(253,248,240,0.95),_rgba(236,220,184,0.9))] ${
+      className={`relative overflow-hidden rounded-xl border border-ink-200/80 bg-[radial-gradient(circle_at_top,_rgba(253,248,240,0.95),_rgba(236,220,184,0.9))] ${
         variant === 'full' ? 'shadow-[0_12px_30px_rgba(74,55,40,0.12)]' : ''
-      }`}
+      } ${zoom > MIN_ZOOM ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      onWheel={handleWheel}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
     >
+      <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={zoomIn}
+          className="flex h-6 w-6 items-center justify-center rounded bg-parchment-50/90 text-xs font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60"
+          aria-label="Zoom in"
+        >+</button>
+        <button
+          type="button"
+          onClick={zoomOut}
+          className="flex h-6 w-6 items-center justify-center rounded bg-parchment-50/90 text-xs font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60"
+          aria-label="Zoom out"
+        >−</button>
+        {zoom > MIN_ZOOM ? (
+          <button
+            type="button"
+            onClick={resetZoom}
+            className="flex h-6 w-6 items-center justify-center rounded bg-parchment-50/90 text-[9px] font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60"
+            aria-label="Reset zoom"
+          >⟲</button>
+        ) : null}
+      </div>
       <svg
         data-testid={`territory-map-${data.territoryId}`}
         className={variant === 'full' ? 'h-72 w-full' : 'h-44 w-full'}
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
         role={onHexSelect ? 'application' : 'img'}
         aria-label={`${data.territoryName} territory map`}
+        style={{
+          transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+          transformOrigin: 'center center',
+          transition: isPanning.current ? 'none' : 'transform 0.15s ease-out',
+        }}
       >
         {hexRenderData.map((hex) => {
           if (!hex.center) {
@@ -152,8 +229,8 @@ export function TerritoryHexMap({
             >
               <polygon
                 points={hex.points}
-                fill={isContextHex ? '#d3cec3' : terrainFill(hex)}
-                fillOpacity={isContextHex ? 0.42 : 1}
+                fill={isContextHex && hex.hexKind !== 'water' ? '#d3cec3' : terrainFill(hex)}
+                fillOpacity={isContextHex && hex.hexKind !== 'water' ? 0.42 : isContextHex ? 0.6 : 1}
                 stroke={isContextHex ? 'rgba(90, 82, 72, 0.18)' : isSelectable ? 'rgba(58, 42, 30, 0.32)' : 'rgba(58, 42, 30, 0.2)'}
                 strokeWidth={1}
                 vectorEffect="non-scaling-stroke"

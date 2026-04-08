@@ -1,19 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { TerritoryHexMap } from '@/components/map/TerritoryHexMap';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { NobleStatusEditor } from '@/components/governance/NobleStatusEditor';
 import { NobleActivityBadge } from '@/components/governance/NobleActivityBadge';
 import { GmTurnReviewPanel } from '@/components/turn-actions/gm-turn-review-panel';
 import { useRole } from '@/hooks/use-role';
 import type { EconomyOverviewRealmDto } from '@/lib/economy-dto';
+import type { GameMapData } from '@/components/map/types';
+import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import type { GovernmentType, Tradition } from '@/types/game';
 
@@ -167,19 +170,22 @@ export default function GMDashboard() {
   const [editingTerritoryId, setEditingTerritoryId] = useState<string | null>(null);
   const [editingSettlementId, setEditingSettlementId] = useState<string | null>(null);
   const [troopTransfer, setTroopTransfer] = useState<{ troopIds: string[]; targetSettlementId: string }>({ troopIds: [], targetSettlementId: '' });
+  const [gameMapData, setGameMapData] = useState<GameMapData | null>(null);
+  const [addingSettlement, setAddingSettlement] = useState<{ territoryId: string; name: string; size: string; hexId: string | null } | null>(null);
 
   const loadDashboard = useCallback(async () => {
     try {
       setLoadingDashboard(true);
       setError('');
 
-      const [gameResponse, realmsResponse, territoriesResponse, slotsResponse, overviewResponse, settlementsResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, territoriesResponse, slotsResponse, overviewResponse, settlementsResponse, mapResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/territories`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/player-slots`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/economy/overview`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/settlements`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/map`, { cache: 'no-store' }),
       ]);
 
       if (!gameResponse.ok) {
@@ -197,6 +203,9 @@ export default function GMDashboard() {
       setPlayerSlots(await slotsResponse.json());
       if (settlementsResponse.ok) {
         setWorldSettlements(await settlementsResponse.json());
+      }
+      if (mapResponse.ok) {
+        setGameMapData(await mapResponse.json());
       }
       if (overviewResponse.ok) {
         const overviewData = await overviewResponse.json();
@@ -403,17 +412,19 @@ export default function GMDashboard() {
     await loadDashboard();
   }
 
-  async function addSettlement(territoryId: string, name: string, size: string, realmId: string | null) {
+  async function addSettlement(territoryId: string, name: string, size: string, hexId: string | null) {
     setError('');
+    const territory = territories.find((t) => t.id === territoryId);
     const response = await fetch(`/api/game/${gameId}/settlements`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ territoryId, name, size, realmId }),
+      body: JSON.stringify({ territoryId, name, size, realmId: territory?.realmId ?? null, hexId }),
     });
     if (!response.ok) {
       setError(await getErrorMessage(response, 'Failed to create settlement'));
       return;
     }
+    setAddingSettlement(null);
     await loadDashboard();
   }
 
@@ -455,6 +466,10 @@ export default function GMDashboard() {
   }
 
   const realmMap = Object.fromEntries(realms.map((r) => [r.id, r.name]));
+  const addingTerritoryMap = useMemo(
+    () => addingSettlement && gameMapData ? buildGameTerritoryMapData(gameMapData, addingSettlement.territoryId) : null,
+    [addingSettlement, gameMapData]
+  );
 
   if (roleLoading || role !== 'gm' || (loadingDashboard && !game)) {
     return (
@@ -746,7 +761,7 @@ export default function GMDashboard() {
                       <span className={`inline-block text-xs transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
                       <span className="font-heading font-semibold">{territory.name}</span>
                       {territory.realmId && <Badge variant="gold">{realmMap[territory.realmId] || 'Unknown'}</Badge>}
-                      {!territory.realmId && <Badge variant="default">Unclaimed</Badge>}
+                      {!territory.realmId && <Badge variant="default">Neutral</Badge>}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-ink-300">
                       <span>{territorySettlements.length} settlements</span>
@@ -762,7 +777,7 @@ export default function GMDashboard() {
                         </Button>
                         <Select
                           label="Owner"
-                          options={[{ value: '', label: 'Unclaimed' }, ...realms.map((r) => ({ value: r.id, label: r.name }))]}
+                          options={[{ value: '', label: 'Neutral' }, ...realms.map((r) => ({ value: r.id, label: r.name }))]}
                           value={territory.realmId || ''}
                           onChange={(e) => void assignTerritory(territory.id, e.target.value || null)}
                         />
@@ -858,7 +873,7 @@ export default function GMDashboard() {
 
                                 {isEditingSett && (
                                   <div className="p-2 border border-ink-200 rounded space-y-2">
-                                    <div className="grid grid-cols-3 gap-2">
+                                    <div className="grid grid-cols-2 gap-2">
                                       <Input
                                         label="Name"
                                         value={settlement.name}
@@ -874,20 +889,11 @@ export default function GMDashboard() {
                                           setWorldSettlements((prev) => prev.map((s) => s.id === settlement.id ? { ...s, size: e.target.value } : s));
                                         }}
                                       />
-                                      <Select
-                                        label="Owner"
-                                        options={[{ value: '', label: 'None' }, ...realms.map((r) => ({ value: r.id, label: r.name }))]}
-                                        value={settlement.realmId || ''}
-                                        onChange={(e) => {
-                                          setWorldSettlements((prev) => prev.map((s) => s.id === settlement.id ? { ...s, realmId: e.target.value || null } : s));
-                                        }}
-                                      />
                                     </div>
                                     <Button variant="accent" size="sm" onClick={() => {
                                       void saveSettlement(settlement.id, {
                                         name: settlement.name,
                                         size: settlement.size,
-                                        realmId: settlement.realmId,
                                       });
                                     }}>
                                       Save Settlement
@@ -918,17 +924,61 @@ export default function GMDashboard() {
                           })}
                           {territorySettlements.length === 0 && <p className="text-ink-300 text-sm">No settlements.</p>}
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-2"
-                          onClick={() => {
-                            const name = prompt('Settlement name:');
-                            if (name) void addSettlement(territory.id, name, 'Village', territory.realmId);
-                          }}
-                        >
-                          + Add Settlement
-                        </Button>
+                        {addingSettlement?.territoryId === territory.id ? (
+                          <div className="mt-3 space-y-3 rounded border border-ink-200 bg-parchment-50/70 p-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                label="Name"
+                                value={addingSettlement.name}
+                                onChange={(e) => setAddingSettlement((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                              />
+                              <Select
+                                label="Size"
+                                options={SETTLEMENT_SIZE_OPTIONS}
+                                value={addingSettlement.size}
+                                onChange={(e) => setAddingSettlement((prev) => prev ? { ...prev, size: e.target.value } : prev)}
+                              />
+                            </div>
+                            {addingTerritoryMap ? (
+                              <div>
+                                <p className="text-sm text-ink-400 mb-1">
+                                  {addingSettlement.hexId ? 'Hex selected. Click another hex to change.' : 'Click a hex on the map to place the settlement.'}
+                                </p>
+                                <TerritoryHexMap
+                                  data={addingTerritoryMap}
+                                  placements={addingSettlement.hexId ? [{ id: 'new', name: addingSettlement.name || 'New', size: addingSettlement.size, hexId: addingSettlement.hexId }] : []}
+                                  selectedPlacementId={addingSettlement.hexId ? 'new' : null}
+                                  onHexSelect={(hexId) => setAddingSettlement((prev) => prev ? { ...prev, hexId } : prev)}
+                                  variant="full"
+                                />
+                              </div>
+                            ) : (
+                              <p className="text-sm text-ink-300">Loading territory map...</p>
+                            )}
+                            <div className="flex gap-2">
+                              <Button
+                                variant="accent"
+                                size="sm"
+                                disabled={!addingSettlement.name.trim() || !addingSettlement.hexId}
+                                onClick={() => void addSettlement(territory.id, addingSettlement.name, addingSettlement.size, addingSettlement.hexId)}
+                              >
+                                Create Settlement
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => setAddingSettlement(null)}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() => setAddingSettlement({ territoryId: territory.id, name: '', size: 'Village', hexId: null })}
+                          >
+                            + Add Settlement
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}

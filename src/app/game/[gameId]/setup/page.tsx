@@ -599,24 +599,57 @@ export default function SetupWizard() {
         assign owners, and then open realm creation for players.
       </p>
 
-      <div className="mb-8 flex flex-wrap gap-2">
-        {(['territories', 'map', 'assignments', 'review'] as Step[]).map((currentStep) => (
-          <Badge
-            key={currentStep}
-            variant={step === currentStep ? 'gold' : 'default'}
-            className="cursor-pointer"
-            onClick={() => {
-              if (currentStep === 'map' && generatedMap.length === 0) {
-                goToMap();
-                return;
-              }
+      <div className="mb-8 flex items-center">
+        {(['territories', 'map', 'assignments', 'review'] as Step[]).map((currentStep, index, arr) => {
+          const stepLabels: Record<Step, string> = {
+            territories: 'Territories',
+            map: 'Generated Map',
+            assignments: 'Assignments',
+            review: 'Review',
+          };
+          const stepIndex = arr.indexOf(step);
+          const isActive = step === currentStep;
+          const isPast = index < stepIndex;
 
-              setStep(currentStep);
-            }}
-          >
-            {currentStep === 'map' ? 'Generated Map' : currentStep.charAt(0).toUpperCase() + currentStep.slice(1)}
-          </Badge>
-        ))}
+          return (
+            <div key={currentStep} className="flex items-center">
+              <button
+                type="button"
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-heading font-semibold rounded-full transition-colors ${
+                  isActive
+                    ? 'bg-gold-400 text-ink-700'
+                    : isPast
+                      ? 'bg-gold-400/40 text-ink-600'
+                      : 'bg-ink-200 text-ink-500'
+                } cursor-pointer hover:opacity-80`}
+                onClick={() => {
+                  if (currentStep === 'map' && generatedMap.length === 0) {
+                    goToMap();
+                    return;
+                  }
+
+                  setStep(currentStep);
+                }}
+              >
+                <span className={`flex items-center justify-center w-4.5 h-4.5 rounded-full text-[10px] font-bold ${
+                  isActive
+                    ? 'bg-ink-700 text-gold-400'
+                    : isPast
+                      ? 'bg-ink-600/60 text-parchment-50'
+                      : 'bg-ink-400/40 text-ink-600'
+                }`}>
+                  {isPast ? '✓' : index + 1}
+                </span>
+                {stepLabels[currentStep]}
+              </button>
+              {index < arr.length - 1 ? (
+                <svg className={`mx-1 flex-shrink-0 ${isPast ? 'text-gold-400' : 'text-ink-300'}`} width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
 
       {error ? <p className="mb-4 text-red-500">{error}</p> : null}

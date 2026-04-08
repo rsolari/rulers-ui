@@ -56,9 +56,9 @@ function createBenchmarkData(): GameMapData {
       const isWater = row < 2 || column === 0 || (row + column) % 11 === 0;
       const terrainCycle = ['plains', 'forest', 'hills', 'mountains', 'desert', 'swamp', 'jungle', 'tundra'] as const;
       const features = index % 19 === 0
-        ? [{ featureType: 'river' as const, name: null }]
+        ? [{ featureType: 'river' as const, name: null, riverIndex: 1 }]
         : index % 37 === 0
-          ? [{ featureType: 'volcano' as const, name: null }]
+          ? [{ featureType: 'volcano' as const, name: null, riverIndex: null }]
           : [];
 
       hexes.push({

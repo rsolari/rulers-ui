@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SettlementMarker } from '@/components/map/SettlementMarker';
 import { computeTerritoryBorderSegments, computeViewBox, hexToPixel, hexVertices } from '@/components/map/hex-utils';
 import type { TerritoryMapData } from '@/lib/maps/territory-map';
@@ -115,30 +115,58 @@ export function TerritoryHexMap({
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const DRAG_THRESHOLD = 4;
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    setZoom((prev) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev - e.deltaY * 0.003)));
+  // Use ref-based wheel listener with { passive: false } to allow preventDefault
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setZoom((prev) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev - e.deltaY * 0.003)));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
+
+  const pendingPan = useRef(false);
+  const pendingPointerId = useRef<number | null>(null);
+  const pendingTarget = useRef<HTMLElement | null>(null);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (zoom <= MIN_ZOOM) return;
-    isPanning.current = true;
+    isPanning.current = false;
+    pendingPan.current = true;
+    pendingPointerId.current = e.pointerId;
+    pendingTarget.current = e.currentTarget as HTMLElement;
     panStart.current = { x: e.clientX, y: e.clientY };
     panOrigin.current = { ...pan };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }, [zoom, pan]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isPanning.current) return;
+    if (!pendingPan.current && !isPanning.current) return;
+    const dx = e.clientX - panStart.current.x;
+    const dy = e.clientY - panStart.current.y;
+    if (!isPanning.current) {
+      if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+      isPanning.current = true;
+      pendingPan.current = false;
+      if (pendingTarget.current && pendingPointerId.current != null) {
+        pendingTarget.current.setPointerCapture(pendingPointerId.current);
+      }
+    }
     setPan({
-      x: panOrigin.current.x + (e.clientX - panStart.current.x),
-      y: panOrigin.current.y + (e.clientY - panStart.current.y),
+      x: panOrigin.current.x + dx,
+      y: panOrigin.current.y + dy,
     });
   }, []);
 
   const handlePointerUp = useCallback(() => {
     isPanning.current = false;
+    pendingPan.current = false;
+    pendingPointerId.current = null;
+    pendingTarget.current = null;
   }, []);
 
   const zoomIn = useCallback(() => setZoom((prev) => Math.min(MAX_ZOOM, prev + ZOOM_STEP)), []);
@@ -161,10 +189,10 @@ export function TerritoryHexMap({
 
   return (
     <div
+      ref={containerRef}
       className={`relative overflow-hidden rounded-xl border border-ink-200/80 bg-[radial-gradient(circle_at_top,_rgba(253,248,240,0.95),_rgba(236,220,184,0.9))] ${
         variant === 'full' ? 'shadow-[0_12px_30px_rgba(74,55,40,0.12)]' : ''
       } ${zoom > MIN_ZOOM ? 'cursor-grab active:cursor-grabbing' : ''}`}
-      onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

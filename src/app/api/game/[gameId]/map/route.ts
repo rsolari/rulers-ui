@@ -105,10 +105,14 @@ export async function GET(
         waterKind: hex.waterKind ?? null,
         terrainType: hex.terrainType ?? null,
         territoryId: hex.territoryId,
-        features: (featuresByHexId.get(hex.id) ?? []).map((feature) => ({
-          featureType: feature.featureType,
-          name: feature.name ?? null,
-        })),
+        features: (featuresByHexId.get(hex.id) ?? []).map((feature) => {
+          const metadata = feature.metadata ? JSON.parse(feature.metadata as string) : null;
+          return {
+            featureType: feature.featureType,
+            name: feature.name ?? null,
+            riverIndex: (metadata?.riverIndex as number) ?? null,
+          };
+        }),
         landmarks: (landmarksByHexId.get(hex.id) ?? []).map((landmark) => ({
           name: landmark.name,
           kind: landmark.kind,

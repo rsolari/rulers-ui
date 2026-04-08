@@ -14,6 +14,7 @@ export interface MapTerritory {
 export interface MapHexFeature {
   featureType: MapFeatureType;
   name: string | null;
+  riverIndex: number | null;
 }
 
 export interface MapHexLandmark {

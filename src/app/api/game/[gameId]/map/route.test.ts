@@ -77,7 +77,7 @@ describe('GET /api/game/[gameId]/map', () => {
         waterKind: null,
         terrainType: 'plains',
         territoryId: 'territory-1',
-        features: [{ featureType: 'river', name: 'Kingsrun' }],
+        features: [{ featureType: 'river', name: 'Kingsrun', riverIndex: null }],
         landmarks: [{ name: 'Old Tower', kind: 'ruin', description: null }],
         settlement: { name: 'Stoneford', size: 'Town' },
         armies: [{ id: 'army-1', name: 'First Banner', realmId: 'realm-1' }],

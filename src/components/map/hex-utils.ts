@@ -24,7 +24,7 @@ export interface ViewBox {
 
 const SQRT_3 = Math.sqrt(3);
 const CORNER_ANGLES = [0, 60, 120, 180, 240, 300];
-const AXIAL_DIRECTIONS = [
+export const AXIAL_DIRECTIONS = [
   { q: 1, r: 0 },
   { q: 1, r: -1 },
   { q: 0, r: -1 },

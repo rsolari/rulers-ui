@@ -31,6 +31,21 @@ export function getHighestEstateLevel(levels: Array<EstateLevel | null | undefin
   }, 'Meagre');
 }
 
+function collectSettlementEstateLevels(
+  settlementsForRealm: Array<Pick<typeof settlements.$inferSelect, 'governingNobleId' | 'size'>>,
+) {
+  const levelsByNobleId = new Map<string, EstateLevel[]>();
+
+  for (const settlement of settlementsForRealm) {
+    if (!settlement.governingNobleId) continue;
+    const levels = levelsByNobleId.get(settlement.governingNobleId) ?? [];
+    levels.push(getSettlementGovernorRequiredEstate(settlement.size));
+    levelsByNobleId.set(settlement.governingNobleId, levels);
+  }
+
+  return levelsByNobleId;
+}
+
 function resolveRulerVacancy(
   database: DatabaseExecutor,
   input: {
@@ -769,27 +784,35 @@ export function markRealmFallen(
   return realm.id;
 }
 
-export function getRequiredEstateLevelsForRealm(
+export function getDisplayEstateLevelsForRealm(
   input: {
     realmRulerNobleId?: string | null;
     settlements: Array<Pick<typeof settlements.$inferSelect, 'governingNobleId' | 'size'>>;
   },
 ) {
-  const requiredByNobleId = new Map<string, EstateLevel[]>();
+  const levelsByNobleId = collectSettlementEstateLevels(input.settlements);
 
   if (input.realmRulerNobleId) {
-    requiredByNobleId.set(input.realmRulerNobleId, ['Luxurious']);
-  }
-
-  for (const settlement of input.settlements) {
-    if (!settlement.governingNobleId) continue;
-    const levels = requiredByNobleId.get(settlement.governingNobleId) ?? [];
-    levels.push(getSettlementGovernorRequiredEstate(settlement.size));
-    requiredByNobleId.set(settlement.governingNobleId, levels);
+    const rulerLevels = levelsByNobleId.get(input.realmRulerNobleId) ?? [];
+    rulerLevels.push('Luxurious');
+    levelsByNobleId.set(input.realmRulerNobleId, rulerLevels);
   }
 
   return new Map(
-    [...requiredByNobleId.entries()].map(([nobleId, levels]) => [nobleId, getHighestEstateLevel(levels)]),
+    [...levelsByNobleId.entries()].map(([nobleId, levels]) => [nobleId, getHighestEstateLevel(levels)]),
+  );
+}
+
+export function getPaidEstateLevelsForRealm(
+  input: {
+    realmRulerNobleId?: string | null;
+    settlements: Array<Pick<typeof settlements.$inferSelect, 'governingNobleId' | 'size'>>;
+  },
+) {
+  return new Map(
+    [...collectSettlementEstateLevels(input.settlements).entries()]
+      .filter(([nobleId]) => nobleId !== input.realmRulerNobleId)
+      .map(([nobleId, levels]) => [nobleId, getHighestEstateLevel(levels)]),
   );
 }
 

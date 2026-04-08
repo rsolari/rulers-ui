@@ -4,7 +4,14 @@ import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { armies, guildsOrdersSocieties, nobleFamilies, nobles, realms, settlements } from '@/db/schema';
 import { recomputeGameInitState } from '@/lib/game-init-state';
-import { generateNobleAge, generateNobleGender, generateNoblePersonality } from '@/lib/tables';
+import { ESTATE_COSTS } from '@/lib/game-logic/constants';
+import { getDisplayEstateLevelsForRealm, getPaidEstateLevelsForRealm } from '@/lib/game-logic/governance';
+import {
+  generateNobleAge,
+  generateNobleGender,
+  generateNoblePersonality,
+  generateNobleSkill,
+} from '@/lib/tables';
 import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 
 export async function GET(
@@ -41,30 +48,56 @@ export async function GET(
     }).from(guildsOrdersSocieties).where(eq(guildsOrdersSocieties.realmId, realmId)),
   ]);
 
-  const officeLabelByNobleId = new Map<string, string>();
+  const governsByNobleId = new Map<string, string[]>();
+  const addGovernanceLabel = (nobleId: string, label: string) => {
+    const labels = governsByNobleId.get(nobleId) ?? [];
+    labels.push(label);
+    governsByNobleId.set(nobleId, labels);
+  };
+
+  if (realm?.rulerNobleId) {
+    addGovernanceLabel(realm.rulerNobleId, 'Ruler');
+  }
   for (const settlement of settlementList) {
     if (settlement.governingNobleId) {
-      officeLabelByNobleId.set(settlement.governingNobleId, `${settlement.name} Governor`);
+      addGovernanceLabel(settlement.governingNobleId, `${settlement.name} Governor`);
     }
   }
   for (const army of armyList) {
     if (army.generalId) {
-      officeLabelByNobleId.set(army.generalId, `${army.name} General`);
+      addGovernanceLabel(army.generalId, `${army.name} General`);
     }
   }
   for (const gos of gosList) {
     if (gos.leaderId) {
-      officeLabelByNobleId.set(gos.leaderId, `${gos.name} Leader`);
+      addGovernanceLabel(gos.leaderId, `${gos.name} Leader`);
     }
   }
 
-  return NextResponse.json(nobleList.map((noble) => ({
-    ...noble,
-    isRuler: noble.id === realm?.rulerNobleId,
-    isHeir: noble.id === realm?.heirNobleId,
-    isActingRuler: noble.id === realm?.actingRulerNobleId,
-    title: officeLabelByNobleId.get(noble.id) ?? null,
-  })));
+  const displayEstateByNobleId = getDisplayEstateLevelsForRealm({
+    realmRulerNobleId: realm?.rulerNobleId,
+    settlements: settlementList,
+  });
+  const paidEstateByNobleId = getPaidEstateLevelsForRealm({
+    realmRulerNobleId: realm?.rulerNobleId,
+    settlements: settlementList,
+  });
+
+  return NextResponse.json(nobleList.map((noble) => {
+    const governs = governsByNobleId.get(noble.id) ?? ['At court'];
+    const paidEstateLevel = paidEstateByNobleId.get(noble.id);
+
+    return {
+      ...noble,
+      isRuler: noble.id === realm?.rulerNobleId,
+      isHeir: noble.id === realm?.heirNobleId,
+      isActingRuler: noble.id === realm?.actingRulerNobleId,
+      title: governs[0] ?? null,
+      governs,
+      estateLevel: displayEstateByNobleId.get(noble.id) ?? null,
+      estateCost: paidEstateLevel ? ESTATE_COSTS[paidEstateLevel] : 0,
+    };
+  }));
 }
 
 export async function POST(
@@ -89,6 +122,8 @@ export async function POST(
     const generatedPersonality = hasManualPersonality ? null : generateNoblePersonality();
     const gender = body.gender || generateNobleGender();
     const age = body.age || generateNobleAge();
+    const reasonSkill = body.reasonSkill ?? generateNobleSkill();
+    const cunningSkill = body.cunningSkill ?? generateNobleSkill();
     const personality = hasManualPersonality
       ? {
         personality: body.personality,
@@ -117,9 +152,8 @@ export async function POST(
       valuedObject: personality?.valuedObject ?? null,
       valuedPerson: personality?.valuedPerson ?? null,
       greatestDesire: personality?.greatestDesire ?? null,
-      estateLevel: body.estateLevel || 'Meagre',
-      reasonSkill: body.reasonSkill || 0,
-      cunningSkill: body.cunningSkill || 0,
+      reasonSkill,
+      cunningSkill,
       isAlive: true,
       deathYear: null,
       deathSeason: null,

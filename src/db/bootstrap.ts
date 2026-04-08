@@ -276,7 +276,6 @@ function createBaseSchema(database: Database.Database) {
       valued_object text,
       valued_person text,
       greatest_desire text,
-      estate_level text NOT NULL DEFAULT 'Meagre',
       reason_skill integer NOT NULL DEFAULT 0,
       cunning_skill integer NOT NULL DEFAULT 0,
       is_alive integer NOT NULL DEFAULT true,
@@ -942,6 +941,141 @@ function migrateBuildingsToSupportStandaloneLocations(database: Database.Databas
   }
 }
 
+function migrateNoblesDropEstateLevel(database: Database.Database) {
+  const migrate = database.transaction(() => {
+    database.exec(`
+      CREATE TABLE nobles__new (
+        id text PRIMARY KEY NOT NULL,
+        family_id text NOT NULL,
+        realm_id text NOT NULL,
+        origin_realm_id text NOT NULL,
+        displaced_from_realm_id text,
+        name text NOT NULL,
+        gender text NOT NULL,
+        age text NOT NULL,
+        backstory text,
+        race text,
+        personality text,
+        relationship_with_ruler text,
+        belief text,
+        valued_object text,
+        valued_person text,
+        greatest_desire text,
+        reason_skill integer NOT NULL DEFAULT 0,
+        cunning_skill integer NOT NULL DEFAULT 0,
+        is_alive integer NOT NULL DEFAULT true,
+        death_year integer,
+        death_season text,
+        death_cause text,
+        is_prisoner integer NOT NULL DEFAULT false,
+        captor_realm_id text,
+        captured_year integer,
+        captured_season text,
+        released_year integer,
+        released_season text,
+        gm_status_text text,
+        location_territory_id text,
+        location_hex_id text,
+        FOREIGN KEY (family_id) REFERENCES noble_families(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (origin_realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (displaced_from_realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (captor_realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (location_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (location_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+    database.exec(`
+      INSERT INTO nobles__new (
+        id,
+        family_id,
+        realm_id,
+        origin_realm_id,
+        displaced_from_realm_id,
+        name,
+        gender,
+        age,
+        backstory,
+        race,
+        personality,
+        relationship_with_ruler,
+        belief,
+        valued_object,
+        valued_person,
+        greatest_desire,
+        reason_skill,
+        cunning_skill,
+        is_alive,
+        death_year,
+        death_season,
+        death_cause,
+        is_prisoner,
+        captor_realm_id,
+        captured_year,
+        captured_season,
+        released_year,
+        released_season,
+        gm_status_text,
+        location_territory_id,
+        location_hex_id
+      )
+      SELECT
+        id,
+        family_id,
+        realm_id,
+        COALESCE(origin_realm_id, realm_id),
+        displaced_from_realm_id,
+        name,
+        gender,
+        age,
+        backstory,
+        race,
+        personality,
+        relationship_with_ruler,
+        belief,
+        valued_object,
+        valued_person,
+        greatest_desire,
+        COALESCE(reason_skill, 0),
+        COALESCE(cunning_skill, 0),
+        COALESCE(is_alive, 1),
+        death_year,
+        death_season,
+        death_cause,
+        COALESCE(is_prisoner, 0),
+        captor_realm_id,
+        captured_year,
+        captured_season,
+        released_year,
+        released_season,
+        gm_status_text,
+        location_territory_id,
+        location_hex_id
+      FROM nobles;
+    `);
+    database.exec('DROP TABLE nobles;');
+    database.exec('ALTER TABLE nobles__new RENAME TO nobles;');
+  });
+
+  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF');
+  }
+
+  try {
+    migrate();
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON');
+    }
+  }
+
+  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
+  if (foreignKeyViolations.length > 0) {
+    throw new Error('SQLite schema migration left foreign key violations in nobles.');
+  }
+}
+
 function migrateTerritoriesDropClimate(database: Database.Database) {
   const migrate = database.transaction(() => {
     database.exec(`
@@ -1327,6 +1461,10 @@ export function initializeDatabaseSchema(database: Database.Database) {
 
   ensureEconomySchema(database);
   ensureGovernanceSchema(database);
+
+  if (tableExists(database, 'nobles') && columnExists(database, 'nobles', 'estate_level')) {
+    migrateNoblesDropEstateLevel(database);
+  }
 
   if (tableExists(database, 'territories') && columnExists(database, 'territories', 'climate')) {
     migrateTerritoriesDropClimate(database);

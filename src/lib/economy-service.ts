@@ -41,7 +41,7 @@ import {
   type EconomyRealmInput,
   type EconomyResult,
 } from '@/lib/game-logic/economy';
-import { getRequiredEstateLevelsForRealm } from '@/lib/game-logic/governance';
+import { getPaidEstateLevelsForRealm } from '@/lib/game-logic/governance';
 import { resolveTradeNetwork } from '@/lib/game-logic/trade';
 import { prepareTurnReportFinancialActions } from '@/lib/turn-report-financial-actions';
 import type {
@@ -588,7 +588,7 @@ function loadGameEconomyState(
 
   const economyRealms: EconomyRealmInput[] = realmRows.map((realm) => {
     const realmSettlements = settlementsByRealm.get(realm.id) ?? [];
-    const requiredEstateByNobleId = getRequiredEstateLevelsForRealm({
+    const paidEstateByNobleId = getPaidEstateLevelsForRealm({
       realmRulerNobleId: realm.rulerNobleId,
       settlements: realmSettlements,
     });
@@ -679,8 +679,7 @@ function loadGameEconomyState(
     nobles: (noblesByRealm.get(realm.id) ?? []).map((noble) => ({
       id: noble.id,
       name: noble.name,
-      estateLevel: noble.estateLevel as EconomyRealmInput['nobles'][number]['estateLevel'],
-      requiredEstateLevel: requiredEstateByNobleId.get(noble.id) ?? null,
+      estateLevel: paidEstateByNobleId.get(noble.id) ?? null,
       isPrisoner: noble.isPrisoner,
     })),
       tradeRoutes: tradeRouteRows

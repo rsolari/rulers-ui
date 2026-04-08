@@ -91,7 +91,7 @@ export default function RealmDashboard() {
   const [ruler, setRuler] = useState<Ruler | null>(null);
   const [resources, setResources] = useState<Array<{ resourceType: string; rarity: string }>>([]);
   const [militaryData, setMilitaryData] = useState<{ troops: Array<{ type: string }>; siegeUnits: Array<{ type: string }> }>({ troops: [], siegeUnits: [] });
-  const [nobles, setNobles] = useState<Array<{ estateLevel: string }>>([]);
+  const [nobles, setNobles] = useState<Array<{ id: string }>>([]);
   const [gos, setGos] = useState<Array<{ id: string; name: string; type: string; focus: string | null }>>([]);
   const [form, setForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
   const [saving, setSaving] = useState(false);

@@ -9,7 +9,7 @@ let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
 function getDb() {
   if (!_db) {
-    const dbPath = path.join(process.cwd(), 'data', 'rulers.db');
+    const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'rulers.db');
     const dbDir = path.dirname(dbPath);
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });

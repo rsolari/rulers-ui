@@ -197,7 +197,6 @@ export async function PATCH(
 ) {
   try {
     const { gameId } = await params;
-    await requireGM(gameId);
     const body = await request.json();
 
     if (!body.settlementId) {
@@ -210,6 +209,33 @@ export async function PATCH(
 
     if (!settlement) {
       return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+    }
+
+    const game = await db.select().from(games).where(eq(games.id, gameId)).get();
+    if (!game) {
+      return NextResponse.json({ error: 'Game not found' }, { status: 404 });
+    }
+
+    const gmCode = await getGmCode();
+    const isGM = Boolean(gmCode && gmCode === game.gmCode);
+
+    if (!isGM) {
+      // Players can only rename their own settlements during setup
+      await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
+
+      if (!settlement.realmId) {
+        return NextResponse.json({ error: 'Settlement has no realm' }, { status: 403 });
+      }
+
+      await requireRealmOwner(gameId, settlement.realmId);
+
+      // Players may only update name
+      const playerDisallowed = Object.keys(body).filter(
+        (key) => key !== 'settlementId' && key !== 'name',
+      );
+      if (playerDisallowed.length > 0) {
+        return NextResponse.json({ error: 'Players can only rename settlements during setup' }, { status: 403 });
+      }
     }
 
     const updates: Record<string, unknown> = {};
@@ -230,6 +256,8 @@ export async function PATCH(
         .set({ realmId: body.realmId })
         .where(eq(siegeUnits.garrisonSettlementId, body.settlementId));
     }
+
+    await recomputeGameInitState(gameId);
 
     return NextResponse.json({ updated: true });
   } catch (error) {

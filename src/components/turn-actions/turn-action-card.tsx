@@ -38,6 +38,8 @@ const EXECUTION_STATUS_OPTIONS = [
 interface TurnActionCardProps {
   action: TurnActionRecord;
   settlementOptions: Array<{ value: string; label: string }>;
+  realmOptions?: Array<{ value: string; label: string }>;
+  nobleOptions?: Array<{ value: string; label: string }>;
   editable?: boolean;
   gmExecutable?: boolean;
   commentable?: boolean;
@@ -80,6 +82,8 @@ function createDraftState(action: TurnActionRecord): TurnActionUpdateDto {
 export function TurnActionCard({
   action,
   settlementOptions,
+  realmOptions = [],
+  nobleOptions = [],
   editable = false,
   gmExecutable = false,
   commentable = false,
@@ -162,16 +166,18 @@ export function TurnActionCard({
               disabled={!editable}
             />
             <div className="grid gap-3 md:grid-cols-2">
-              <Input
-                label="Target Realm ID"
+              <Select
+                label="Target Realm"
+                options={[{ value: '', label: 'None' }, ...realmOptions]}
                 value={draft.targetRealmId ?? ''}
-                onChange={(event) => setDraft((current) => ({ ...current, targetRealmId: event.target.value }))}
+                onChange={(event) => setDraft((current) => ({ ...current, targetRealmId: event.target.value || null }))}
                 disabled={!editable}
               />
-              <Input
-                label="Assigned Noble ID"
+              <Select
+                label="Assigned Noble"
+                options={[{ value: '', label: 'None' }, ...nobleOptions]}
                 value={draft.assignedNobleId ?? ''}
-                onChange={(event) => setDraft((current) => ({ ...current, assignedNobleId: event.target.value }))}
+                onChange={(event) => setDraft((current) => ({ ...current, assignedNobleId: event.target.value || null }))}
                 disabled={!editable}
               />
             </div>

@@ -12,7 +12,7 @@ import {
   getPreferredTerritoryHexIds,
   type TerritoryMapData,
 } from '@/lib/maps/territory-map';
-import { TRADITION_DEFS, RESOURCE_RARITY } from '@/lib/game-logic/constants';
+import { RESOURCE_RARITY } from '@/lib/game-logic/constants';
 import {
   generateMap,
   generateTerritoryResources,
@@ -20,31 +20,6 @@ import {
   type TerritoryType,
 } from '@/lib/game-logic/map-generation';
 import type { GovernmentType, ResourceType, SettlementSize, Tradition } from '@/types/game';
-
-const GOVERNMENT_OPTIONS = [
-  { value: 'Monarch', label: 'Monarch' },
-  { value: 'ElectedMonarch', label: 'Elected Monarch' },
-  { value: 'Council', label: 'Council' },
-  { value: 'Ecclesiastical', label: 'Ecclesiastical' },
-  { value: 'Consortium', label: 'Consortium' },
-  { value: 'Magistrate', label: 'Magistrate' },
-  { value: 'Warlord', label: 'Warlord' },
-];
-
-const GOVERNMENT_DESCRIPTIONS: Record<string, string> = {
-  Monarch: 'You were born to rule, and you will rule for your whole life, at which point your heir will take over. This position is for life, and is automatically passed onto your heir.',
-  ElectedMonarch: 'You still rule for life like a monarch does, but you were elected by the Nobility of your Realm. After your death, they will elect a new monarch from one of the noble families. You cannot be voted out of office.',
-  Council: 'You are the chairman of a council who governs the Realm. While others on the council will have a say in state politics, you ultimately have the final say. The council can call a vote to elect a new chairman.',
-  Ecclesiastical: 'You are both the head of the church, and the head of the Realm. Create an appropriate Society or Order for your Ruler to also be the head of.',
-  Consortium: 'The Realm is governed by a trading company, and you sit at the head of its council. This position operates as Council, but with more bribery. Create a Guild for your Ruler to also be the Chairperson of.',
-  Magistrate: 'You were appointed by a higher authority to be in charge of your Realm. You can be replaced at any time by the higher authority. This authority must be defined at creation, and must be an NPC which the N.O. controls.',
-  Warlord: 'You are the commander of the military, and the head of state. This position can operate as Elected Monarch or Council, depending on the strength of your Armies.',
-};
-
-const TRADITION_OPTIONS = Object.entries(TRADITION_DEFS).map(([key, def]) => ({
-  value: key,
-  label: `${def.displayName} (${def.category})`,
-}));
 
 const TERRITORY_TYPE_OPTIONS = [
   { value: 'Realm', label: 'Realm Territory' },
@@ -338,24 +313,6 @@ export default function SetupWizard() {
     setAssignments((current) => current.map((assignment, assignmentIndex) => assignmentIndex === index
       ? { ...assignment, ...update }
       : assignment));
-  }
-
-  function toggleTradition(index: number, tradition: Tradition) {
-    const assignment = assignments[index];
-    if (!assignment) {
-      return;
-    }
-
-    if (assignment.traditions.includes(tradition)) {
-      updateAssignment(index, { traditions: assignment.traditions.filter((value) => value !== tradition) });
-      return;
-    }
-
-    if (assignment.traditions.length >= 3) {
-      return;
-    }
-
-    updateAssignment(index, { traditions: [...assignment.traditions, tradition] });
   }
 
   function doGenerateMap() {
@@ -920,42 +877,11 @@ export default function SetupWizard() {
                     ) : null}
 
                     {ownerKind === 'npc' ? (
-                      <>
-                        <Input
-                          label="NPC Realm Name"
-                          value={assignment?.realmName || ''}
-                          onChange={(event) => updateAssignment(index, { realmName: event.target.value })}
-                        />
-                        <Select
-                          label="Government"
-                          options={GOVERNMENT_OPTIONS}
-                          value={assignment?.governmentType || 'Monarch'}
-                          onChange={(event) => updateAssignment(index, { governmentType: event.target.value as GovernmentType })}
-                        />
-                        {GOVERNMENT_DESCRIPTIONS[assignment?.governmentType || 'Monarch'] ? (
-                          <p className="text-sm italic text-ink-400">
-                            {GOVERNMENT_DESCRIPTIONS[assignment?.governmentType || 'Monarch']}
-                          </p>
-                        ) : null}
-                        <div>
-                          <p className="mb-2 font-heading text-sm font-medium text-ink-500">
-                            Traditions ({assignment?.traditions.length || 0}/3)
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {TRADITION_OPTIONS.map((option) => (
-                              <Badge
-                                key={option.value}
-                                variant={assignment?.traditions.includes(option.value as Tradition) ? 'gold' : 'default'}
-                                className="cursor-pointer"
-                                onClick={() => toggleTradition(index, option.value as Tradition)}
-                                title={TRADITION_DEFS[option.value as Tradition].effect}
-                              >
-                                {option.label}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      </>
+                      <Input
+                        label="NPC Realm Name"
+                        value={assignment?.realmName || ''}
+                        onChange={(event) => updateAssignment(index, { realmName: event.target.value })}
+                      />
                     ) : null}
                   </div>
                 </CardContent>

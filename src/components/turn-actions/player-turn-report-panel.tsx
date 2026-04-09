@@ -14,7 +14,7 @@ interface PlayerTurnReportPanelProps {
   compact?: boolean;
 }
 
-interface SettlementOption {
+interface SelectOption {
   value: string;
   label: string;
 }
@@ -30,7 +30,9 @@ async function parseResponse<T>(response: Response): Promise<T> {
 export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: PlayerTurnReportPanelProps) {
   const [currentTurn, setCurrentTurn] = useState<CurrentTurnResponseDto | null>(null);
   const [history, setHistory] = useState<TurnHistoryEntry[]>([]);
-  const [settlementOptions, setSettlementOptions] = useState<SettlementOption[]>([]);
+  const [settlementOptions, setSettlementOptions] = useState<SelectOption[]>([]);
+  const [realmOptions, setRealmOptions] = useState<SelectOption[]>([]);
+  const [nobleOptions, setNobleOptions] = useState<SelectOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
   const [commentActionId, setCommentActionId] = useState<string | null>(null);
@@ -42,18 +44,26 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
     setError('');
 
     try {
-      const [turnData, historyData, settlements] = await Promise.all([
+      const [turnData, historyData, settlements, allRealms, realmNobles] = await Promise.all([
         parseResponse<CurrentTurnResponseDto>(await fetch(`/api/game/${gameId}/turn`, { cache: 'no-store' })),
         parseResponse<{ history: TurnHistoryEntry[] }>(await fetch(`/api/game/${gameId}/turn/history`, { cache: 'no-store' })),
         parseResponse<Array<{ id: string; name: string }>>(
           await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`, { cache: 'no-store' }),
+        ),
+        parseResponse<Array<{ id: string; name: string }>>(
+          await fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
+        ),
+        parseResponse<Array<{ id: string; name: string }>>(
+          await fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`, { cache: 'no-store' }),
         ),
       ]);
 
       startTransition(() => {
         setCurrentTurn(turnData);
         setHistory(historyData.history);
-        setSettlementOptions(settlements.map((settlement) => ({ value: settlement.id, label: settlement.name })));
+        setSettlementOptions(settlements.map((s) => ({ value: s.id, label: s.name })));
+        setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
+        setNobleOptions(realmNobles.map((n) => ({ value: n.id, label: n.name })));
       });
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Failed to load turn data');
@@ -205,6 +215,8 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
                   key={`${action.id}:${action.updatedAt ?? ''}`}
                   action={action}
                   settlementOptions={settlementOptions}
+                  realmOptions={realmOptions}
+                  nobleOptions={nobleOptions}
                   editable={isEditable && action.status === 'draft'}
                   commentable
                   saving={savingActionId === action.id}
@@ -222,7 +234,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
       {!compact ? (
         <div className="space-y-4">
           <h2 className="font-heading text-2xl font-semibold text-ink-600">Past Turns</h2>
-          <TurnHistoryList history={history} settlementOptions={settlementOptions} />
+          <TurnHistoryList history={history} settlementOptions={settlementOptions} realmOptions={realmOptions} nobleOptions={nobleOptions} />
         </div>
       ) : null}
     </div>

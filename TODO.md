@@ -1,5 +1,12 @@
 # TODO
 
+- There should be a way for the GM to create events for realms (not necessarily tied to an action). Events should also show in a “news feed” for players and GM. GM can use this for turmoil, flavor, disasters, wars, messages, and ingame events like sporting events
+
+- GM should be able to advance the turn
+
+- In-progress buildings should take up a slot in a settlement
+
+
 - Clarify `TechnicalKnowledge` modeling. The rulebook requires specific technical knowledge for some buildings and troop paths, but the current schema stores it as an untyped realm-level JSON list. The validator currently treats any local or traded entry as satisfying the generic `TechnicalKnowledge` prerequisite. Add typed knowledge keys plus source tracking so imported knowledge can be validated and costed precisely.
 
 - Clarify how `Food` should gate `Stables`. The rulebook lists Food as a prerequisite, but the current backend models food as derived seasonal economy state rather than an explicit construction input. The validator currently records this as an ambiguity note instead of blocking construction. Add an explicit build-time food access/input rule so this prerequisite can be enforced without inventing behavior.

@@ -194,11 +194,9 @@ export default function GMDashboard() {
   const [showRealmForm, setShowRealmForm] = useState(false);
   const [error, setError] = useState('');
   const [worldSettlements, setWorldSettlements] = useState<Settlement[]>([]);
-  const [worldTroops, setWorldTroops] = useState<Troop[]>([]);
   const [expandedTerritory, setExpandedTerritory] = useState<string | null>(null);
   const [editingTerritoryId, setEditingTerritoryId] = useState<string | null>(null);
   const [editingSettlementId, setEditingSettlementId] = useState<string | null>(null);
-  const [troopTransfer, setTroopTransfer] = useState<{ troopIds: string[]; targetSettlementId: string }>({ troopIds: [], targetSettlementId: '' });
   const [gameMapData, setGameMapData] = useState<GameMapData | null>(null);
   const [addingSettlement, setAddingSettlement] = useState<{ territoryId: string; name: string; size: string; hexId: string | null } | null>(null);
 
@@ -471,29 +469,6 @@ export default function GMDashboard() {
     await loadDashboard();
   }
 
-  async function loadTroopsForRealm(realmId: string) {
-    const response = await fetch(`/api/game/${gameId}/troops?realmId=${realmId}`, { cache: 'no-store' });
-    if (response.ok) {
-      setWorldTroops(await response.json());
-    }
-  }
-
-  async function transferTroops() {
-    if (troopTransfer.troopIds.length === 0 || !troopTransfer.targetSettlementId) return;
-    setError('');
-    const response = await fetch(`/api/game/${gameId}/troops`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ troopIds: troopTransfer.troopIds, garrisonSettlementId: troopTransfer.targetSettlementId }),
-    });
-    if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to transfer troops'));
-      return;
-    }
-    setTroopTransfer({ troopIds: [], targetSettlementId: '' });
-    setWorldTroops([]);
-  }
-
   const realmMap = Object.fromEntries(realms.map((r) => [r.id, r.name]));
   const addingTerritoryMap = useMemo(
     () => addingSettlement && gameMapData ? buildGameTerritoryMapData(gameMapData, addingSettlement.territoryId) : null,
@@ -512,6 +487,7 @@ export default function GMDashboard() {
     return null;
   }
 
+  const isActive = game.initState === 'active' || game.initState === 'completed';
   const npcCount = realms.filter((realm) => realm.isNPC).length;
   const playerCount = realms.filter((realm) => !realm.isNPC).length;
   const allPlayersReady = playerSlots.length > 0 && playerSlots.every((slot) => slot.setupState === 'ready');
@@ -526,46 +502,52 @@ export default function GMDashboard() {
           <p className="text-ink-300">GM Dashboard</p>
         </div>
         <div className="flex items-center gap-3">
-          <Badge>{game.initState}</Badge>
-          <Badge variant={game.gmSetupState === 'ready' ? 'green' : 'gold'}>GM {game.gmSetupState}</Badge>
-          <Badge variant="gold">{game.gamePhase}</Badge>
+          {game.initState !== 'active' && game.initState !== 'completed' && (
+            <Badge>Init: {game.initState}</Badge>
+          )}
+          {game.initState !== 'active' && game.initState !== 'completed' && (
+            <Badge variant={game.gmSetupState === 'ready' ? 'green' : 'gold'}>GM Setup: {game.gmSetupState}</Badge>
+          )}
+          <Badge variant="gold">Phase: {game.gamePhase}</Badge>
           <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
-          <Badge>{game.turnPhase}</Badge>
+          <Badge>Turn: {game.turnPhase}</Badge>
         </div>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        <Card>
-          <CardContent>
-            <p className="text-sm text-ink-300 pt-4">GM Code</p>
-            <p className="font-mono text-2xl">{game.gmCode || '—'}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Player Slots</p>
-            <p className="text-3xl font-heading font-bold">{playerSlots.length}</p>
-            <p className="text-sm text-ink-300">{playerSlots.filter((slot) => slot.status === 'claimed').length} claimed</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Realms</p>
-            <p className="text-3xl font-heading font-bold">{realms.length}</p>
-            <p className="text-sm text-ink-300">{npcCount} NPC / {playerCount} player</p>
-          </CardContent>
-        </Card>
-      </div>
+      {!isActive && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+          <Card>
+            <CardContent>
+              <p className="text-sm text-ink-300 pt-4">GM Code</p>
+              <p className="font-mono text-2xl">{game.gmCode || '—'}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <p className="text-sm text-ink-300 pt-4">Player Slots</p>
+              <p className="text-3xl font-heading font-bold">{playerSlots.length}</p>
+              <p className="text-sm text-ink-300">{playerSlots.filter((slot) => slot.status === 'claimed').length} claimed</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <p className="text-sm text-ink-300 pt-4">Realms</p>
+              <p className="text-3xl font-heading font-bold">{realms.length}</p>
+              <p className="text-sm text-ink-300">{npcCount} NPC / {playerCount} player</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="flex gap-3 mb-6">
-        {game.initState !== 'active' && game.initState !== 'completed' && game.gmSetupState !== 'ready' && (
+        {!isActive && game.gmSetupState !== 'ready' && (
           <Button variant="outline" onClick={() => void markGMReady()} disabled={markingReady}>
             {markingReady ? 'Saving...' : 'Mark GM Setup Ready'}
           </Button>
         )}
-        {canStartGame && game.initState !== 'active' && game.initState !== 'completed' && (
+        {canStartGame && !isActive && (
           <Button variant="accent" onClick={() => void startGame()} disabled={starting}>
             {starting ? 'Starting...' : 'Start Game'}
           </Button>
@@ -573,96 +555,95 @@ export default function GMDashboard() {
         <Button variant="ghost" onClick={() => void loadDashboard()} disabled={loadingDashboard}>
           {loadingDashboard ? 'Refreshing...' : 'Refresh'}
         </Button>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mb-6">
         <Link href={`/game/${gameId}/map`}>
-          <Card className="cursor-pointer transition-colors hover:border-gold-500">
-            <CardContent>
-              <p className="font-heading font-bold pt-4">Map</p>
-            </CardContent>
-          </Card>
+          <Button variant="outline">Map</Button>
         </Link>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Player Slots</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {playerSlots.map((slot) => (
-              <div key={slot.id} className="p-3 medieval-border rounded flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-heading font-semibold">{slot.territoryName || slot.territoryId}</p>
-                  <p className="text-sm text-ink-300">{slot.displayName || 'Unlabeled player slot'}</p>
-                </div>
-                <div className="text-right">
-                  <Badge variant={slot.status === 'claimed' ? 'green' : 'gold'}>{slot.status}</Badge>
-                  <p className="text-xs text-ink-300 mt-1">{slot.setupState}</p>
-                  <p className="font-mono text-lg mt-1">{slot.claimCode}</p>
-                </div>
-              </div>
-            ))}
-            {playerSlots.length === 0 && <p className="text-ink-300 text-sm">No player slots yet.</p>}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Claimed Player Progress</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {claimedPlayerSlots.map((slot) => {
-              const completedChecklistItems = slot.checklist
-                ? Object.values(slot.checklist).filter(Boolean).length
-                : 0;
-
-              return (
-                <div key={slot.id} className="rounded border border-card-border bg-parchment-100/40 p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-4">
+      {!isActive && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Player Slots</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {playerSlots.map((slot) => (
+                  <div key={slot.id} className="p-3 medieval-border rounded flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-heading font-semibold">{slot.displayName || slot.territoryName || 'Claimed slot'}</p>
-                      <p className="text-sm text-ink-300">
-                        {slot.territoryName || slot.territoryId}
-                        {slot.realmId ? ` · realm created` : ' · realm not created yet'}
-                      </p>
+                      <p className="font-heading font-semibold">{slot.territoryName || slot.territoryId}</p>
+                      <p className="text-sm text-ink-300">{slot.displayName || 'Unlabeled player slot'}</p>
                     </div>
                     <div className="text-right">
-                      <Badge variant={getSetupStateBadgeVariant(slot.setupState)}>
-                        {formatSetupStateLabel(slot.setupState)}
-                      </Badge>
-                      <p className="mt-1 text-xs text-ink-300">
-                        {slot.checklist ? `${completedChecklistItems}/7 setup items complete` : 'Awaiting setup data'}
-                      </p>
+                      <Badge variant={slot.status === 'claimed' ? 'green' : 'gold'}>{slot.status}</Badge>
+                      <p className="text-xs text-ink-300 mt-1">{slot.setupState}</p>
+                      <p className="font-mono text-lg mt-1">{slot.claimCode}</p>
                     </div>
                   </div>
-                  {slot.missingRequirements.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {slot.missingRequirements.map((requirement) => (
-                        <Badge key={`${slot.id}-${requirement}`} variant="default">
-                          Missing: {requirement}
-                        </Badge>
-                      ))}
+                ))}
+                {playerSlots.length === 0 && <p className="text-ink-300 text-sm">No player slots yet.</p>}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Claimed Player Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {claimedPlayerSlots.map((slot) => {
+                  const completedChecklistItems = slot.checklist
+                    ? Object.values(slot.checklist).filter(Boolean).length
+                    : 0;
+
+                  return (
+                    <div key={slot.id} className="rounded border border-card-border bg-parchment-100/40 p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-heading font-semibold">{slot.displayName || slot.territoryName || 'Claimed slot'}</p>
+                          <p className="text-sm text-ink-300">
+                            {slot.territoryName || slot.territoryId}
+                            {slot.realmId ? ` · realm created` : ' · realm not created yet'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant={getSetupStateBadgeVariant(slot.setupState)}>
+                            {formatSetupStateLabel(slot.setupState)}
+                          </Badge>
+                          <p className="mt-1 text-xs text-ink-300">
+                            {slot.checklist ? `${completedChecklistItems}/7 setup items complete` : 'Awaiting setup data'}
+                          </p>
+                        </div>
+                      </div>
+                      {slot.missingRequirements.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {slot.missingRequirements.map((requirement) => (
+                            <Badge key={`${slot.id}-${requirement}`} variant="default">
+                              Missing: {requirement}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-green-700">All player setup requirements are complete.</p>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-sm text-green-700">All player setup requirements are complete.</p>
-                  )}
-                </div>
-              );
-            })}
-            {claimedPlayerSlots.length === 0 && (
-              <p className="text-sm text-ink-300">No player slots have been claimed yet.</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                  );
+                })}
+                {claimedPlayerSlots.length === 0 && (
+                  <p className="text-sm text-ink-300">No player slots have been claimed yet.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {isActive && <GmTurnReviewPanel gameId={gameId} />}
 
       <Card className="mt-6">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>All Realms</CardTitle>
+          <CardTitle>{isActive ? 'Realms' : 'All Realms'}</CardTitle>
           {!showRealmForm && (
             <Button variant="outline" onClick={() => openRealmForm()}>
               + Add NPC Realm
@@ -798,7 +779,7 @@ export default function GMDashboard() {
                     {economyOverview[realm.id]?.warningCount ? (
                       <Badge variant="gold">{economyOverview[realm.id].warningCount} warnings</Badge>
                     ) : null}
-                    {!realm.isNPC && slotForRealm && (
+                    {!realm.isNPC && slotForRealm && game.initState !== 'active' && game.initState !== 'completed' && (
                       <Badge variant={getSetupStateBadgeVariant(slotForRealm.setupState)}>
                         {formatSetupStateLabel(slotForRealm.setupState)}
                       </Badge>
@@ -819,6 +800,26 @@ export default function GMDashboard() {
                       {realmTerritories.map((t) => (
                         <Badge key={t.id} variant="default">{t.name}</Badge>
                       ))}
+                    </div>
+                  )}
+                  {isActive && (
+                    <div className="mt-3 space-y-4 border-t border-card-border pt-3">
+                      <details className="group">
+                        <summary className="cursor-pointer font-heading text-sm font-semibold text-ink-500 select-none">
+                          Governance
+                        </summary>
+                        <div className="mt-3">
+                          <GovernanceRealmPanel gameId={gameId} realmId={realm.id} />
+                        </div>
+                      </details>
+                      <details className="group">
+                        <summary className="cursor-pointer font-heading text-sm font-semibold text-ink-500 select-none">
+                          Troops
+                        </summary>
+                        <div className="mt-3">
+                          <RealmTroopPanel gameId={gameId} realmId={realm.id} settlements={worldSettlements} realmNames={realmMap} />
+                        </div>
+                      </details>
                     </div>
                   )}
                 </div>
@@ -1080,119 +1081,6 @@ export default function GMDashboard() {
         </CardContent>
       </Card>
 
-      {game.initState === 'active' && (
-        <>
-          {/* Troop Transfer */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Troop Management</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-3 items-end">
-                <Select
-                  label="Load troops for realm"
-                  options={[{ value: '', label: 'Select realm...' }, ...realms.map((r) => ({ value: r.id, label: r.name }))]}
-                  value=""
-                  onChange={(e) => { if (e.target.value) void loadTroopsForRealm(e.target.value); }}
-                />
-              </div>
-
-              {worldTroops.length > 0 && (
-                <div className="space-y-3">
-                  {(() => {
-                    const grouped = new Map<string, Troop[]>();
-                    for (const troop of worldTroops) {
-                      const key = troop.garrisonSettlementId || troop.armyId || 'unassigned';
-                      if (!grouped.has(key)) grouped.set(key, []);
-                      grouped.get(key)!.push(troop);
-                    }
-
-                    const allSettlements = worldSettlements;
-                    const settlementMap = Object.fromEntries(allSettlements.map((s) => [s.id, s.name]));
-
-                    return Array.from(grouped.entries()).map(([key, groupTroops]) => {
-                      const locationName = settlementMap[key] || (key === 'unassigned' ? 'Unassigned' : `Army ${key.slice(0, 8)}`);
-                      const allSelected = groupTroops.every((t) => troopTransfer.troopIds.includes(t.id));
-
-                      return (
-                        <div key={key} className="p-3 medieval-border rounded space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="font-heading font-semibold">{locationName}</span>
-                              <Badge>{groupTroops.length} troops</Badge>
-                            </div>
-                            <Button variant="ghost" size="sm" onClick={() => {
-                              if (allSelected) {
-                                setTroopTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => !groupTroops.some((t) => t.id === id)) }));
-                              } else {
-                                setTroopTransfer((prev) => ({ ...prev, troopIds: [...new Set([...prev.troopIds, ...groupTroops.map((t) => t.id)])] }));
-                              }
-                            }}>
-                              {allSelected ? 'Deselect All' : 'Select All'}
-                            </Button>
-                          </div>
-                          <div className="space-y-1 ml-4">
-                            {groupTroops.map((troop) => (
-                              <label key={troop.id} className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={troopTransfer.troopIds.includes(troop.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setTroopTransfer((prev) => ({ ...prev, troopIds: [...prev.troopIds, troop.id] }));
-                                    } else {
-                                      setTroopTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => id !== troop.id) }));
-                                    }
-                                  }}
-                                />
-                                <span>{troop.type}</span>
-                                <Badge variant="default">{troop.class}</Badge>
-                                <Badge variant="default">{troop.armourType}</Badge>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-
-                  {troopTransfer.troopIds.length > 0 && (
-                    <div className="flex gap-3 items-end p-3 bg-parchment-100/50 rounded">
-                      <Select
-                        label={`Transfer ${troopTransfer.troopIds.length} troop(s) to`}
-                        options={[{ value: '', label: 'Select garrison...' }, ...worldSettlements.map((s) => ({ value: s.id, label: `${s.name} (${s.size})` }))]}
-                        value={troopTransfer.targetSettlementId}
-                        onChange={(e) => setTroopTransfer((prev) => ({ ...prev, targetSettlementId: e.target.value }))}
-                      />
-                      <Button variant="accent" onClick={() => void transferTroops()} disabled={!troopTransfer.targetSettlementId}>
-                        Transfer
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {worldTroops.length === 0 && <p className="text-ink-300 text-sm">Select a realm to view and manage troops.</p>}
-            </CardContent>
-          </Card>
-
-          {/* Governance Panel */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Governance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-ink-300 text-sm mb-4">Edit noble assignments, heir designations, and GM status text per realm.</p>
-              {realms.map((realm) => (
-                <GovernanceRealmPanel key={realm.id} gameId={gameId} realmId={realm.id} realmName={realm.name} />
-              ))}
-              {realms.length === 0 && <p className="text-ink-300 text-sm">No realms yet.</p>}
-            </CardContent>
-          </Card>
-
-          <GmTurnReviewPanel gameId={gameId} />
-        </>
-      )}
     </main>
   );
 }
@@ -1231,8 +1119,7 @@ interface GovGOS {
   leaderId: string | null;
 }
 
-function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; realmId: string; realmName: string }) {
-  const [expanded, setExpanded] = useState(false);
+function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: string }) {
   const [nobles, setNobles] = useState<GovNoble[]>([]);
   const [settlements, setSettlements] = useState<GovSettlement[]>([]);
   const [armies, setArmies] = useState<GovArmy[]>([]);
@@ -1240,7 +1127,7 @@ function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; 
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     const [noblesRes, settRes, armiesRes, gosRes] = await Promise.all([
       fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`),
       fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
@@ -1253,12 +1140,9 @@ function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; 
     setArmies(armyData.armies ?? armyData);
     setGosList(await gosRes.json());
     setLoaded(true);
-  }
+  }, [gameId, realmId]);
 
-  function toggle() {
-    if (!expanded && !loaded) void load();
-    setExpanded(!expanded);
-  }
+  useEffect(() => { void load(); }, [load]);
 
   const currentHeir = nobles.find((n) => n.isHeir);
 
@@ -1309,21 +1193,13 @@ function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; 
   }
 
   return (
-    <div className="medieval-border rounded mb-4">
-      <div
-        className="p-3 flex items-center justify-between cursor-pointer hover:bg-parchment-100/50"
-        onClick={toggle}
-      >
-        <div className="flex items-center gap-2">
-          <span className={`inline-block text-xs transition-transform ${expanded ? 'rotate-90' : ''}`}>&#9654;</span>
-          <span className="font-heading font-semibold">{realmName}</span>
-        </div>
-      </div>
+    <div className="space-y-6">
+      {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {expanded && loaded && (
-        <div className="p-4 pt-0 space-y-6">
-          {error && <p className="text-sm text-red-500">{error}</p>}
-
+      {!loaded ? (
+        <Button variant="outline" size="sm" onClick={() => void load()}>Load Governance</Button>
+      ) : (
+        <>
           {/* Heir */}
           <div>
             <p className="font-heading font-semibold text-sm mb-2">Heir Designation</p>
@@ -1413,6 +1289,148 @@ function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; 
               {nobles.length === 0 && <p className="text-ink-300 text-sm">No nobles in this realm.</p>}
             </div>
           </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Troop sub-panel (loaded per realm) ──
+
+function RealmTroopPanel({ gameId, realmId, settlements: allSettlements, realmNames }: { gameId: string; realmId: string; settlements: Settlement[]; realmNames: Record<string, string> }) {
+  const [troops, setTroops] = useState<Troop[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState('');
+  const [transfer, setTransfer] = useState<{ troopIds: string[]; targetSettlementId: string }>({ troopIds: [], targetSettlementId: '' });
+
+  async function load() {
+    const response = await fetch(`/api/game/${gameId}/troops?realmId=${realmId}`, { cache: 'no-store' });
+    if (response.ok) {
+      setTroops(await response.json());
+    }
+    setLoaded(true);
+  }
+
+  async function transferTroops() {
+    if (transfer.troopIds.length === 0 || !transfer.targetSettlementId) return;
+    setError('');
+    const response = await fetch(`/api/game/${gameId}/troops`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ troopIds: transfer.troopIds, garrisonSettlementId: transfer.targetSettlementId }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(data.error ?? 'Failed to transfer troops');
+      return;
+    }
+    setTransfer({ troopIds: [], targetSettlementId: '' });
+    await load();
+  }
+
+  if (!loaded) {
+    return <Button variant="outline" size="sm" onClick={() => void load()}>Load Troops</Button>;
+  }
+
+  const settlementMap = Object.fromEntries(allSettlements.map((s) => [s.id, s.name]));
+  const grouped = new Map<string, Troop[]>();
+  for (const troop of troops) {
+    const key = troop.garrisonSettlementId || troop.armyId || 'unassigned';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(troop);
+  }
+
+  return (
+    <div className="space-y-3">
+      {error && <p className="text-sm text-red-500">{error}</p>}
+      {troops.length === 0 && <p className="text-ink-300 text-sm">No troops.</p>}
+      {Array.from(grouped.entries()).map(([key, groupTroops]) => {
+        const locationName = settlementMap[key] || (key === 'unassigned' ? 'Unassigned' : `Army ${key.slice(0, 8)}`);
+        const allSelected = groupTroops.every((t) => transfer.troopIds.includes(t.id));
+
+        return (
+          <div key={key} className="p-3 medieval-border rounded space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="font-heading font-semibold">{locationName}</span>
+                <Badge>{groupTroops.length} troops</Badge>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => {
+                if (allSelected) {
+                  setTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => !groupTroops.some((t) => t.id === id)) }));
+                } else {
+                  setTransfer((prev) => ({ ...prev, troopIds: [...new Set([...prev.troopIds, ...groupTroops.map((t) => t.id)])] }));
+                }
+              }}>
+                {allSelected ? 'Deselect All' : 'Select All'}
+              </Button>
+            </div>
+            <div className="space-y-1 ml-4">
+              {groupTroops.map((troop) => (
+                <label key={troop.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={transfer.troopIds.includes(troop.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setTransfer((prev) => ({ ...prev, troopIds: [...prev.troopIds, troop.id] }));
+                      } else {
+                        setTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => id !== troop.id) }));
+                      }
+                    }}
+                  />
+                  <span>{troop.type}</span>
+                  <Badge variant="default">{troop.class}</Badge>
+                  <Badge variant="default">{troop.armourType}</Badge>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {transfer.troopIds.length > 0 && (
+        <div className="flex gap-3 items-end p-3 bg-parchment-100/50 rounded">
+          <div className="flex flex-col gap-1.5">
+            <label className="font-heading text-sm font-medium text-ink-500">
+              Transfer {transfer.troopIds.length} troop(s) to
+            </label>
+            <select
+              className="w-full px-4 py-2.5 bg-input-bg border-2 border-input-border rounded text-foreground focus:outline-none focus:border-accent transition-colors cursor-pointer"
+              value={transfer.targetSettlementId}
+              onChange={(e) => setTransfer((prev) => ({ ...prev, targetSettlementId: e.target.value }))}
+            >
+              <option value="">Select garrison...</option>
+              {(() => {
+                const thisRealm = allSettlements.filter((s) => s.realmId === realmId);
+                const otherRealms = new Map<string, Settlement[]>();
+                for (const s of allSettlements) {
+                  if (s.realmId === realmId || !s.realmId) continue;
+                  if (!otherRealms.has(s.realmId)) otherRealms.set(s.realmId, []);
+                  otherRealms.get(s.realmId)!.push(s);
+                }
+                return (
+                  <>
+                    <optgroup label={realmNames[realmId] || 'This Realm'}>
+                      {thisRealm.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.size})</option>
+                      ))}
+                    </optgroup>
+                    {Array.from(otherRealms.entries()).map(([rId, settlements]) => (
+                      <optgroup key={rId} label={realmNames[rId] || rId}>
+                        {settlements.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name} ({s.size})</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </>
+                );
+              })()}
+            </select>
+          </div>
+          <Button variant="accent" onClick={() => void transferTroops()} disabled={!transfer.targetSettlementId}>
+            Transfer
+          </Button>
         </div>
       )}
     </div>

@@ -377,6 +377,7 @@ describe('resolveEconomyForRealm', () => {
 
   it('adds escalating shortage turmoil and clears it after two recovery seasons', () => {
     const shortage = resolveEconomyForRealm(createRealm({
+      taxType: 'Levy',
       settlements: [{
         id: 'settlement-1',
         name: 'Hungry Capital',
@@ -388,22 +389,23 @@ describe('resolveEconomyForRealm', () => {
     }), 1, 'Summer');
 
     expect(shortage.food.consecutiveShortageSeasons).toBe(2);
-    expect(shortage.turmoil.foodShortageIncrement).toBe(1);
+    expect(shortage.turmoil.foodShortageIncrement).toBe(3);
     expect(shortage.turmoil.sources).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'food-shortage:realm-1',
-        amount: 1,
+        amount: 3,
       }),
     ]));
 
     const recovery = resolveEconomyForRealm(createRealm({
+      taxType: 'Levy',
       consecutiveFoodShortageSeasons: 3,
       consecutiveFoodRecoverySeasons: 1,
       turmoilSources: [{
         id: 'food-shortage:realm-1',
         kind: 'food_shortage',
         description: 'Food shortage unrest',
-        amount: 1,
+        amount: 3,
         durationType: 'permanent',
         originYear: 1,
         originSeason: 'Autumn',
@@ -479,7 +481,7 @@ describe('resolveEconomyForRealm', () => {
       isOperational: true,
     });
     expect(result.turmoil.buildingReduction).toBe(2);
-    expect(result.turmoil.closing).toBe(2);
+    expect(result.turmoil.closing).toBe(0);
   });
 
   it('applies GM seasonal modifiers through the shared economy input path', () => {

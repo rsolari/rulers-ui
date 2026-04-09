@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { isAuthError, requireGame, requireOwnedRealmAccess } from '@/lib/auth';
 import { designateHeir } from '@/lib/game-logic/governance';
 import { isGovernanceError } from '@/lib/game-logic/nobles';
 
@@ -13,12 +13,13 @@ export async function POST(
     const body = await request.json();
     await requireOwnedRealmAccess(gameId, body.realmId);
 
+    const game = await requireGame(gameId);
     const result = db.transaction((tx) => designateHeir(tx, {
       gameId,
       realmId: body.realmId,
       nobleId: body.nobleId ?? null,
-      year: body.year,
-      season: body.season,
+      year: body.year ?? game.currentYear,
+      season: body.season ?? game.currentSeason,
       notes: body.notes ?? null,
     }));
 

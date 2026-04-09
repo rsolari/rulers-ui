@@ -53,7 +53,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         parseResponse<Array<{ id: string; name: string }>>(
           await fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
         ),
-        parseResponse<Array<{ id: string; name: string }>>(
+        parseResponse<Array<{ id: string; name: string; reasonSkill: number; cunningSkill: number }>>(
           await fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`, { cache: 'no-store' }),
         ),
       ]);
@@ -63,7 +63,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         setHistory(historyData.history);
         setSettlementOptions(settlements.map((s) => ({ value: s.id, label: s.name })));
         setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
-        setNobleOptions(realmNobles.map((n) => ({ value: n.id, label: n.name })));
+        setNobleOptions(realmNobles.map((n) => ({ value: n.id, label: `${n.name} (R${n.reasonSkill} / C${n.cunningSkill})` })));
       });
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Failed to load turn data');

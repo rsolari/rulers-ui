@@ -35,6 +35,9 @@ const EXECUTION_STATUS_OPTIONS = [
   { value: 'executed', label: 'Executed' },
 ];
 
+const DICE_POOL_SIZE = 5;
+const DICE_SUCCESS_THRESHOLD = 5;
+
 interface TurnActionCardProps {
   action: TurnActionRecord;
   settlementOptions: Array<{ value: string; label: string }>;
@@ -77,6 +80,112 @@ function createDraftState(action: TurnActionRecord): TurnActionUpdateDto {
     outcome: action.outcome,
     resolutionSummary: action.resolutionSummary,
   };
+}
+
+function lookupLabel(options: Array<{ value: string; label: string }>, value: string | null | undefined): string | null {
+  if (!value) return null;
+  return options.find((o) => o.value === value)?.label ?? value;
+}
+
+function DiceRoller() {
+  const [rolls, setRolls] = useState<number[] | null>(null);
+
+  function roll() {
+    const dice = Array.from({ length: DICE_POOL_SIZE }, () => Math.floor(Math.random() * 6) + 1);
+    setRolls(dice);
+  }
+
+  const successes = rolls?.filter((d) => d >= DICE_SUCCESS_THRESHOLD).length ?? 0;
+
+  return (
+    <div className="flex items-center gap-3">
+      <Button variant="outline" size="sm" onClick={roll}>
+        Roll {DICE_POOL_SIZE}d6
+      </Button>
+      {rolls && (
+        <div className="flex items-center gap-2">
+          <span className="flex gap-1">
+            {rolls.map((d, i) => (
+              <span
+                key={i}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded border text-sm font-mono font-bold ${
+                  d >= DICE_SUCCESS_THRESHOLD
+                    ? 'border-green-600 bg-green-50 text-green-700'
+                    : 'border-ink-200 bg-parchment-100 text-ink-400'
+                }`}
+              >
+                {d}
+              </span>
+            ))}
+          </span>
+          <Badge variant={successes > 0 ? 'green' : 'default'}>
+            {successes} {successes === 1 ? 'success' : 'successes'}
+          </Badge>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReadOnlySummary({
+  action,
+  settlementOptions,
+  realmOptions,
+  nobleOptions,
+}: {
+  action: TurnActionRecord;
+  settlementOptions: Array<{ value: string; label: string }>;
+  realmOptions: Array<{ value: string; label: string }>;
+  nobleOptions: Array<{ value: string; label: string }>;
+}) {
+  if (action.kind === 'political') {
+    const words = action.actionWords ?? [];
+    const targetRealm = lookupLabel(realmOptions, action.targetRealmId);
+    const noble = lookupLabel(nobleOptions, action.assignedNobleId);
+
+    return (
+      <div className="space-y-2">
+        {words.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {words.map((word) => (
+              <Badge key={word} variant="gold">{word}</Badge>
+            ))}
+          </div>
+        )}
+        {action.description && <p className="text-sm text-ink-600 whitespace-pre-wrap">{action.description}</p>}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-400">
+          {targetRealm && <span>Target: <span className="text-ink-600">{targetRealm}</span></span>}
+          {noble && <span>Noble: <span className="text-ink-600">{noble}</span></span>}
+          {action.triggerCondition && <span>Trigger: <span className="text-ink-600">{action.triggerCondition}</span></span>}
+        </div>
+      </div>
+    );
+  }
+
+  // Financial action summary
+  const settlement = lookupLabel(settlementOptions, action.settlementId);
+  const lines: string[] = [];
+
+  if (action.financialType === 'build') {
+    lines.push(`Build ${action.buildingType ?? 'building'}${settlement ? ` in ${settlement}` : ''}`);
+  } else if (action.financialType === 'recruit') {
+    lines.push(`Recruit ${action.troopType ?? 'troops'}${settlement ? ` at ${settlement}` : ''}`);
+  } else if (action.financialType === 'taxChange') {
+    lines.push(`Change tax to ${action.taxType ?? '?'}`);
+  } else if (action.financialType === 'spending') {
+    lines.push('Spending');
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <Badge variant="default">{action.financialType ?? 'spending'}</Badge>
+        <span className="text-ink-600">{lines[0]}</span>
+        {action.cost > 0 && <Badge>Cost: {action.cost}</Badge>}
+      </div>
+      {action.description && <p className="text-sm text-ink-600 whitespace-pre-wrap">{action.description}</p>}
+    </div>
+  );
 }
 
 export function TurnActionCard({
@@ -125,6 +234,8 @@ export function TurnActionCard({
     }));
   }
 
+  const showReadOnlySummary = !editable;
+
   return (
     <Card className="border border-ink-100">
       <CardHeader>
@@ -138,7 +249,14 @@ export function TurnActionCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {action.kind === 'political' ? (
+        {showReadOnlySummary ? (
+          <ReadOnlySummary
+            action={action}
+            settlementOptions={settlementOptions}
+            realmOptions={realmOptions}
+            nobleOptions={nobleOptions}
+          />
+        ) : action.kind === 'political' ? (
           <div className="space-y-4">
             <div>
               <p className="mb-2 text-sm font-semibold text-ink-500">Action Words</p>
@@ -270,6 +388,8 @@ export function TurnActionCard({
 
         {gmExecutable ? (
           <div className="space-y-3 border-t border-ink-100 pt-3">
+            <p className="text-sm font-semibold text-ink-500">Noble Action Check</p>
+            <DiceRoller />
             <div className="grid gap-3 md:grid-cols-2">
               <Select
                 label="Workflow Status"

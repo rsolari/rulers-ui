@@ -23,6 +23,7 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
   const [currentTurn, setCurrentTurn] = useState<CurrentTurnResponseDto | null>(null);
   const [settlementOptions, setSettlementOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [realmOptions, setRealmOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [nobleOptionsByRealm, setNobleOptionsByRealm] = useState<Record<string, Array<{ value: string; label: string }>>>({});
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
   const [commentActionId, setCommentActionId] = useState<string | null>(null);
@@ -43,10 +44,23 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
         ),
       ]);
 
+      const noblesByRealm: Record<string, Array<{ value: string; label: string }>> = {};
+      const realmIds = (turnData.realms ?? []).map((r) => r.realmId);
+      const nobleResponses = await Promise.all(
+        realmIds.map((rId) =>
+          fetch(`/api/game/${gameId}/nobles?realmId=${rId}`, { cache: 'no-store' })
+            .then((res) => res.ok ? res.json() as Promise<Array<{ id: string; name: string; reasonSkill: number; cunningSkill: number }>> : [])
+        ),
+      );
+      for (let i = 0; i < realmIds.length; i++) {
+        noblesByRealm[realmIds[i]] = (nobleResponses[i] ?? []).map((n) => ({ value: n.id, label: `${n.name} (R${n.reasonSkill} / C${n.cunningSkill})` }));
+      }
+
       startTransition(() => {
         setCurrentTurn(turnData);
         setSettlementOptions(settlements.map((settlement) => ({ value: settlement.id, label: settlement.name })));
         setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
+        setNobleOptionsByRealm(noblesByRealm);
       });
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Failed to load current turn');
@@ -151,6 +165,7 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
                       action={action}
                       settlementOptions={settlementOptions}
                       realmOptions={realmOptions}
+                      nobleOptions={nobleOptionsByRealm[realm.realmId] ?? []}
                       gmExecutable={action.kind === 'political'}
                       commentable
                       saving={savingActionId === action.id}

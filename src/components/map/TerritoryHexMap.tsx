@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SettlementMarker } from '@/components/map/SettlementMarker';
 import { computeTerritoryBorderSegments, computeViewBox, hexToPixel, hexVertices } from '@/components/map/hex-utils';
+import { computeRiverPaths, type RiverHexInput } from '@/components/map/river-utils';
 import type { TerritoryMapData } from '@/lib/maps/territory-map';
 
 const HEX_SIZE_BY_VARIANT = {
@@ -77,7 +78,7 @@ export function TerritoryHexMap({
     ),
     [data.hexes]
   );
-  const { viewBox, hexRenderData, borderSegments } = useMemo(() => {
+  const { viewBox, hexRenderData, borderSegments, riverPaths } = useMemo(() => {
     const hexPixels = new Map(data.hexes.map((hex) => [hex.id, hexToPixel(hex.q, hex.r, hexSize)]));
     const renderedHexes = showContext
       ? data.hexes
@@ -85,6 +86,24 @@ export function TerritoryHexMap({
     const framedHexes = showContext
       ? data.hexes
       : data.hexes.filter((hex) => hex.isTerritoryHex || hex.isWaterContextHex);
+
+    const riverHexInputs: RiverHexInput[] = [];
+    for (const hex of renderedHexes) {
+      const center = hexPixels.get(hex.id);
+      if (!center) continue;
+      for (const feature of hex.features) {
+        if (feature.featureType === 'river' && feature.riverIndex != null) {
+          riverHexInputs.push({
+            id: hex.id,
+            q: hex.q,
+            r: hex.r,
+            centerX: center.x,
+            centerY: center.y,
+            riverIndex: feature.riverIndex,
+          });
+        }
+      }
+    }
 
     return {
       viewBox: computeViewBox(
@@ -94,6 +113,7 @@ export function TerritoryHexMap({
         hexSize
       ),
       borderSegments: computeTerritoryBorderSegments(data.hexes, hexPixels, hexSize),
+      riverPaths: computeRiverPaths(riverHexInputs),
       hexRenderData: renderedHexes.map((hex) => {
         const center = hexPixels.get(hex.id);
 
@@ -314,6 +334,29 @@ export function TerritoryHexMap({
             />
           );
         })}
+
+        {riverPaths.map((river) => (
+          <g key={`river-${river.riverIndex}-${river.path.slice(0, 20)}`} pointerEvents="none">
+            <path
+              d={river.path}
+              fill="none"
+              stroke="#1a3a5a"
+              strokeWidth={3.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity={0.25}
+            />
+            <path
+              d={river.path}
+              fill="none"
+              stroke="#4a90c4"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity={0.8}
+            />
+          </g>
+        ))}
       </svg>
     </div>
   );

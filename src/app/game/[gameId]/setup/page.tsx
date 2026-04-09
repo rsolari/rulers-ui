@@ -19,6 +19,7 @@ import {
   type GeneratedResource,
   type TerritoryType,
 } from '@/lib/game-logic/map-generation';
+import { generatePlaceName } from '@/lib/game-logic/place-names';
 import type { GovernmentType, ResourceType, SettlementSize, Tradition } from '@/types/game';
 
 const TERRITORY_TYPE_OPTIONS = [
@@ -793,16 +794,31 @@ export default function SetupWizard() {
                                   event.target.value
                                 )}
                               />
-                              <Input
-                                label={resourceIndex === 0 ? 'Settlement Name' : undefined}
-                                value={resource.settlement.name}
-                                onChange={(event) => updateMapResource(
-                                  entry.territoryIndex,
-                                  resource.id,
-                                  'settlementName',
-                                  event.target.value
-                                )}
-                              />
+                              <div className="flex gap-1 items-end">
+                                <Input
+                                  label={resourceIndex === 0 ? 'Settlement Name' : undefined}
+                                  value={resource.settlement.name}
+                                  onChange={(event) => updateMapResource(
+                                    entry.territoryIndex,
+                                    resource.id,
+                                    'settlementName',
+                                    event.target.value
+                                  )}
+                                />
+                                <button
+                                  type="button"
+                                  title="Generate random name"
+                                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded border-2 border-input-border bg-input-bg text-lg text-ink-400 hover:bg-parchment-100 hover:text-ink-600 transition-colors"
+                                  onClick={() => updateMapResource(
+                                    entry.territoryIndex,
+                                    resource.id,
+                                    'settlementName',
+                                    generatePlaceName()
+                                  )}
+                                >
+                                  &#x2684;
+                                </button>
+                              </div>
                               <Select
                                 label={resourceIndex === 0 ? 'Size' : undefined}
                                 options={SETTLEMENT_SIZE_OPTIONS}

@@ -8,10 +8,12 @@ import type { TurnHistoryEntry } from '@/types/game';
 interface TurnHistoryListProps {
   history: TurnHistoryEntry[];
   settlementOptions: Array<{ value: string; label: string }>;
+  realmOptions?: Array<{ value: string; label: string }>;
+  nobleOptions?: Array<{ value: string; label: string }>;
   showRealmName?: boolean;
 }
 
-export function TurnHistoryList({ history, settlementOptions, showRealmName = false }: TurnHistoryListProps) {
+export function TurnHistoryList({ history, settlementOptions, realmOptions = [], nobleOptions = [], showRealmName = false }: TurnHistoryListProps) {
   if (history.length === 0) {
     return (
       <Card>
@@ -46,6 +48,8 @@ export function TurnHistoryList({ history, settlementOptions, showRealmName = fa
                   key={`${action.id}:${action.updatedAt ?? ''}`}
                   action={action}
                   settlementOptions={settlementOptions}
+                  realmOptions={realmOptions}
+                  nobleOptions={nobleOptions}
                 />
               ))
             )}

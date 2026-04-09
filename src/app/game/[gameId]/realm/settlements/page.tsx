@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -62,6 +62,36 @@ export default function SettlementsPage() {
       .then(setNobles);
   }, [gameId, realmId]);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  async function renameSettlement(settlementId: string, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    setSavingName(true);
+    const response = await fetch(`/api/game/${gameId}/settlements`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settlementId, name: trimmed }),
+    });
+    setSavingName(false);
+
+    if (!response.ok) return;
+
+    setEditingId(null);
+    const res = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
+    setSettlements(await res.json());
+  }
+
+  function startEditing(settlement: Settlement) {
+    setEditingId(settlement.id);
+    setEditingName(settlement.name);
+    setTimeout(() => nameInputRef.current?.select(), 0);
+  }
+
   async function assignGovernor(settlementId: string, nobleId: string | null): Promise<string | null> {
     const response = await fetch(`/api/game/${gameId}/settlements/${settlementId}/governor`, {
       method: 'POST',
@@ -88,7 +118,7 @@ export default function SettlementsPage() {
       <h1 className="text-3xl font-bold mb-2">Settlements</h1>
       <p className="text-ink-300 mb-6">
         {isSetup
-          ? 'You may assign governors to your settlements during setup.'
+          ? 'Name your settlements and assign governors during setup.'
           : 'Settlement management is GM-controlled. This page is read-only for players.'}
       </p>
 
@@ -101,7 +131,35 @@ export default function SettlementsPage() {
             <Card key={settlement.id} variant="gold">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>{settlement.name}</CardTitle>
+                  {isSetup && editingId === settlement.id ? (
+                    <form
+                      className="flex items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        renameSettlement(settlement.id, editingName);
+                      }}
+                    >
+                      <input
+                        ref={nameInputRef}
+                        className="bg-transparent border-b border-gold-500 text-xl font-heading font-bold text-ink-100 outline-none px-0 py-0.5 w-48"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => renameSettlement(settlement.id, editingName)}
+                        disabled={savingName}
+                        autoFocus
+                      />
+                    </form>
+                  ) : (
+                    <CardTitle
+                      className={isSetup ? 'cursor-pointer hover:text-gold-400 transition-colors' : ''}
+                      onClick={isSetup ? () => startEditing(settlement) : undefined}
+                    >
+                      {settlement.name}
+                      {isSetup && (
+                        <span className="ml-2 text-sm font-normal text-ink-400">✎</span>
+                      )}
+                    </CardTitle>
+                  )}
                   <div className="flex items-center gap-2">
                     <Badge variant="gold">{settlement.size}</Badge>
                     <Badge>{usedSlots}/{data.buildingSlots} slots</Badge>

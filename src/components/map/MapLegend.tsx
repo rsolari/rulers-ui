@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 interface RealmLegendEntry {
   name: string;
   color: string;
+  isPlayer?: boolean;
 }
 
 interface MapLegendProps {
@@ -55,9 +56,16 @@ export function MapLegend({ terrainColors, realms = [] }: MapLegendProps) {
                 <div key={realm.name} className="flex items-center gap-2">
                   <span
                     className="h-3.5 w-3.5 rounded-sm"
-                    style={{ backgroundColor: realm.color, border: `2px solid ${realm.color}` }}
+                    style={{
+                      backgroundColor: realm.color,
+                      border: realm.isPlayer ? '2px solid #c49000' : `2px solid ${realm.color}`,
+                      boxShadow: realm.isPlayer ? '0 0 4px #c49000' : undefined,
+                    }}
                   />
-                  <span className="truncate">{realm.name}</span>
+                  <span className="truncate">
+                    {realm.name}
+                    {realm.isPlayer ? <span className="ml-1 text-xs text-amber-700">(you)</span> : null}
+                  </span>
                 </div>
               ))}
             </div>
@@ -67,6 +75,7 @@ export function MapLegend({ terrainColors, realms = [] }: MapLegendProps) {
           <p>Red seal: settlement</p>
           <p>Shield: army</p>
           <p>Colored lines: realm borders</p>
+          <p>Gold border: your kingdom</p>
         </div>
       </CardContent>
     </Card>

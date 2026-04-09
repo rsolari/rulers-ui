@@ -276,7 +276,7 @@ function LegacyHexMap({ data }: { data: GameMapData }) {
       ))}
 
       {territoryLabels.map((territory) => (
-        <TerritoryLabel key={territory.id} x={territory.x} y={territory.y} name={territory.name} />
+        <TerritoryLabel key={territory.id} x={territory.x} y={territory.y} name={territory.name} realmName={null} />
       ))}
 
       {data.hexes.map((hex) => {

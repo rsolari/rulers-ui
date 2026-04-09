@@ -22,6 +22,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
   const [currentTurn, setCurrentTurn] = useState<CurrentTurnResponseDto | null>(null);
   const [settlementOptions, setSettlementOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [realmOptions, setRealmOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
   const [commentActionId, setCommentActionId] = useState<string | null>(null);
@@ -32,16 +33,20 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
     setError('');
 
     try {
-      const [turnData, settlements] = await Promise.all([
+      const [turnData, settlements, allRealms] = await Promise.all([
         parseResponse<CurrentTurnResponseDto>(await fetch(`/api/game/${gameId}/turn`, { cache: 'no-store' })),
         parseResponse<Array<{ id: string; name: string }>>(
           await fetch(`/api/game/${gameId}/settlements`, { cache: 'no-store' }),
+        ),
+        parseResponse<Array<{ id: string; name: string }>>(
+          await fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
         ),
       ]);
 
       startTransition(() => {
         setCurrentTurn(turnData);
         setSettlementOptions(settlements.map((settlement) => ({ value: settlement.id, label: settlement.name })));
+        setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
       });
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Failed to load current turn');
@@ -145,6 +150,7 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
                       key={`${action.id}:${action.updatedAt ?? ''}`}
                       action={action}
                       settlementOptions={settlementOptions}
+                      realmOptions={realmOptions}
                       gmExecutable={action.kind === 'political'}
                       commentable
                       saving={savingActionId === action.id}

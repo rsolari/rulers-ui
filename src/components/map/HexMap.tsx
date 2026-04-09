@@ -45,6 +45,7 @@ const TERRAIN_COLORS: Record<string, string> = {
 
 interface HexMapProps {
   data: GameMapData;
+  playerRealmId?: string | null;
 }
 
 interface HexRenderData {
@@ -90,7 +91,7 @@ function buildHoveredHex(
   };
 }
 
-export function HexMap({ data }: HexMapProps) {
+export function HexMap({ data, playerRealmId }: HexMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -199,9 +200,11 @@ export function HexMap({ data }: HexMapProps) {
         return [];
       }
 
+      const realm = territory.realmId ? realmById.get(territory.realmId) ?? null : null;
       return [{
         id: territory.id,
         name: territory.name,
+        realmName: realm?.name ?? null,
         x: position.x / position.count,
         y: position.y / position.count,
       }];
@@ -218,7 +221,7 @@ export function HexMap({ data }: HexMapProps) {
       hexPointsById,
       riverPaths,
     };
-  }, [data.hexes, data.territories, realmColorById, territoryById]);
+  }, [data.hexes, data.territories, realmById, realmColorById, territoryById]);
 
   const hoveredHex = useMemo<HoveredHexData | null>(() => {
     if (!hoveredHexId) {
@@ -326,28 +329,46 @@ export function HexMap({ data }: HexMapProps) {
       />
     ))
   ), [handleHexClick, handleHexEnter, handleHexLeave, handleHexMove, hexRenderData]);
+  const playerRealmTerritoryIds = useMemo(() => {
+    if (!playerRealmId) return new Set<string>();
+    return new Set(data.territories.filter((t) => t.realmId === playerRealmId).map((t) => t.id));
+  }, [data.territories, playerRealmId]);
+
   const territoryBorderPaths = useMemo(() => (
     territoryBorderSegs.map((segment, index) => {
       const territory = segment.territoryId ? territoryById.get(segment.territoryId) : null;
       const realmColor = territory?.realmId ? realmColorById.get(territory.realmId) : null;
+      const isPlayerTerritory = segment.territoryId ? playerRealmTerritoryIds.has(segment.territoryId) : false;
 
       return (
-        <path
-          key={`${segment.path}-${index}`}
-          d={segment.path}
-          fill="none"
-          stroke={realmColor ?? '#3a2a1e'}
-          strokeOpacity={realmColor ? 0.85 : 0.7}
-          strokeWidth={2.4}
-          vectorEffect="non-scaling-stroke"
-          pointerEvents="none"
-        />
+        <g key={`${segment.path}-${index}`}>
+          {isPlayerTerritory ? (
+            <path
+              d={segment.path}
+              fill="none"
+              stroke="#c49000"
+              strokeOpacity={0.5}
+              strokeWidth={6}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          ) : null}
+          <path
+            d={segment.path}
+            fill="none"
+            stroke={isPlayerTerritory ? '#c49000' : (realmColor ?? '#3a2a1e')}
+            strokeOpacity={isPlayerTerritory ? 1 : (realmColor ? 0.85 : 0.7)}
+            strokeWidth={isPlayerTerritory ? 3 : 2.4}
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+          />
+        </g>
       );
     })
-  ), [territoryBorderSegs, territoryById, realmColorById]);
+  ), [territoryBorderSegs, territoryById, realmColorById, playerRealmTerritoryIds]);
   const territoryLabelNodes = useMemo(() => (
     territoryLabels.map((territory) => (
-      <TerritoryLabel key={territory.id} x={territory.x} y={territory.y} name={territory.name} />
+      <TerritoryLabel key={territory.id} x={territory.x} y={territory.y} name={territory.name} realmName={territory.realmName} />
     ))
   ), [territoryLabels]);
   const riverPathNodes = useMemo(() => (
@@ -509,7 +530,7 @@ export function HexMap({ data }: HexMapProps) {
       ref={wrapperRef}
       className="relative min-h-[560px] overflow-hidden rounded-2xl border border-ink-200 bg-[radial-gradient(circle_at_top,_rgba(253,248,240,0.92),_rgba(236,220,184,0.96))] shadow-[inset_0_0_0_1px_rgba(201,160,102,0.25),0_20px_60px_rgba(74,55,40,0.14)]"
     >
-      <MapLegend terrainColors={TERRAIN_COLORS} realms={data.realms.map((realm, index) => ({ name: realm.name, color: REALM_COLORS[index % REALM_COLORS.length] }))} />
+      <MapLegend terrainColors={TERRAIN_COLORS} realms={data.realms.map((realm, index) => ({ name: realm.name, color: REALM_COLORS[index % REALM_COLORS.length], isPlayer: realm.id === playerRealmId }))} />
       <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-ink-200 bg-parchment-50/90 px-3 py-2 text-sm text-ink-300 backdrop-blur-sm">
         Drag to pan. Scroll to zoom. Click a hex to highlight it.
       </div>

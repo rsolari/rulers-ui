@@ -13,7 +13,7 @@ export default function GameMapPage() {
   const params = useParams();
   const router = useRouter();
   const gameId = params.gameId as string;
-  const { role, loading } = useRole();
+  const { role, realmId, loading } = useRole();
   const [mapData, setMapData] = useState<GameMapData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMap, setLoadingMap] = useState(true);
@@ -130,7 +130,7 @@ export default function GameMapPage() {
         </div>
       </div>
 
-      <HexMap data={mapData} />
+      <HexMap data={mapData} playerRealmId={realmId} />
     </main>
   );
 }

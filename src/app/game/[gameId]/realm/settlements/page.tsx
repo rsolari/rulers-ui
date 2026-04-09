@@ -89,7 +89,10 @@ export default function SettlementsPage() {
   function startEditing(settlement: Settlement) {
     setEditingId(settlement.id);
     setEditingName(settlement.name);
-    setTimeout(() => nameInputRef.current?.select(), 0);
+    setTimeout(() => {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }, 0);
   }
 
   async function assignGovernor(settlementId: string, nobleId: string | null): Promise<string | null> {
@@ -146,7 +149,6 @@ export default function SettlementsPage() {
                         onChange={(e) => setEditingName(e.target.value)}
                         onBlur={() => renameSettlement(settlement.id, editingName)}
                         disabled={savingName}
-                        autoFocus
                       />
                     </form>
                   ) : (

@@ -809,7 +809,7 @@ export default function GMDashboard() {
                           Governance
                         </summary>
                         <div className="mt-3">
-                          <GovernanceRealmPanel gameId={gameId} realmId={realm.id} realmName={realm.name} />
+                          <GovernanceRealmPanel gameId={gameId} realmId={realm.id} />
                         </div>
                       </details>
                       <details className="group">
@@ -1119,8 +1119,7 @@ interface GovGOS {
   leaderId: string | null;
 }
 
-function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; realmId: string; realmName: string }) {
-  const [expanded, setExpanded] = useState(false);
+function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: string }) {
   const [nobles, setNobles] = useState<GovNoble[]>([]);
   const [settlements, setSettlements] = useState<GovSettlement[]>([]);
   const [armies, setArmies] = useState<GovArmy[]>([]);
@@ -1128,7 +1127,7 @@ function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; 
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     const [noblesRes, settRes, armiesRes, gosRes] = await Promise.all([
       fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`),
       fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
@@ -1141,12 +1140,9 @@ function GovernanceRealmPanel({ gameId, realmId, realmName }: { gameId: string; 
     setArmies(armyData.armies ?? armyData);
     setGosList(await gosRes.json());
     setLoaded(true);
-  }
+  }, [gameId, realmId]);
 
-  function toggle() {
-    if (!expanded && !loaded) void load();
-    setExpanded(!expanded);
-  }
+  useEffect(() => { void load(); }, [load]);
 
   const currentHeir = nobles.find((n) => n.isHeir);
 

@@ -10,6 +10,7 @@ import type {
 export interface TerritoryMapFeature {
   featureType: MapFeatureType;
   name: string | null;
+  riverIndex: number | null;
 }
 
 export interface TerritoryMapHexData {
@@ -62,6 +63,11 @@ function buildWaterContextHexKeySet(
   const hexesByCoord = new Map(hexes.map((hex) => [getTerritoryMapHexKey(hex.q, hex.r), hex]));
   const includedWaterHexKeys = new Set<string>();
 
+  // BFS: start from water hexes adjacent to territory, flood-fill connected water
+  // Use depth limit for sea (to avoid pulling in the entire ocean) but unlimited for lakes
+  const SEA_DEPTH_LIMIT = 3;
+  const queue: Array<{ key: string; depth: number; waterKind: WaterHexKind | null }> = [];
+
   for (const hex of territoryHexes) {
     for (const direction of HEX_DIRECTIONS) {
       const neighborKey = getTerritoryMapHexKey(hex.q + direction.q, hex.r + direction.r);
@@ -71,9 +77,30 @@ function buildWaterContextHexKeySet(
         continue;
       }
 
-      if (neighbor.waterKind === 'lake' || neighbor.waterKind === 'sea') {
+      if (!includedWaterHexKeys.has(neighborKey)) {
         includedWaterHexKeys.add(neighborKey);
+        queue.push({ key: neighborKey, depth: 1, waterKind: neighbor.waterKind });
       }
+    }
+  }
+
+  while (queue.length > 0) {
+    const { key, depth, waterKind } = queue.shift()!;
+    const hex = hexesByCoord.get(key);
+    if (!hex) continue;
+
+    for (const direction of HEX_DIRECTIONS) {
+      const neighborKey = getTerritoryMapHexKey(hex.q + direction.q, hex.r + direction.r);
+      if (includedWaterHexKeys.has(neighborKey)) continue;
+
+      const neighbor = hexesByCoord.get(neighborKey);
+      if (!neighbor || neighbor.hexKind !== 'water') continue;
+
+      const nextDepth = depth + 1;
+      if (waterKind === 'sea' && nextDepth > SEA_DEPTH_LIMIT) continue;
+
+      includedWaterHexKeys.add(neighborKey);
+      queue.push({ key: neighborKey, depth: nextDepth, waterKind: neighbor.waterKind ?? waterKind });
     }
   }
 
@@ -124,6 +151,7 @@ export function buildCuratedTerritoryMapData(
       features: (hex.features ?? []).map((feature) => ({
         featureType: feature.type,
         name: feature.name ?? null,
+        riverIndex: (feature.metadata?.riverIndex as number) ?? null,
       })),
     }));
   const neighborTerritoryIds = buildNeighborTerritoryIdSet(territoryHexes);

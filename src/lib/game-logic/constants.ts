@@ -220,7 +220,7 @@ export const TAX_RATES: Record<TaxType, number> = {
 };
 
 export const TAX_TURMOIL: Record<TaxType, number> = {
-  Tribute: 4,
+  Tribute: 0,
   Levy: 10,
 };
 

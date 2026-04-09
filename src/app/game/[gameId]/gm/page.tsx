@@ -526,11 +526,11 @@ export default function GMDashboard() {
           <p className="text-ink-300">GM Dashboard</p>
         </div>
         <div className="flex items-center gap-3">
-          <Badge>{game.initState}</Badge>
-          <Badge variant={game.gmSetupState === 'ready' ? 'green' : 'gold'}>GM {game.gmSetupState}</Badge>
-          <Badge variant="gold">{game.gamePhase}</Badge>
+          <Badge>Init: {game.initState}</Badge>
+          <Badge variant={game.gmSetupState === 'ready' ? 'green' : 'gold'}>GM Setup: {game.gmSetupState}</Badge>
+          <Badge variant="gold">Phase: {game.gamePhase}</Badge>
           <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
-          <Badge>{game.turnPhase}</Badge>
+          <Badge>Turn: {game.turnPhase}</Badge>
         </div>
       </div>
 
@@ -851,7 +851,7 @@ export default function GMDashboard() {
                       <span className={`inline-block text-xs transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
                       <span className="font-heading font-semibold">{territory.name}</span>
                       {territory.realmId && <Badge variant="gold">{realmMap[territory.realmId] || 'Unknown'}</Badge>}
-                      {!territory.realmId && <Badge variant="default">Neutral</Badge>}
+                      {!territory.realmId && <Badge variant="default">Unclaimed</Badge>}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-ink-300">
                       <span>{territorySettlements.length} settlements</span>
@@ -867,7 +867,7 @@ export default function GMDashboard() {
                         </Button>
                         <Select
                           label="Owner"
-                          options={[{ value: '', label: 'Neutral' }, ...realms.map((r) => ({ value: r.id, label: r.name }))]}
+                          options={[{ value: '', label: 'Unclaimed' }, ...realms.map((r) => ({ value: r.id, label: r.name }))]}
                           value={territory.realmId || ''}
                           onChange={(e) => void assignTerritory(territory.id, e.target.value || null)}
                         />

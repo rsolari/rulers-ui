@@ -8,8 +8,8 @@ import {
 import { createTurmoilSource } from '@/__tests__/helpers/test-factories';
 
 describe('calculateBaseTaxTurmoil', () => {
-  it('returns 4 for Tribute', () => {
-    expect(calculateBaseTaxTurmoil('Tribute')).toBe(4);
+  it('returns 0 for Tribute', () => {
+    expect(calculateBaseTaxTurmoil('Tribute')).toBe(0);
   });
 
   it('returns 10 for Levy', () => {
@@ -90,7 +90,7 @@ describe('calculateTotalTurmoil', () => {
   });
 
   it('returns base tax turmoil with no sources and no reduction', () => {
-    expect(calculateTotalTurmoil('Tribute', [], 0)).toBe(4);
+    expect(calculateTotalTurmoil('Tribute', [], 0)).toBe(0);
     expect(calculateTotalTurmoil('Levy', [], 0)).toBe(10);
   });
 });

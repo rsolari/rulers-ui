@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { settlements } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { isAuthError, requireGM, requireOwnedRealmAccess } from '@/lib/auth';
+import { isAuthError, requireGame, requireGM, requireOwnedRealmAccess } from '@/lib/auth';
 import { assignSettlementGovernor } from '@/lib/game-logic/governance';
 import { isGovernanceError } from '@/lib/game-logic/nobles';
 
@@ -24,12 +24,13 @@ export async function POST(
       await requireGM(gameId);
     }
 
+    const game = await requireGame(gameId);
     const governingNobleId = await db.transaction((tx) => assignSettlementGovernor(tx, {
       gameId,
       settlementId,
       nobleId: body.nobleId ?? null,
-      year: body.year,
-      season: body.season,
+      year: body.year ?? game.currentYear,
+      season: body.season ?? game.currentSeason,
       notes: body.notes ?? null,
       grievanceNobleId: body.grievanceNobleId ?? null,
     }));

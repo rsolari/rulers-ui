@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex, index, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex, index, primaryKey, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 import type {
   ActionAuthorRole,
@@ -124,6 +124,7 @@ export const realmsRelations = relations(realms, ({ one, many }) => ({
   ships: many(ships),
   siegeUnits: many(siegeUnits),
   guildsOrdersSocieties: many(guildsOrdersSocieties),
+  gosMemberships: many(gosRealms),
   nobleTitles: many(nobleTitles),
   governanceEvents: many(governanceEvents),
   turnReports: many(turnReports),
@@ -677,6 +678,15 @@ export const guildsOrdersSocieties = sqliteTable('guilds_orders_societies', {
   firstBuildingId: text('first_building_id').references((): AnySQLiteColumn => buildings.id),
 });
 
+export const gosRealms = sqliteTable('gos_realms', {
+  gosId: text('gos_id').notNull().references(() => guildsOrdersSocieties.id),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.gosId, table.realmId], name: 'gos_realms_pk' }),
+  realmIdx: index('gos_realms_realm_idx').on(table.realmId),
+  gosIdx: index('gos_realms_gos_idx').on(table.gosId),
+}));
+
 export const guildsOrdersSocietiesRelations = relations(guildsOrdersSocieties, ({ one, many }) => ({
   realm: one(realms, { fields: [guildsOrdersSocieties.realmId], references: [realms.id] }),
   leader: one(nobles, {
@@ -696,8 +706,14 @@ export const guildsOrdersSocietiesRelations = relations(guildsOrdersSocieties, (
   armies: many(armies, { relationName: 'gos_armies' }),
   ships: many(ships, { relationName: 'gos_ships' }),
   fleets: many(fleets, { relationName: 'gos_fleets' }),
+  realmMemberships: many(gosRealms),
   nobleTitles: many(nobleTitles),
   governanceEvents: many(governanceEvents),
+}));
+
+export const gosRealmsRelations = relations(gosRealms, ({ one }) => ({
+  gos: one(guildsOrdersSocieties, { fields: [gosRealms.gosId], references: [guildsOrdersSocieties.id] }),
+  realm: one(realms, { fields: [gosRealms.realmId], references: [realms.id] }),
 }));
 
 // ============================================================

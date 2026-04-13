@@ -107,6 +107,7 @@ describe('GET /api/game/[gameId]/nobles', () => {
       ],
       [{ id: 'settlement-1', name: 'Stonewatch', governingNobleId: 'noble-1' }],
       [{ id: 'army-1', name: 'First Army', generalId: 'noble-2' }],
+      [{ id: 'fleet-1', name: 'Western Fleet', admiralId: 'noble-1' }],
       [{ id: 'gos-1', name: 'Silver Guild', leaderId: null }],
     );
 
@@ -123,7 +124,8 @@ describe('GET /api/game/[gameId]/nobles', () => {
         isHeir: false,
         isActingRuler: false,
         title: 'Ruler',
-        governs: ['Ruler', 'Stonewatch Governor'],
+        governs: ['Ruler', 'Stonewatch Governor', 'Western Fleet Admiral'],
+        officeAssignments: ['Stonewatch Governor', 'Western Fleet Admiral'],
         estateLevel: 'Luxurious',
         estateCost: 0,
       },
@@ -137,6 +139,7 @@ describe('GET /api/game/[gameId]/nobles', () => {
         isActingRuler: false,
         title: 'First Army General',
         governs: ['First Army General'],
+        officeAssignments: ['First Army General'],
         estateLevel: null,
         estateCost: 0,
       },

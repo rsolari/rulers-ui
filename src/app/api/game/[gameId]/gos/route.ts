@@ -5,6 +5,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireRealmOwner } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
+import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -129,6 +130,21 @@ export async function POST(
     await Promise.all(realmIds.map((realmId) => requireRealmOwner(gameId, realmId)));
     const requestedPrimaryRealmId = typeof body.realmId === 'string' ? body.realmId.trim() : '';
     const primaryRealmId = realmIds.includes(requestedPrimaryRealmId) ? requestedPrimaryRealmId : realmIds[0];
+    const leaderId = typeof body.leaderId === 'string' && body.leaderId.trim()
+      ? body.leaderId.trim()
+      : null;
+
+    if (leaderId) {
+      const leader = await db.select().from(nobles)
+        .where(eq(nobles.id, leaderId))
+        .get();
+
+      if (!leader || leader.realmId !== primaryRealmId) {
+        return NextResponse.json({ error: 'Leader not found for this realm' }, { status: 404 });
+      }
+
+      assertNobleCanHoldExclusiveOffice(db, leader, primaryRealmId, 'leadership');
+    }
 
     const id = uuid();
     db.transaction((tx) => {
@@ -138,7 +154,7 @@ export async function POST(
         name: body.name,
         type: body.type,
         focus: body.focus || null,
-        leaderId: body.leaderId || null,
+        leaderId,
         treasury: Number.isInteger(body.treasury) ? body.treasury : 0,
         creationSource: body.creationSource || null,
         monopolyProduct: body.monopolyProduct || null,
@@ -166,6 +182,10 @@ export async function POST(
     });
   } catch (error) {
     if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isGovernanceError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

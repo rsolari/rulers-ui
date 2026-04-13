@@ -5,6 +5,7 @@ import {
   GovernanceError,
   type DatabaseExecutor,
   assertNobleCanHoldOffice,
+  assertNobleCanHoldExclusiveOffice,
   assertRealmNotFallen,
   clearNobleOffices,
   clearRealmOffices,
@@ -288,7 +289,9 @@ export function assignSettlementGovernor(
   }
 
   const noble = requireRealmNoble(database, settlement.realmId, input.nobleId);
-  assertNobleCanHoldOffice(noble, settlement.realmId, 'the governorship');
+  assertNobleCanHoldExclusiveOffice(database, noble, settlement.realmId, 'the governorship', {
+    settlementId: settlement.id,
+  });
 
   database.update(settlements)
     .set({ governingNobleId: noble.id })
@@ -379,7 +382,9 @@ export function assignArmyGeneral(
   }
 
   const noble = requireRealmNoble(database, army.realmId, input.nobleId);
-  assertNobleCanHoldOffice(noble, army.realmId, 'the generalship');
+  assertNobleCanHoldExclusiveOffice(database, noble, army.realmId, 'the generalship', {
+    armyId: army.id,
+  });
 
   database.update(armies).set({ generalId: noble.id }).where(eq(armies.id, army.id)).run();
 
@@ -453,7 +458,9 @@ export function assignFleetAdmiral(
   }
 
   const noble = requireRealmNoble(database, fleet.realmId, input.nobleId);
-  assertNobleCanHoldOffice(noble, fleet.realmId, 'the admiralty');
+  assertNobleCanHoldExclusiveOffice(database, noble, fleet.realmId, 'the admiralty', {
+    fleetId: fleet.id,
+  });
 
   database.update(fleets).set({ admiralId: noble.id }).where(eq(fleets.id, fleet.id)).run();
 
@@ -527,7 +534,9 @@ export function assignGosLeader(
   }
 
   const noble = requireRealmNoble(database, gos.realmId, input.nobleId);
-  assertNobleCanHoldOffice(noble, gos.realmId, 'leadership');
+  assertNobleCanHoldExclusiveOffice(database, noble, gos.realmId, 'leadership', {
+    gosId: gos.id,
+  });
 
   database.update(guildsOrdersSocieties).set({ leaderId: noble.id }).where(eq(guildsOrdersSocieties.id, gos.id)).run();
 

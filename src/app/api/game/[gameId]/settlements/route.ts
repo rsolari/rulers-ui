@@ -6,6 +6,7 @@ import { v4 as uuid } from 'uuid';
 import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
 import { getAvailableSettlementHexId, getLandHexById } from '@/lib/game-logic/maps';
 import { recomputeGameInitState } from '@/lib/game-init-state';
+import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
 
 type GoverningNobleSummary = {
   id: string;
@@ -167,6 +168,25 @@ export async function POST(
     }
 
     const hexId = requestedHex?.id ?? await getAvailableSettlementHexId(db, territory.id);
+    const governingNobleId = typeof body.governingNobleId === 'string' && body.governingNobleId.trim()
+      ? body.governingNobleId.trim()
+      : null;
+
+    if (governingNobleId) {
+      const governingRealmId = body.realmId ?? territory.realmId;
+      const governingNoble = await db.select().from(nobles)
+        .where(and(
+          eq(nobles.id, governingNobleId),
+          eq(nobles.realmId, governingRealmId),
+        ))
+        .get();
+
+      if (!governingNoble) {
+        return NextResponse.json({ error: 'Governing noble not found for this realm' }, { status: 404 });
+      }
+
+      assertNobleCanHoldExclusiveOffice(db, governingNoble, governingRealmId, 'the governorship');
+    }
 
     const id = uuid();
     await db.insert(settlements).values({
@@ -176,7 +196,7 @@ export async function POST(
       realmId: body.realmId ?? territory.realmId,
       name: body.name,
       size: body.size || 'Village',
-      governingNobleId: body.governingNobleId || null,
+      governingNobleId,
     });
 
     await recomputeGameInitState(gameId);
@@ -184,6 +204,10 @@ export async function POST(
     return NextResponse.json({ id, ...body });
   } catch (error) {
     if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isGovernanceError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
@@ -242,7 +266,37 @@ export async function PATCH(
     if (body.name !== undefined) updates.name = body.name;
     if (body.size !== undefined) updates.size = body.size;
     if (body.realmId !== undefined) updates.realmId = body.realmId;
-    if (body.governingNobleId !== undefined) updates.governingNobleId = body.governingNobleId;
+    if (body.governingNobleId !== undefined) {
+      const governingNobleId = typeof body.governingNobleId === 'string' && body.governingNobleId.trim()
+        ? body.governingNobleId.trim()
+        : null;
+      const governingRealmId = typeof body.realmId === 'string' && body.realmId.trim()
+        ? body.realmId.trim()
+        : settlement.realmId;
+
+      if (governingNobleId) {
+        if (!governingRealmId) {
+          return NextResponse.json({ error: 'Settlement has no realm to assign a governor' }, { status: 400 });
+        }
+
+        const governingNoble = await db.select().from(nobles)
+          .where(and(
+            eq(nobles.id, governingNobleId),
+            eq(nobles.realmId, governingRealmId),
+          ))
+          .get();
+
+        if (!governingNoble) {
+          return NextResponse.json({ error: 'Governing noble not found for this realm' }, { status: 404 });
+        }
+
+        assertNobleCanHoldExclusiveOffice(db, governingNoble, governingRealmId, 'the governorship', {
+          settlementId: settlement.id,
+        });
+      }
+
+      updates.governingNobleId = governingNobleId;
+    }
 
     await db.update(settlements)
       .set(updates)
@@ -262,6 +316,10 @@ export async function PATCH(
     return NextResponse.json({ updated: true });
   } catch (error) {
     if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isGovernanceError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
@@ -290,6 +348,10 @@ export async function DELETE(
     return NextResponse.json({ deleted: true });
   } catch (error) {
     if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isGovernanceError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

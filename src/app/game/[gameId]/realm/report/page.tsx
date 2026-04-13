@@ -7,12 +7,12 @@ import { useRole } from '@/hooks/use-role';
 export default function ReportPage() {
   const params = useParams();
   const gameId = params.gameId as string;
-  const { realmId } = useRole();
+  const { realmId, gamePhase } = useRole();
 
-  if (!realmId) {
+  if (!realmId || gamePhase !== 'Active') {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p className="font-heading text-ink-300">Loading report...</p>
+        <p className="font-heading text-ink-300">{gamePhase !== 'Active' ? 'Turn actions are available once the game is active.' : 'Loading report...'}</p>
       </main>
     );
   }

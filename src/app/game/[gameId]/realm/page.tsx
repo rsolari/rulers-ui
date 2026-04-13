@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import type { GameMapData } from '@/components/map/types';
+import { TerritoryHexMap } from '@/components/map/TerritoryHexMap';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -10,6 +12,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
+import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
 import type { TaxType } from '@/types/game';
 import { TurmoilSummaryCard } from '@/components/turmoil/turmoil-summary-card';
@@ -94,6 +97,7 @@ export default function RealmDashboard() {
   const [militaryData, setMilitaryData] = useState<{ troops: Array<{ type: string }>; siegeUnits: Array<{ type: string }> }>({ troops: [], siegeUnits: [] });
   const [nobles, setNobles] = useState<Array<{ id: string }>>([]);
   const [gos, setGos] = useState<Array<{ id: string; name: string; type: string; focus: string | null }>>([]);
+  const [mapData, setMapData] = useState<GameMapData | null>(null);
   const [form, setForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
   const [saving, setSaving] = useState(false);
   const [economyProjection, setEconomyProjection] = useState<EconomyProjectionDto | null>(null);
@@ -126,7 +130,7 @@ export default function RealmDashboard() {
     }
 
     async function loadRealm() {
-      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse, resourcesResponse, armiesResponse, noblesResponse, gosResponse, projectionResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse, resourcesResponse, armiesResponse, noblesResponse, gosResponse, projectionResponse, mapResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`),
         fetch(`/api/game/${gameId}/realms`),
         fetch(`/api/game/${gameId}/territories`),
@@ -137,6 +141,7 @@ export default function RealmDashboard() {
         fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/gos?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/economy/projection?realmId=${realmId}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/map`),
       ]);
 
       const gameData = await gameResponse.json();
@@ -156,6 +161,7 @@ export default function RealmDashboard() {
       setNobles(await noblesResponse.json());
       setGos(gosResponse.ok ? await gosResponse.json() : []);
       setEconomyProjection(projectionResponse.ok ? await projectionResponse.json() : null);
+      setMapData(mapResponse.ok ? await mapResponse.json() : null);
       if (realmData) {
         setForm({
           name: realmData.name,
@@ -244,6 +250,15 @@ export default function RealmDashboard() {
     }
     setFinalizingSetup(false);
   }
+
+  const territoryMapsByTerritoryId = useMemo(() => {
+    if (!mapData) return new Map<string, ReturnType<typeof buildGameTerritoryMapData>>();
+    const map = new Map<string, ReturnType<typeof buildGameTerritoryMapData>>();
+    for (const territory of territories.filter((t) => t.realmId === realmId)) {
+      map.set(territory.id, buildGameTerritoryMapData(mapData, territory.id));
+    }
+    return map;
+  }, [mapData, territories, realmId]);
 
   if (!game || !realm) {
     return (
@@ -547,11 +562,15 @@ export default function RealmDashboard() {
                 <>
                   {ownTerritories.map((territory) => {
                     const territorySettlements = settlements.filter((s) => s.territoryId === territory.id);
+                    const territoryMap = territoryMapsByTerritoryId.get(territory.id) ?? null;
                     return (
                       <div key={territory.id} className="p-3 medieval-border rounded space-y-2 border-gold-500/50">
                         <div className="flex items-center justify-between">
                           <span className="font-heading font-semibold">{territory.name}</span>
                         </div>
+                        {territoryMap ? (
+                          <TerritoryHexMap data={territoryMap} />
+                        ) : null}
                         {territorySettlements.length > 0 && (
                           <div className="space-y-1 ml-4">
                             {territorySettlements.map((settlement) => (
@@ -622,7 +641,7 @@ export default function RealmDashboard() {
         </Link>
       </div>
 
-      {realmId ? (
+      {realmId && game.gamePhase === 'Active' ? (
         <div className="mt-6">
           <PlayerTurnReportPanel gameId={gameId} realmId={realmId} compact />
         </div>

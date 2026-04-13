@@ -38,6 +38,7 @@ interface Settlement {
 interface Noble {
   id: string;
   name: string;
+  officeAssignments: string[];
 }
 
 interface BuildingOption {
@@ -203,6 +204,10 @@ export default function SettlementsPage() {
     };
   });
 
+  function getOfficeEligibleNobles(currentNobleId: string | null) {
+    return nobles.filter((noble) => noble.id === currentNobleId || noble.officeAssignments.length === 0);
+  }
+
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
       <nav className="mb-4 text-sm text-ink-300">
@@ -267,7 +272,7 @@ export default function SettlementsPage() {
                       <div className="flex-1 min-w-[200px]">
                         <NobleAssignmentSelect
                           label=""
-                          nobles={nobles}
+                          nobles={getOfficeEligibleNobles(settlement.governingNobleId)}
                           currentNobleId={settlement.governingNobleId}
                           onAssign={(nobleId) => assignGovernor(settlement.id, nobleId)}
                         />

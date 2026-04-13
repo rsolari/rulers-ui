@@ -1,4 +1,4 @@
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, ne, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { type DB } from '@/db';
 import {
@@ -89,6 +89,89 @@ export function assertNobleCanHoldOffice(
 
   if (noble.isPrisoner) {
     throw new GovernanceError(`Imprisoned nobles cannot hold ${roleLabel}`, 400);
+  }
+}
+
+type ExclusiveOfficeScope = {
+  settlementId?: string | null;
+  armyId?: string | null;
+  fleetId?: string | null;
+  gosId?: string | null;
+};
+
+function getNobleExclusiveOfficeConflict(
+  database: DatabaseExecutor,
+  nobleId: string,
+  scope: ExclusiveOfficeScope = {},
+) {
+  const settlementConflict = database.select({
+    name: settlements.name,
+  })
+    .from(settlements)
+    .where(scope.settlementId
+      ? and(eq(settlements.governingNobleId, nobleId), ne(settlements.id, scope.settlementId))
+      : eq(settlements.governingNobleId, nobleId))
+    .get();
+
+  if (settlementConflict) {
+    return `governor of ${settlementConflict.name}`;
+  }
+
+  const armyConflict = database.select({
+    name: armies.name,
+  })
+    .from(armies)
+    .where(scope.armyId
+      ? and(eq(armies.generalId, nobleId), ne(armies.id, scope.armyId))
+      : eq(armies.generalId, nobleId))
+    .get();
+
+  if (armyConflict) {
+    return `general of ${armyConflict.name}`;
+  }
+
+  const fleetConflict = database.select({
+    name: fleets.name,
+  })
+    .from(fleets)
+    .where(scope.fleetId
+      ? and(eq(fleets.admiralId, nobleId), ne(fleets.id, scope.fleetId))
+      : eq(fleets.admiralId, nobleId))
+    .get();
+
+  if (fleetConflict) {
+    return `admiral of ${fleetConflict.name}`;
+  }
+
+  const gosConflict = database.select({
+    name: guildsOrdersSocieties.name,
+  })
+    .from(guildsOrdersSocieties)
+    .where(scope.gosId
+      ? and(eq(guildsOrdersSocieties.leaderId, nobleId), ne(guildsOrdersSocieties.id, scope.gosId))
+      : eq(guildsOrdersSocieties.leaderId, nobleId))
+    .get();
+
+  if (gosConflict) {
+    return `leader of ${gosConflict.name}`;
+  }
+
+  return null;
+}
+
+export function assertNobleCanHoldExclusiveOffice(
+  database: DatabaseExecutor,
+  noble: typeof nobles.$inferSelect,
+  realmId: string,
+  roleLabel = 'office',
+  scope: ExclusiveOfficeScope = {},
+) {
+  assertNobleCanHoldOffice(noble, realmId, roleLabel);
+
+  const conflict = getNobleExclusiveOfficeConflict(database, noble.id, scope);
+
+  if (conflict) {
+    throw new GovernanceError(`${noble.name} already serves as ${conflict} and cannot also hold ${roleLabel}`, 400);
   }
 }
 

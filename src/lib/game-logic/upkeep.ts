@@ -1,6 +1,6 @@
-import type { BuildingSize, EstateLevel, TroopType, SiegeUnitType } from '@/types/game';
+import type { BuildingSize, EstateLevel, ShipType, TroopType, SiegeUnitType } from '@/types/game';
 import {
-  BUILDING_SIZE_DATA, TROOP_DEFS, SIEGE_UNIT_DEFS,
+  BUILDING_SIZE_DATA, SHIP_DEFS, TROOP_DEFS, SIEGE_UNIT_DEFS,
   ESTATE_COSTS, PRISONER_NOBLE_UPKEEP,
 } from './constants';
 
@@ -38,6 +38,17 @@ export function calculateSiegeUpkeep(
   return total;
 }
 
+export function calculateShipUpkeep(
+  ships: Array<{ type: ShipType; isReady: boolean }>,
+): number {
+  let total = 0;
+  for (const ship of ships) {
+    if (!ship.isReady) continue;
+    total += SHIP_DEFS[ship.type].upkeep;
+  }
+  return total;
+}
+
 export function calculateNobleUpkeep(
   nobles: Array<{ estateLevel: EstateLevel | null }>,
 ): number {
@@ -56,6 +67,7 @@ export function calculatePrisonerUpkeep(prisonerCount: number): number {
 export function calculateTotalUpkeep(params: {
   buildingUpkeep: number;
   troopUpkeep: number;
+  shipUpkeep?: number;
   siegeUpkeep: number;
   nobleUpkeep: number;
   prisonerUpkeep: number;
@@ -63,6 +75,7 @@ export function calculateTotalUpkeep(params: {
   return (
     params.buildingUpkeep +
     params.troopUpkeep +
+    (params.shipUpkeep ?? 0) +
     params.siegeUpkeep +
     params.nobleUpkeep +
     params.prisonerUpkeep

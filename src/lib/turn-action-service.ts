@@ -2,7 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB } from '@/db';
 import { actionComments, games, realms, settlements, territories, turnActions, turnReports } from '@/db/schema';
-import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, TROOP_DEFS } from '@/lib/game-logic/constants';
+import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { createBuilding, createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
 import type {
   ActionCommentCreateDto,
@@ -13,12 +13,14 @@ import type {
   BuildingLocationType,
   BuildingSize,
   BuildingType,
+  ConstructShipFinancialAction,
   CurrentTurnResponseDto,
   FinancialAction,
   FortificationMaterial,
   ReportStatus,
   RecruitFinancialAction,
   Season,
+  ShipType,
   TaxChangeFinancialAction,
   TaxType,
   TurnPhase,
@@ -127,6 +129,8 @@ function serializeAction(action: TurnActionRow, comments: ActionCommentRecord[])
     financialType: (action.financialType as FinancialAction['type'] | null) ?? null,
     buildingType: (action.buildingType as BuildingType | null) ?? null,
     troopType: (action.troopType as TroopType | null) ?? null,
+    shipType: (action.shipType as ShipType | null) ?? null,
+    fleetId: action.fleetId ?? null,
     settlementId: action.settlementId ?? null,
     territoryId: action.territoryId ?? null,
     material: (action.material as FortificationMaterial | null) ?? null,
@@ -179,7 +183,7 @@ function deriveReportStatus(actions: TurnActionRow[]): ReportStatus {
 }
 
 function getFinancialActionType(value: string | null | undefined): FinancialAction['type'] | null {
-  if (value === 'build' || value === 'recruit' || value === 'taxChange' || value === 'spending') {
+  if (value === 'build' || value === 'recruit' || value === 'constructShip' || value === 'taxChange' || value === 'spending') {
     return value;
   }
   return null;
@@ -242,6 +246,14 @@ function assertValidTroopType(value: string | null | undefined) {
     throw new TurnActionError('Unknown troop type.', 400, 'invalid_troop_type', { troopType: value });
   }
   return value as TroopType;
+}
+
+function assertValidShipType(value: string | null | undefined) {
+  if (!value) return null;
+  if (!(value in SHIP_DEFS)) {
+    throw new TurnActionError('Unknown ship type.', 400, 'invalid_ship_type', { shipType: value });
+  }
+  return value as ShipType;
 }
 
 function assertValidTaxType(value: string | null | undefined) {
@@ -315,6 +327,18 @@ function mapTurnActionRowToFinancialAction(action: TurnActionRow): FinancialActi
       type,
       troopType: action.troopType as RecruitFinancialAction['troopType'],
       settlementId: action.settlementId ?? undefined,
+      technicalKnowledgeKey: action.technicalKnowledgeKey ?? undefined,
+      description: action.description || undefined,
+      cost: action.cost,
+    };
+  }
+
+  if (type === 'constructShip') {
+    return {
+      type,
+      shipType: action.shipType as ConstructShipFinancialAction['shipType'],
+      settlementId: action.settlementId ?? undefined,
+      fleetId: action.fleetId ?? undefined,
       technicalKnowledgeKey: action.technicalKnowledgeKey ?? undefined,
       description: action.description || undefined,
       cost: action.cost,
@@ -403,6 +427,8 @@ function buildDraftFields(
       financialType: null,
       buildingType: null,
       troopType: null,
+      shipType: null,
+      fleetId: null,
       settlementId: null,
       territoryId: null,
       material: null,
@@ -426,7 +452,9 @@ function buildDraftFields(
 
   const buildingType = assertValidBuildingType(input.buildingType);
   const troopType = assertValidTroopType(input.troopType);
+  const shipType = assertValidShipType(input.shipType);
   const settlementId = normalizeNullableString(input.settlementId);
+  const fleetId = normalizeNullableString(input.fleetId);
   const territoryId = normalizeNullableString(input.territoryId);
   const material = assertValidMaterial(normalizeNullableString(input.material));
   const wallSize = assertValidBuildingSize(normalizeNullableString(input.wallSize));
@@ -446,7 +474,9 @@ function buildDraftFields(
     financialType,
     buildingType: financialType === 'build' ? buildingType : null,
     troopType: financialType === 'recruit' ? troopType : null,
-    settlementId: financialType === 'build' || financialType === 'recruit' ? settlementId : null,
+    shipType: financialType === 'constructShip' ? shipType : null,
+    fleetId: financialType === 'constructShip' ? fleetId : null,
+    settlementId: financialType === 'build' || financialType === 'recruit' || financialType === 'constructShip' ? settlementId : null,
     territoryId: financialType === 'build' ? territoryId : null,
     material: financialType === 'build' ? material : null,
     wallSize: financialType === 'build' ? wallSize : null,
@@ -457,7 +487,7 @@ function buildDraftFields(
     takesBuildingSlot: financialType === 'build' ? normalizeNullableBoolean(input.takesBuildingSlot) : null,
     constructionTurns: financialType === 'build' ? normalizeNullableInteger(input.constructionTurns) : null,
     taxType: financialType === 'taxChange' ? taxType : null,
-    technicalKnowledgeKey: financialType === 'build' || financialType === 'recruit'
+    technicalKnowledgeKey: financialType === 'build' || financialType === 'recruit' || financialType === 'constructShip'
       ? normalizeNullableString(input.technicalKnowledgeKey)
       : null,
     cost: normalizeCost(input.cost),
@@ -563,6 +593,16 @@ function assertSubmittableAction(
     }
     if (!action.settlementId) {
       throw new TurnActionError('Recruit actions require a settlement.', 400, 'recruit_action_missing_settlement');
+    }
+    return;
+  }
+
+  if (financialType === 'constructShip') {
+    if (!assertValidShipType(action.shipType)) {
+      throw new TurnActionError('Ship construction actions require a valid ship type.', 400, 'construct_ship_missing_ship');
+    }
+    if (!action.settlementId) {
+      throw new TurnActionError('Ship construction actions require a settlement.', 400, 'construct_ship_missing_settlement');
     }
     return;
   }

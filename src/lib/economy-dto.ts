@@ -8,6 +8,7 @@ export interface EconomyLedgerEntryDto {
   settlementId?: string | null;
   buildingId?: string | null;
   troopId?: string | null;
+  shipId?: string | null;
   siegeUnitId?: string | null;
   tradeRouteId?: string | null;
   reportId?: string | null;

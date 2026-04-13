@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { type DB } from '@/db';
 import {
   armies,
+  fleets,
   governanceEvents,
   guildsOrdersSocieties,
   nobleTitles,
@@ -111,6 +112,7 @@ export function createGovernanceEvent(
     relatedNobleId?: string | null;
     settlementId?: string | null;
     armyId?: string | null;
+    fleetId?: string | null;
     gosId?: string | null;
     payload?: Record<string, unknown>;
   },
@@ -126,6 +128,7 @@ export function createGovernanceEvent(
     relatedNobleId: input.relatedNobleId ?? null,
     settlementId: input.settlementId ?? null,
     armyId: input.armyId ?? null,
+    fleetId: input.fleetId ?? null,
     gosId: input.gosId ?? null,
     payload: JSON.stringify(input.payload ?? {}),
     description: input.description,
@@ -149,6 +152,7 @@ export function grantTitle(
     notes?: string | null;
     settlementId?: string | null;
     armyId?: string | null;
+    fleetId?: string | null;
     gosId?: string | null;
   },
 ) {
@@ -161,6 +165,7 @@ export function grantTitle(
     label: input.label,
     settlementId: input.settlementId ?? null,
     armyId: input.armyId ?? null,
+    fleetId: input.fleetId ?? null,
     gosId: input.gosId ?? null,
     isActive: true,
     grantedYear: input.year,
@@ -183,6 +188,7 @@ export function revokeTitles(
     type?: NobleTitleType;
     settlementId?: string;
     armyId?: string;
+    fleetId?: string;
     gosId?: string;
   },
 ) {
@@ -192,6 +198,7 @@ export function revokeTitles(
   if (params.type) predicates.push(eq(nobleTitles.type, params.type));
   if (params.settlementId) predicates.push(eq(nobleTitles.settlementId, params.settlementId));
   if (params.armyId) predicates.push(eq(nobleTitles.armyId, params.armyId));
+  if (params.fleetId) predicates.push(eq(nobleTitles.fleetId, params.fleetId));
   if (params.gosId) predicates.push(eq(nobleTitles.gosId, params.gosId));
 
   database.update(nobleTitles)
@@ -231,6 +238,11 @@ export function clearNobleOffices(
     .where(eq(armies.generalId, nobleId))
     .run();
 
+  database.update(fleets)
+    .set({ admiralId: null })
+    .where(eq(fleets.admiralId, nobleId))
+    .run();
+
   database.update(guildsOrdersSocieties)
     .set({ leaderId: null })
     .where(eq(guildsOrdersSocieties.leaderId, nobleId))
@@ -258,6 +270,11 @@ export function clearRealmOffices(
   database.update(armies)
     .set({ generalId: null })
     .where(eq(armies.realmId, realmId))
+    .run();
+
+  database.update(fleets)
+    .set({ admiralId: null })
+    .where(eq(fleets.realmId, realmId))
     .run();
 
   database.update(guildsOrdersSocieties)

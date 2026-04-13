@@ -55,6 +55,19 @@ function getTroopRecruitmentOptions(gameId: string, realmId: string, recruitment
   });
 }
 
+function getTroopRecruitmentOptionsBySettlement(
+  gameId: string,
+  realmId: string,
+  settlementIds: string[],
+) {
+  return Object.fromEntries(
+    settlementIds.map((settlementId) => [
+      settlementId,
+      getTroopRecruitmentOptions(gameId, realmId, settlementId),
+    ]),
+  );
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ gameId: string }> },
@@ -84,10 +97,11 @@ export async function GET(
     const generalById = new Map(generals.map((general) => [general.id, general]));
     const troopList = await db.select().from(troops).where(eq(troops.realmId, realmId)).all();
     const siegeList = await db.select().from(siegeUnits).where(eq(siegeUnits.realmId, realmId)).all();
-    const recruitmentSettlement = await db.select({ id: settlements.id })
+    const recruitmentSettlements = await db.select({ id: settlements.id })
       .from(settlements)
       .where(eq(settlements.realmId, realmId))
-      .get();
+      .all();
+    const recruitmentSettlementIds = recruitmentSettlements.map((settlement) => settlement.id);
 
     return NextResponse.json({
       armies: armyList.map((army) => ({
@@ -99,7 +113,12 @@ export async function GET(
       troopRecruitmentOptions: getTroopRecruitmentOptions(
         gameId,
         realmId,
-        recruitmentSettlement?.id ?? null,
+        recruitmentSettlementIds[0] ?? null,
+      ),
+      troopRecruitmentOptionsBySettlement: getTroopRecruitmentOptionsBySettlement(
+        gameId,
+        realmId,
+        recruitmentSettlementIds,
       ),
     });
   } catch (error) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { ArmyMarker } from '@/components/map/ArmyMarker';
 import { FeatureIndicator } from '@/components/map/FeatureIndicator';
+import { FleetMarker } from '@/components/map/FleetMarker';
 import { HexTile } from '@/components/map/HexTile';
 import { HexTooltip } from '@/components/map/HexTooltip';
 import { MapLegend } from '@/components/map/MapLegend';
@@ -62,6 +63,7 @@ interface HexDetailData {
   features: MapHexData['features'];
   settlement: MapHexData['settlement'];
   armies: MapHexData['armies'];
+  fleets: MapHexData['fleets'];
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -168,6 +170,7 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
         features: hex.features,
         settlement: hex.settlement,
         armies: hex.armies,
+        fleets: hex.fleets,
       });
 
       for (const feature of hex.features) {
@@ -409,16 +412,24 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
         {hex.settlement ? (
           <SettlementMarker
             x={hex.centerX}
-            y={hex.centerY + (hex.armies.length > 0 ? -4 : 0)}
+            y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -4 : 0)}
             size={hex.settlement.size}
           />
         ) : null}
         {hex.armies.length > 0 ? (
           <ArmyMarker
-            x={hex.centerX + (hex.settlement ? 10 : 0)}
+            x={hex.centerX + (hex.settlement ? 10 : 0) - (hex.fleets.length > 0 ? 8 : 0)}
             y={hex.centerY + 10}
             fill={realmColorById.get(hex.armies[0].realmId) ?? '#4a3728'}
             count={hex.armies.length}
+          />
+        ) : null}
+        {hex.fleets.length > 0 ? (
+          <FleetMarker
+            x={hex.centerX + (hex.settlement ? 10 : 0) + (hex.armies.length > 0 ? 8 : 0)}
+            y={hex.centerY + 10}
+            fill={realmColorById.get(hex.fleets[0].realmId) ?? '#2a4a7a'}
+            count={hex.fleets.length}
           />
         ) : null}
       </g>

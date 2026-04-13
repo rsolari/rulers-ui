@@ -2,12 +2,15 @@ import { normalizeFinancialActions } from '@/lib/financial-actions';
 import {
   RuleValidationError,
   prepareRealmBuildingCreation,
+  prepareRealmShipConstruction,
   prepareRealmTroopRecruitment,
   type PreparedBuildingCreation,
+  type PreparedShipConstruction,
   type PreparedTroopRecruitment,
 } from '@/lib/rules-action-service';
 import type {
   BuildFinancialAction,
+  ConstructShipFinancialAction,
   FinancialAction,
   RecruitFinancialAction,
 } from '@/types/game';
@@ -18,6 +21,7 @@ export interface PreparedTurnReportFinancialActions {
   actions: FinancialAction[];
   buildPreparations: Map<number, PreparedBuildingCreation>;
   troopPreparations: Map<number, PreparedTroopRecruitment>;
+  shipPreparations: Map<number, PreparedShipConstruction>;
 }
 
 function withPreparedBuildingFields(
@@ -49,6 +53,18 @@ function withPreparedRecruitmentFields(
   };
 }
 
+function withPreparedShipFields(
+  action: ConstructShipFinancialAction,
+  prepared: PreparedShipConstruction,
+): ConstructShipFinancialAction {
+  return {
+    ...action,
+    settlementId: prepared.row.constructionSettlementId ?? null,
+    fleetId: prepared.row.fleetId ?? null,
+    cost: prepared.cost.total,
+  };
+}
+
 export function prepareTurnReportFinancialActions(
   gameId: string,
   realmId: string,
@@ -67,6 +83,7 @@ export function prepareTurnReportFinancialActions(
   const actions: FinancialAction[] = [];
   const buildPreparations = new Map<number, PreparedBuildingCreation>();
   const troopPreparations = new Map<number, PreparedTroopRecruitment>();
+  const shipPreparations = new Map<number, PreparedShipConstruction>();
 
   for (const [index, action] of normalizedActions.entries()) {
     if (action.type === 'build') {
@@ -96,17 +113,31 @@ export function prepareTurnReportFinancialActions(
       continue;
     }
 
+    if (action.type === 'constructShip') {
+      const prepared = prepareRealmShipConstruction(gameId, realmId, {
+        realmId,
+        type: action.shipType,
+        settlementId: action.settlementId ?? null,
+        fleetId: action.fleetId ?? null,
+        technicalKnowledgeKey: action.technicalKnowledgeKey ?? null,
+      }, { database });
+      shipPreparations.set(index, prepared);
+      actions.push(withPreparedShipFields(action, prepared));
+      continue;
+    }
+
     if (action.type === 'taxChange') {
       actions.push({ ...action, cost: 0 });
       continue;
     }
 
-    actions.push({ ...action, cost: Math.max(action.cost, 0) });
+    actions.push({ ...action, cost: Math.max(action.cost ?? 0, 0) });
   }
 
   return {
     actions,
     buildPreparations,
     troopPreparations,
+    shipPreparations,
   };
 }

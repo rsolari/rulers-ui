@@ -58,6 +58,13 @@ describe('ArmyPage', () => {
         troops: [],
         siegeUnits: [],
         troopRecruitmentOptions: [],
+        troopRecruitmentOptionsBySettlement: {},
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        fleets: [],
+        ships: [],
+        shipConstructionOptions: [],
+        shipConstructionOptionsBySettlement: {},
       }))
       .mockResolvedValueOnce(jsonResponse([
         { id: 'settlement-1', name: 'Capital', size: 'Town', territoryId: 'territory-1' },
@@ -77,7 +84,17 @@ describe('ArmyPage', () => {
         troops: [],
         siegeUnits: [],
         troopRecruitmentOptions: [],
-      })));
+        troopRecruitmentOptionsBySettlement: {},
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        fleets: [],
+        ships: [],
+        shipConstructionOptions: [],
+        shipConstructionOptionsBySettlement: {},
+      }))
+      .mockResolvedValueOnce(jsonResponse([
+        { id: 'settlement-1', name: 'Capital', size: 'Town', territoryId: 'territory-1' },
+      ])));
   });
 
   afterEach(() => {
@@ -90,7 +107,7 @@ describe('ArmyPage', () => {
     render(<ArmyPage />);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch).toHaveBeenCalledTimes(3);
     });
 
     await user.click(screen.getByRole('button', { name: /\+ new army/i }));
@@ -98,10 +115,10 @@ describe('ArmyPage', () => {
     await user.click(screen.getByText('Create Army', { selector: 'button' }));
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(4);
+      expect(fetch).toHaveBeenCalledTimes(5);
     });
 
-    const postCall = vi.mocked(fetch).mock.calls[2];
+    const postCall = vi.mocked(fetch).mock.calls[3];
     const requestInit = postCall?.[1] as RequestInit | undefined;
     expect(postCall?.[0]).toBe('/api/game/game-1/armies');
     expect(requestInit).toMatchObject({ method: 'POST' });

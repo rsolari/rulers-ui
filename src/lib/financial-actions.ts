@@ -4,15 +4,18 @@ import type {
   BuildingLocationType,
   BuildingSize,
   BuildingType,
+  ConstructShipFinancialAction,
   FinancialAction,
   FortificationMaterial,
   RecruitFinancialAction,
+  ShipType,
   TaxChangeFinancialAction,
   TroopType,
 } from '@/types/game';
 
 const BUILDING_TYPES = Object.keys(BUILDING_DEFS) as BuildingType[];
 const TROOP_TYPES = Object.keys(TROOP_DEFS) as TroopType[];
+const SHIP_TYPES = ['Galley', 'WarGalley', 'Galleass', 'Cog', 'Holk', 'Carrack', 'Galleon', 'Caravel'] as ShipType[];
 const BUILDING_SIZES: BuildingSize[] = ['Tiny', 'Small', 'Medium', 'Large', 'Colossal'];
 const LOCATION_TYPES: BuildingLocationType[] = ['settlement', 'territory'];
 const TAX_TYPES: TaxChangeFinancialAction['taxType'][] = ['Tribute', 'Levy'];
@@ -20,6 +23,7 @@ const MATERIALS: FortificationMaterial[] = ['Timber', 'Stone'];
 
 export const BUILDING_ACTION_OPTIONS = BUILDING_TYPES.map((value) => ({ value, label: value }));
 export const TROOP_ACTION_OPTIONS = TROOP_TYPES.map((value) => ({ value, label: value }));
+export const SHIP_ACTION_OPTIONS = SHIP_TYPES.map((value) => ({ value, label: value }));
 export const TAX_ACTION_OPTIONS = TAX_TYPES.map((value) => ({ value, label: value }));
 export const WALL_SIZE_OPTIONS = ['Small', 'Medium', 'Large'].map((value) => ({ value, label: value }));
 export const FORTIFICATION_MATERIAL_OPTIONS = MATERIALS.map((value) => ({ value, label: value }));
@@ -41,6 +45,10 @@ function isBuildingType(value: unknown): value is BuildingType {
 
 function isTroopType(value: unknown): value is TroopType {
   return typeof value === 'string' && TROOP_TYPES.includes(value as TroopType);
+}
+
+function isShipType(value: unknown): value is ShipType {
+  return typeof value === 'string' && SHIP_TYPES.includes(value as ShipType);
 }
 
 function isBuildingSize(value: unknown): value is BuildingSize {
@@ -101,6 +109,15 @@ export function createEmptyFinancialAction(type: FinancialAction['type'] = 'spen
         description: '',
         cost: 0,
       };
+    case 'constructShip':
+      return {
+        type,
+        shipType: 'Galley',
+        settlementId: null,
+        fleetId: null,
+        description: '',
+        cost: 0,
+      };
     case 'taxChange':
       return {
         type,
@@ -157,6 +174,20 @@ function normalizeRecruitFinancialAction(record: Record<string, unknown>): Recru
   };
 }
 
+function normalizeConstructShipFinancialAction(record: Record<string, unknown>): ConstructShipFinancialAction | null {
+  if (!isShipType(record.shipType)) return null;
+
+  return {
+    type: 'constructShip',
+    shipType: record.shipType,
+    settlementId: toOptionalString(record.settlementId),
+    fleetId: toOptionalString(record.fleetId),
+    technicalKnowledgeKey: toOptionalString(record.technicalKnowledgeKey) ?? undefined,
+    description: typeof record.description === 'string' ? record.description : '',
+    cost: toOptionalNumber(record.cost),
+  };
+}
+
 function normalizeTaxChangeFinancialAction(record: Record<string, unknown>): TaxChangeFinancialAction | null {
   if (!isTaxType(record.taxType)) return null;
 
@@ -184,6 +215,8 @@ export function normalizeFinancialAction(value: unknown): FinancialAction | null
       return normalizeBuildFinancialAction(value);
     case 'recruit':
       return normalizeRecruitFinancialAction(value);
+    case 'constructShip':
+      return normalizeConstructShipFinancialAction(value);
     case 'taxChange':
       return normalizeTaxChangeFinancialAction(value);
     case 'spending':

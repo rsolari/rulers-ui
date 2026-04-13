@@ -21,8 +21,10 @@ const APP_TABLES = [
   'resource_sites',
   'buildings',
   'troops',
+  'ships',
   'siege_units',
   'armies',
+  'fleets',
   'trade_routes',
   'guilds_orders_societies',
   'nobles',
@@ -321,6 +323,29 @@ function createBaseSchema(database: Database.Database) {
       FOREIGN KEY (destination_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
     );
 
+    CREATE TABLE IF NOT EXISTS fleets (
+      id text PRIMARY KEY NOT NULL,
+      realm_id text NOT NULL,
+      gos_id text,
+      name text NOT NULL,
+      admiral_id text,
+      home_settlement_id text,
+      location_territory_id text NOT NULL,
+      destination_territory_id text,
+      location_hex_id text,
+      destination_hex_id text,
+      movement_turns_remaining integer NOT NULL DEFAULT 0,
+      water_zone_type text NOT NULL DEFAULT 'coast',
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (admiral_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (home_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (location_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (destination_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (location_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (destination_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+    );
+
     CREATE TABLE IF NOT EXISTS troops (
       id text PRIMARY KEY NOT NULL,
       realm_id text NOT NULL,
@@ -340,6 +365,27 @@ function createBaseSchema(database: Database.Database) {
       FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (garrison_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (recruitment_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS ships (
+      id text PRIMARY KEY NOT NULL,
+      realm_id text NOT NULL,
+      gos_id text,
+      type text NOT NULL,
+      class text NOT NULL,
+      quality text NOT NULL,
+      condition text NOT NULL DEFAULT 'Ready',
+      fleet_id text,
+      garrison_settlement_id text,
+      construction_settlement_id text,
+      construction_year integer,
+      construction_season text,
+      construction_turns_remaining integer NOT NULL DEFAULT 0,
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (fleet_id) REFERENCES fleets(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (garrison_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (construction_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS siege_units (
@@ -425,6 +471,7 @@ function createBaseSchema(database: Database.Database) {
       label text NOT NULL,
       settlement_id text,
       army_id text,
+      fleet_id text,
       gos_id text,
       is_active integer NOT NULL DEFAULT true,
       granted_year integer NOT NULL,
@@ -437,6 +484,7 @@ function createBaseSchema(database: Database.Database) {
       FOREIGN KEY (noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (fleet_id) REFERENCES fleets(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
 
@@ -451,6 +499,7 @@ function createBaseSchema(database: Database.Database) {
       related_noble_id text,
       settlement_id text,
       army_id text,
+      fleet_id text,
       gos_id text,
       payload text NOT NULL DEFAULT '{}',
       description text NOT NULL,
@@ -462,6 +511,7 @@ function createBaseSchema(database: Database.Database) {
       FOREIGN KEY (related_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (fleet_id) REFERENCES fleets(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
 
@@ -509,6 +559,8 @@ function createBaseSchema(database: Database.Database) {
       financial_type text,
       building_type text,
       troop_type text,
+      ship_type text,
+      fleet_id text,
       settlement_id text,
       territory_id text,
       material text,
@@ -637,6 +689,7 @@ function createBaseSchema(database: Database.Database) {
       settlement_id text,
       building_id text,
       troop_id text,
+      ship_id text,
       siege_unit_id text,
       trade_route_id text,
       report_id text,
@@ -1448,6 +1501,81 @@ function ensureMapSchema(database: Database.Database) {
   }
 }
 
+function ensureNavalSchema(database: Database.Database) {
+  if (!tableExists(database, 'fleets')) {
+    database.exec(`
+      CREATE TABLE fleets (
+        id text PRIMARY KEY NOT NULL,
+        realm_id text NOT NULL,
+        gos_id text,
+        name text NOT NULL,
+        admiral_id text,
+        home_settlement_id text,
+        location_territory_id text NOT NULL,
+        destination_territory_id text,
+        location_hex_id text,
+        destination_hex_id text,
+        movement_turns_remaining integer NOT NULL DEFAULT 0,
+        water_zone_type text NOT NULL DEFAULT 'coast',
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (admiral_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (home_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (location_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (destination_territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (location_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (destination_hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  if (!tableExists(database, 'ships')) {
+    database.exec(`
+      CREATE TABLE ships (
+        id text PRIMARY KEY NOT NULL,
+        realm_id text NOT NULL,
+        gos_id text,
+        type text NOT NULL,
+        class text NOT NULL,
+        quality text NOT NULL,
+        condition text NOT NULL DEFAULT 'Ready',
+        fleet_id text,
+        garrison_settlement_id text,
+        construction_settlement_id text,
+        construction_year integer,
+        construction_season text,
+        construction_turns_remaining integer NOT NULL DEFAULT 0,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (fleet_id) REFERENCES fleets(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (garrison_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (construction_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  addColumnIfMissing(database, 'noble_titles', 'fleet_id text', 'fleet_id');
+  addColumnIfMissing(database, 'governance_events', 'fleet_id text', 'fleet_id');
+  addColumnIfMissing(database, 'turn_actions', 'ship_type text', 'ship_type');
+  addColumnIfMissing(database, 'turn_actions', 'fleet_id text', 'fleet_id');
+  addColumnIfMissing(database, 'economic_entries', 'ship_id text', 'ship_id');
+  addColumnIfMissing(database, 'fleets', 'gos_id text', 'gos_id');
+  addColumnIfMissing(database, 'ships', 'gos_id text', 'gos_id');
+  addColumnIfMissing(database, 'ships', 'construction_year integer', 'construction_year');
+  addColumnIfMissing(database, 'ships', 'construction_season text', 'construction_season');
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS fleets_realm_idx
+      ON fleets (realm_id);
+    CREATE INDEX IF NOT EXISTS ships_realm_idx
+      ON ships (realm_id);
+    CREATE INDEX IF NOT EXISTS ships_fleet_idx
+      ON ships (fleet_id);
+    CREATE INDEX IF NOT EXISTS fleets_admiral_idx
+      ON fleets (admiral_id);
+  `);
+}
+
 function createIndexes(database: Database.Database) {
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS game_maps_game_id_unique
@@ -1519,6 +1647,7 @@ export function initializeDatabaseSchema(database: Database.Database) {
 
   ensureEconomySchema(database);
   ensureGovernanceSchema(database);
+  ensureNavalSchema(database);
 
   if (tableExists(database, 'nobles') && columnExists(database, 'nobles', 'estate_level')) {
     migrateNoblesDropEstateLevel(database);

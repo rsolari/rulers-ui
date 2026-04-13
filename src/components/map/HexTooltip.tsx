@@ -53,6 +53,9 @@ export const HexTooltip = forwardRef<HTMLDivElement, HexTooltipProps>(function H
       {hex.armies.length > 0 ? (
         <p className="mt-1">Armies: {hex.armies.map((army) => army.name).join(', ')}</p>
       ) : null}
+      {hex.fleets.length > 0 ? (
+        <p className="mt-1">Fleets: {hex.fleets.map((fleet) => fleet.name).join(', ')}</p>
+      ) : null}
     </div>
   );
 });

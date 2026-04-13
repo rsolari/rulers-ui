@@ -95,17 +95,19 @@ describe('/api/game/[gameId]/armies', () => {
       ])
       .mockResolvedValueOnce([
         { id: 'siege-1', realmId: 'realm-player', type: 'Catapult' },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'settlement-1' },
       ]);
     const where = vi.fn()
       .mockReturnValueOnce({ all: dbAll })
       .mockReturnValueOnce({ all: dbAll })
       .mockReturnValueOnce({ all: dbAll })
       .mockReturnValueOnce({ all: dbAll })
-      .mockReturnValueOnce({ get: dbMocks.dbGet });
+      .mockReturnValueOnce({ all: dbAll });
     const from = vi.fn(() => ({ where }));
 
     dbMocks.db.select.mockReturnValue({ from });
-    dbMocks.dbGet.mockResolvedValue({ id: 'settlement-1' });
     authMocks.requireOwnedRealmAccess.mockResolvedValue({
       realm: { id: 'realm-player' },
       realmId: 'realm-player',
@@ -159,6 +161,16 @@ describe('/api/game/[gameId]/armies', () => {
       canRecruit: true,
       usesTradeAccess: true,
       requiredBuildings: ['Armoursmith', 'Weaponsmith', 'Stables'],
+    });
+    expect(payload.troopRecruitmentOptionsBySettlement).toMatchObject({
+      'settlement-1': expect.arrayContaining([
+        {
+          type: 'Spearmen',
+          canRecruit: true,
+          usesTradeAccess: false,
+          requiredBuildings: [],
+        },
+      ]),
     });
     expect(ruleActionMocks.prepareRealmTroopRecruitment).toHaveBeenCalled();
   });

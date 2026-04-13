@@ -5,17 +5,19 @@ import type { DB } from '@/db';
 import {
   armies,
   buildings,
+  fleets,
   games,
   guildsOrdersSocieties,
   mapHexes,
   realms,
   resourceSites,
   settlements,
+  ships,
   territories,
   tradeRoutes,
   troops,
 } from '@/db/schema';
-import { BUILDING_DEFS, BUILDING_SIZE_DATA, RESOURCE_RARITY, SETTLEMENT_DATA, TROOP_DEFS } from '@/lib/game-logic/constants';
+import { BUILDING_DEFS, BUILDING_SIZE_DATA, RESOURCE_RARITY, SETTLEMENT_DATA, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import {
   canRecruitTroop,
   getBuildingCost,
@@ -31,7 +33,10 @@ import type {
   GOSType,
   ResourceRarity,
   ResourceType,
+  Season,
   SettlementSize,
+  ShipType,
+  WaterZoneType,
   TradeRoutePathMode,
   Tradition,
   TroopType,
@@ -127,6 +132,21 @@ interface TroopPreparationContext {
   garrisonSettlementId?: string | null;
 }
 
+interface ShipPreparationContext {
+  gameId: string;
+  realmId: string;
+  settlement: PlacementSettlement | null;
+  territory: PlacementTerritory | null;
+  settlementBuildings: BuildingType[];
+  localBuildings: BuildingType[];
+  tradedBuildings: BuildingType[];
+  localTechnicalKnowledge: string[];
+  tradedTechnicalKnowledge: string[];
+  fleetId?: string | null;
+  garrisonSettlementId?: string | null;
+  fleetWaterZoneType?: WaterZoneType | null;
+}
+
 interface ResourcePreparationContext {
   gameId: string;
   territory: PlacementTerritory | null;
@@ -199,6 +219,11 @@ export interface PreparedTroopRecruitment {
   cost: CostSummary;
 }
 
+export interface PreparedShipConstruction {
+  row: typeof ships.$inferInsert;
+  cost: CostSummary;
+}
+
 export interface PreparedTradeRouteCreation {
   row: typeof tradeRoutes.$inferInsert;
   exports: {
@@ -218,6 +243,15 @@ export interface CreateBuildingInput {
   ownerGosId?: string | null;
   allottedGosId?: string | null;
   wallSize?: BuildingSize | null;
+}
+
+export interface CreateShipInput {
+  realmId?: string | null;
+  type: string;
+  settlementId?: string | null;
+  fleetId?: string | null;
+  technicalKnowledgeKey?: string | null;
+  instant?: boolean;
 }
 
 interface CreateResourceSiteInput {
@@ -406,6 +440,37 @@ function resolveRequirementSource(
     if (resolveResourceAccess(option, context) === 'traded') {
       return 'traded';
     }
+  }
+
+  return 'none';
+}
+
+function resolveShipRequirementSource(
+  requirement: string,
+  context: ShipPreparationContext,
+  requiredTechnicalKnowledgeKey?: string | null,
+): AccessSource {
+  if (requirement === 'TechnicalKnowledge') {
+    if (requiredTechnicalKnowledgeKey && context.localTechnicalKnowledge.includes(requiredTechnicalKnowledgeKey)) {
+      return 'local';
+    }
+
+    if (requiredTechnicalKnowledgeKey && context.tradedTechnicalKnowledge.includes(requiredTechnicalKnowledgeKey)) {
+      return 'traded';
+    }
+
+    return 'none';
+  }
+
+  if (
+    context.settlementBuildings.includes(requirement as BuildingType) ||
+    context.localBuildings.includes(requirement as BuildingType)
+  ) {
+    return 'local';
+  }
+
+  if (context.tradedBuildings.includes(requirement as BuildingType)) {
+    return 'traded';
   }
 
   return 'none';
@@ -714,6 +779,116 @@ export function prepareTroopRecruitment(
   };
 }
 
+export function prepareShipConstruction(
+  input: CreateShipInput,
+  context: ShipPreparationContext,
+  idGenerator: IdGenerator = uuid,
+): PreparedShipConstruction {
+  const shipType = input.type;
+  if (!(shipType in SHIP_DEFS)) {
+    throw new RuleValidationError('Unknown ship type', 400, 'invalid_ship_type', { shipType });
+  }
+
+  const def = SHIP_DEFS[shipType as ShipType];
+  const settlement = context.settlement;
+  const territory = context.territory;
+
+  if (!settlement || settlement.realmId !== context.realmId) {
+    throw new RuleValidationError(
+      'Construction settlement not found for this realm',
+      404,
+      'construction_settlement_not_found',
+      { settlementId: input.settlementId ?? null, realmId: context.realmId },
+    );
+  }
+
+  if (!territory || territory.id !== settlement.territoryId) {
+    throw new RuleValidationError(
+      'Construction settlement must belong to a valid territory',
+      404,
+      'construction_territory_not_found',
+      { settlementId: settlement.id, territoryId: settlement.territoryId },
+    );
+  }
+
+  if (!context.settlementBuildings.includes('Port')) {
+    throw new RuleValidationError(
+      'Ships require an operational Port in the construction settlement',
+      409,
+      'ship_port_required',
+      { settlementId: settlement.id, shipType },
+    );
+  }
+
+  let usesTradeAccess = false;
+  const technicalKnowledgeKey = input.technicalKnowledgeKey ?? def.technicalKnowledgeKey ?? null;
+
+  for (const requirement of def.requires) {
+    const source = resolveShipRequirementSource(requirement, context, technicalKnowledgeKey);
+    if (source === 'none') {
+      throw new RuleValidationError(
+        `Missing prerequisite for ${shipType}: ${requirement}`,
+        409,
+        'ship_prerequisite_unmet',
+        { shipType, missingPrerequisite: requirement },
+      );
+    }
+
+    if (source === 'traded') {
+      usesTradeAccess = true;
+    }
+  }
+
+  if (context.fleetId && context.garrisonSettlementId) {
+    throw new RuleValidationError(
+      'Ships cannot be assigned to both a fleet and a harbor at creation time',
+      400,
+      'ship_assignment_conflict',
+    );
+  }
+
+  if (context.fleetWaterZoneType) {
+    if (!def.supportedZones.includes(context.fleetWaterZoneType)) {
+      throw new RuleValidationError(
+        `${shipType} cannot be assigned to ${context.fleetWaterZoneType} fleets`,
+        409,
+        'ship_water_zone_mismatch',
+        { shipType, waterZoneType: context.fleetWaterZoneType },
+      );
+    }
+  } else if (!territory.hasSeaAccess && !territory.hasRiverAccess) {
+    throw new RuleValidationError(
+      'Ships require a territory with sea or river access',
+      409,
+      'ship_water_access_required',
+      { settlementId: settlement.id, territoryId: territory.id, shipType },
+    );
+  }
+
+  const totalCost = usesTradeAccess ? Math.floor(def.buildCost * 1.25) : def.buildCost;
+
+  return {
+    row: {
+      id: idGenerator(),
+      realmId: context.realmId,
+      type: def.type,
+      class: def.class,
+      quality: def.quality,
+      condition: def.condition,
+      fleetId: context.fleetId ?? null,
+      garrisonSettlementId: context.fleetId ? null : (context.garrisonSettlementId ?? settlement.id),
+      constructionSettlementId: settlement.id,
+      constructionTurnsRemaining: input.instant ? 0 : def.buildTime,
+    },
+    cost: {
+      base: def.buildCost,
+      surcharge: totalCost - def.buildCost,
+      total: totalCost,
+      usesTradeAccess,
+    },
+  };
+}
+
 export function prepareTradeRouteCreation(
   input: CreateTradeRouteInput,
   context: TradeRoutePreparationContext,
@@ -879,6 +1054,20 @@ function loadSettlement(database: DatabaseLike, settlementId?: string | null): P
     name: settlement.name,
     size: settlement.size as SettlementSize,
   };
+}
+
+function loadOperationalSettlementBuildingTypes(database: DatabaseLike, settlementId?: string | null) {
+  if (!settlementId) return [] as BuildingType[];
+
+  return database.select({ type: buildings.type })
+    .from(buildings)
+    .where(and(
+      eq(buildings.settlementId, settlementId),
+      eq(buildings.constructionTurnsRemaining, 0),
+      eq(buildings.isOperational, true),
+    ))
+    .all()
+    .map((row) => row.type as BuildingType);
 }
 
 function hasRealmFoodAccess(
@@ -1537,6 +1726,154 @@ export function prepareRealmTroopRecruitment(
     tradedBuildings: ruleAccess.tradedBuildings,
     armyId,
     garrisonSettlementId,
+  }, options.idGenerator);
+}
+
+export async function createShipConstruction(
+  gameId: string,
+  input: CreateShipInput,
+  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+) {
+  const database = resolveDatabase(options.database);
+  const realmId = input.realmId ?? null;
+
+  if (!realmId) {
+    throw new RuleValidationError('realmId required', 400, 'realm_required');
+  }
+
+  return database.transaction((tx) => {
+    const game = tx.select({
+      id: games.id,
+      currentYear: games.currentYear,
+      currentSeason: games.currentSeason,
+    })
+      .from(games)
+      .where(eq(games.id, gameId))
+      .get();
+
+    if (!game) {
+      throw new RuleValidationError('Game not found', 404, 'game_not_found', { gameId });
+    }
+
+    const realm = tx.select({
+      id: realms.id,
+      treasury: realms.treasury,
+    })
+      .from(realms)
+      .where(and(
+        eq(realms.id, realmId),
+        eq(realms.gameId, gameId),
+      ))
+      .get();
+
+    if (!realm) {
+      throw new RuleValidationError('Realm not found', 404, 'realm_not_found', { realmId, gameId });
+    }
+
+    const prepared = prepareRealmShipConstruction(gameId, realmId, input, {
+      database: tx,
+      idGenerator: options.idGenerator,
+    });
+
+    if (realm.treasury < prepared.cost.total) {
+      throw new RuleValidationError(
+        'Realm treasury cannot afford this ship construction',
+        409,
+        'insufficient_treasury',
+        { realmId, treasury: realm.treasury, shipCost: prepared.cost.total },
+      );
+    }
+
+    const row = {
+      ...prepared.row,
+      constructionYear: game.currentYear,
+      constructionSeason: game.currentSeason as Season,
+    };
+
+    tx.update(realms)
+      .set({ treasury: realm.treasury - prepared.cost.total })
+      .where(eq(realms.id, realmId))
+      .run();
+
+    tx.insert(ships).values(row).run();
+
+    return {
+      ...prepared,
+      row,
+    };
+  });
+}
+
+export function prepareRealmShipConstruction(
+  gameId: string,
+  realmId: string,
+  input: CreateShipInput,
+  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+) {
+  const database = resolveDatabase(options.database);
+  const settlementId = input.settlementId ?? null;
+
+  if (!settlementId) {
+    throw new RuleValidationError(
+      'settlementId required',
+      400,
+      'construction_settlement_required',
+    );
+  }
+
+  const settlement = loadSettlement(database, settlementId);
+  if (!settlement || settlement.realmId !== realmId) {
+    throw new RuleValidationError(
+      'Construction settlement not found for this realm',
+      404,
+      'construction_settlement_not_found',
+      { settlementId, realmId },
+    );
+  }
+
+  const territory = loadTerritory(database, gameId, settlement.territoryId);
+  const settlementBuildings = loadOperationalSettlementBuildingTypes(database, settlement.id);
+  const ruleAccess = loadRealmRuleAccess(database, gameId, realmId);
+
+  let fleetId: string | null = null;
+  let fleetWaterZoneType: WaterZoneType | null = null;
+
+  if (input.fleetId) {
+    const fleet = database.select({
+      id: fleets.id,
+      waterZoneType: fleets.waterZoneType,
+    })
+      .from(fleets)
+      .where(and(
+        eq(fleets.id, input.fleetId),
+        eq(fleets.realmId, realmId),
+      ))
+      .get();
+
+    if (!fleet) {
+      throw new RuleValidationError('Fleet not found for this realm', 404, 'fleet_not_found', {
+        fleetId: input.fleetId,
+        realmId,
+      });
+    }
+
+    fleetId = fleet.id;
+    fleetWaterZoneType = fleet.waterZoneType as WaterZoneType;
+  }
+
+  return prepareShipConstruction(input, {
+    gameId,
+    realmId,
+    settlement,
+    territory,
+    settlementBuildings,
+    localBuildings: ruleAccess.localBuildings,
+    tradedBuildings: ruleAccess.tradedBuildings,
+    localTechnicalKnowledge: ruleAccess.localTechnicalKnowledge,
+    tradedTechnicalKnowledge: ruleAccess.tradedTechnicalKnowledge,
+    fleetId,
+    garrisonSettlementId: fleetId ? null : settlement.id,
+    fleetWaterZoneType,
   }, options.idGenerator);
 }
 

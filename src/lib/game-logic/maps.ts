@@ -267,6 +267,24 @@ export async function getLandHexById(database: MapReadDatabase, hexId: string) {
     .get();
 }
 
+export async function getWaterHexById(database: MapReadDatabase, hexId: string) {
+  return database.select({
+    id: mapHexes.id,
+    territoryId: mapHexes.territoryId,
+    gameMapId: mapHexes.gameMapId,
+    q: mapHexes.q,
+    r: mapHexes.r,
+    waterKind: mapHexes.waterKind,
+    hexKind: mapHexes.hexKind,
+  })
+    .from(mapHexes)
+    .where(and(
+      eq(mapHexes.id, hexId),
+      eq(mapHexes.hexKind, 'water'),
+    ))
+    .get();
+}
+
 export async function getAvailableSettlementHexId(database: MapReadDatabase, territoryId: string) {
   const [landHexes, occupiedHexes] = await Promise.all([
     getTerritoryLandHexes(database, territoryId),
@@ -331,6 +349,50 @@ export async function getDefaultArmyHexId(
     .get();
 
   return firstLandHex?.id ?? null;
+}
+
+export async function getDefaultFleetHexId(
+  database: MapReadDatabase,
+  territoryId: string,
+) {
+  const landHexes = await getTerritoryLandHexes(database, territoryId);
+  if (landHexes.length === 0) {
+    return null;
+  }
+
+  const gameMapId = await database.select({ gameMapId: mapHexes.gameMapId })
+    .from(mapHexes)
+    .where(eq(mapHexes.id, landHexes[0].id))
+    .get();
+
+  if (!gameMapId?.gameMapId) {
+    return null;
+  }
+
+  const waterHexes = await database.select({
+    id: mapHexes.id,
+    q: mapHexes.q,
+    r: mapHexes.r,
+  })
+    .from(mapHexes)
+    .where(and(
+      eq(mapHexes.gameMapId, gameMapId.gameMapId),
+      eq(mapHexes.hexKind, 'water'),
+    ))
+    .all();
+
+  const waterByCoord = new Map(waterHexes.map((hex) => [getHexCoordKey(hex.q, hex.r), hex.id]));
+
+  for (const landHex of landHexes) {
+    for (const neighbor of getHexNeighbors({ q: landHex.q, r: landHex.r })) {
+      const waterHexId = waterByCoord.get(getHexCoordKey(neighbor.q, neighbor.r));
+      if (waterHexId) {
+        return waterHexId;
+      }
+    }
+  }
+
+  return null;
 }
 
 Object.values(CURATED_MAP_DEFINITIONS).forEach((definition) => {

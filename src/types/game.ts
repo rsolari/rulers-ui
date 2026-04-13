@@ -31,9 +31,9 @@ export type BuildingSize = 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Colossal';
 export type BuildingType =
   | 'Academy' | 'Armoursmith' | 'Bank' | 'BrickMakers' | 'Bowyer'
   | 'CannonFoundry' | 'Castle' | 'Cathedral' | 'Chapel' | 'Church'
-  | 'Coliseum' | 'College' | 'Fort' | 'Gatehouse' | 'Gunsmith'
-  | 'Port' | 'SiegeWorkshop' | 'Stables' | 'Theatre' | 'University'
-  | 'Walls' | 'Watchtower' | 'Weaponsmith';
+  | 'Coliseum' | 'College' | 'Dockyard' | 'Fort' | 'Gatehouse' | 'Gunsmith'
+  | 'Port' | 'PowderMill' | 'Shipwrights' | 'SiegeWorkshop' | 'Stables'
+  | 'Theatre' | 'University' | 'Walls' | 'Watchtower' | 'Weaponsmith';
 
 export type FortificationMaterial = 'Timber' | 'Stone';
 export type BuildingLocationType = 'settlement' | 'territory';
@@ -56,6 +56,21 @@ export type TroopClass = 'Basic' | 'Elite';
 export type ArmourType = 'Light' | 'Armoured' | 'Mounted';
 export type TroopCondition = 'Healthy' | 'Wounded1' | 'Wounded2' | 'Routed1' | 'Routed2' | 'Defeated' | 'Crushed';
 
+// Naval Units
+export type ShipType =
+  | 'Galley'
+  | 'WarGalley'
+  | 'Galleass'
+  | 'Cog'
+  | 'Holk'
+  | 'Carrack'
+  | 'Galleon'
+  | 'Caravel';
+export type ShipClass = 'Light' | 'Heavy';
+export type ShipQuality = 'Basic' | 'Elite';
+export type ShipCondition = 'Ready' | 'Damaged' | 'Routed' | 'Sunk';
+export type WaterZoneType = 'river' | 'coast' | 'ocean';
+
 // Siege Unit Types
 export type SiegeUnitType = 'Catapult' | 'Trebuchet' | 'Ballista' | 'BatteringRam' | 'Cannon';
 
@@ -75,6 +90,7 @@ export type GovernanceState =
 export type NobleTitleType =
   | 'settlement_governor'
   | 'army_general'
+  | 'fleet_admiral'
   | 'gos_leader'
   | 'heir_designation'
   | 'honorary'
@@ -223,6 +239,16 @@ export interface RecruitFinancialAction {
   cost?: number;
 }
 
+export interface ConstructShipFinancialAction {
+  type: 'constructShip';
+  shipType: ShipType;
+  settlementId?: string | null;
+  fleetId?: string | null;
+  technicalKnowledgeKey?: TechnicalKnowledgeKey;
+  description?: string;
+  cost?: number;
+}
+
 export interface TaxChangeFinancialAction {
   type: 'taxChange';
   taxType: TaxType;
@@ -239,6 +265,7 @@ export interface SpendingFinancialAction {
 export type FinancialAction =
   | BuildFinancialAction
   | RecruitFinancialAction
+  | ConstructShipFinancialAction
   | TaxChangeFinancialAction
   | SpendingFinancialAction;
 
@@ -270,6 +297,8 @@ export interface TurnActionRecord {
   financialType: FinancialAction['type'] | null;
   buildingType: BuildingType | null;
   troopType: TroopType | null;
+  shipType: ShipType | null;
+  fleetId: string | null;
   settlementId: string | null;
   territoryId: string | null;
   material: FortificationMaterial | null;
@@ -333,6 +362,8 @@ export interface TurnActionCreateDto {
   financialType?: FinancialAction['type'];
   buildingType?: BuildingType | null;
   troopType?: TroopType | null;
+  shipType?: ShipType | null;
+  fleetId?: string | null;
   settlementId?: string | null;
   territoryId?: string | null;
   material?: FortificationMaterial | null;
@@ -357,6 +388,8 @@ export interface TurnActionUpdateDto {
   financialType?: FinancialAction['type'];
   buildingType?: BuildingType | null;
   troopType?: TroopType | null;
+  shipType?: ShipType | null;
+  fleetId?: string | null;
   settlementId?: string | null;
   territoryId?: string | null;
   material?: FortificationMaterial | null;

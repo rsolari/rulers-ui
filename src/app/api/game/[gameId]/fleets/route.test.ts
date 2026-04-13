@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { armies } from '@/db/schema';
+import { fleets } from '@/db/schema';
 
 const dbMocks = vi.hoisted(() => {
   const dbGet = vi.fn();
@@ -37,8 +37,15 @@ const authMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => authMocks);
 
+const mapMocks = vi.hoisted(() => ({
+  getWaterHexById: vi.fn(),
+  getDefaultFleetHexId: vi.fn(),
+}));
+
+vi.mock('@/lib/game-logic/maps', () => mapMocks);
+
 const ruleActionMocks = vi.hoisted(() => ({
-  prepareRealmTroopRecruitment: vi.fn(),
+  prepareRealmShipConstruction: vi.fn(),
   isRuleValidationError: vi.fn((error: unknown) => typeof error === 'object' && error !== null && 'code' in error && 'status' in error),
 }));
 
@@ -49,16 +56,9 @@ vi.mock('@/lib/game-init-state', () => ({
   recomputeGameInitState: recomputeGameInitStateMock,
 }));
 
-const mapMocks = vi.hoisted(() => ({
-  getLandHexById: vi.fn(),
-  getDefaultArmyHexId: vi.fn(),
-}));
-
-vi.mock('@/lib/game-logic/maps', () => mapMocks);
-
 import { GET, POST } from './route';
 
-describe('/api/game/[gameId]/armies', () => {
+describe('/api/game/[gameId]/fleets', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.select.mockReset();
@@ -68,39 +68,35 @@ describe('/api/game/[gameId]/armies', () => {
     dbMocks.insertValues.mockReset();
     uuidMock.mockReset();
     authMocks.requireOwnedRealmAccess.mockReset();
-    ruleActionMocks.prepareRealmTroopRecruitment.mockReset();
+    mapMocks.getWaterHexById.mockReset();
+    mapMocks.getDefaultFleetHexId.mockReset();
+    ruleActionMocks.prepareRealmShipConstruction.mockReset();
     recomputeGameInitStateMock.mockReset();
-    mapMocks.getLandHexById.mockReset();
-    mapMocks.getDefaultArmyHexId.mockReset();
     dbMocks.where.mockImplementation(() => ({ get: dbMocks.dbGet }));
     dbMocks.from.mockImplementation(() => ({ where: dbMocks.where }));
     dbMocks.select.mockImplementation(() => ({ from: dbMocks.from }));
   });
 
-  it('returns troop recruitment availability derived from the shared rules service', async () => {
+  it('returns fleets, ships, and construction availability derived from the shared rules service', async () => {
     const dbAll = vi.fn()
       .mockResolvedValueOnce([
         {
-          id: 'army-1',
+          id: 'fleet-1',
           realmId: 'realm-player',
-          name: 'First Army',
-          generalId: 'general-1',
+          name: 'Western Fleet',
+          admiralId: 'noble-1',
         },
       ])
       .mockResolvedValueOnce([
-        { id: 'general-1', name: 'General Rowan', gmStatusText: null },
+        { id: 'noble-1', name: 'Admiral Corvin', gmStatusText: null },
       ])
       .mockResolvedValueOnce([
-        { id: 'troop-1', realmId: 'realm-player', type: 'Spearmen' },
-      ])
-      .mockResolvedValueOnce([
-        { id: 'siege-1', realmId: 'realm-player', type: 'Catapult' },
+        { id: 'ship-1', realmId: 'realm-player', type: 'Galley' },
       ])
       .mockResolvedValueOnce([
         { id: 'settlement-1' },
       ]);
     const where = vi.fn()
-      .mockReturnValueOnce({ all: dbAll })
       .mockReturnValueOnce({ all: dbAll })
       .mockReturnValueOnce({ all: dbAll })
       .mockReturnValueOnce({ all: dbAll })
@@ -113,84 +109,87 @@ describe('/api/game/[gameId]/armies', () => {
       realmId: 'realm-player',
       session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
     });
-    ruleActionMocks.prepareRealmTroopRecruitment.mockImplementation(
+    ruleActionMocks.prepareRealmShipConstruction.mockImplementation(
       (_gameId: string, _realmId: string, input: { type: string }) => {
-        if (input.type === 'Shieldbearers') {
-          throw { status: 409, code: 'recruitment_prerequisite_unmet' };
+        if (input.type === 'Galleon') {
+          throw { status: 409, code: 'ship_prerequisite_unmet' };
         }
 
         return {
-          cost: { usesTradeAccess: input.type === 'Cavalry' },
+          cost: { usesTradeAccess: input.type === 'Caravel' },
         };
       },
     );
 
     const response = await GET(
-      new Request('http://localhost/api/game/game-1/armies?realmId=realm-player'),
+      new Request('http://localhost/api/game/game-1/fleets?realmId=realm-player'),
       { params: Promise.resolve({ gameId: 'game-1' }) },
     );
 
     expect(response.status).toBe(200);
     const payload = await response.json();
-    expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
-    expect(payload.armies).toEqual([
+    expect(payload.fleets).toEqual([
       {
-        id: 'army-1',
+        id: 'fleet-1',
         realmId: 'realm-player',
-        name: 'First Army',
-        generalId: 'general-1',
-        general: { id: 'general-1', name: 'General Rowan', gmStatusText: null },
+        name: 'Western Fleet',
+        admiralId: 'noble-1',
+        admiral: { id: 'noble-1', name: 'Admiral Corvin', gmStatusText: null },
       },
     ]);
-    expect(payload.troops).toEqual([{ id: 'troop-1', realmId: 'realm-player', type: 'Spearmen' }]);
-    expect(payload.siegeUnits).toEqual([{ id: 'siege-1', realmId: 'realm-player', type: 'Catapult' }]);
-    expect(payload.troopRecruitmentOptions).toContainEqual({
-      type: 'Spearmen',
-      canRecruit: true,
+    expect(payload.ships).toEqual([{ id: 'ship-1', realmId: 'realm-player', type: 'Galley' }]);
+    expect(payload.shipConstructionOptions).toContainEqual({
+      type: 'Galley',
+      canConstruct: true,
       usesTradeAccess: false,
-      requiredBuildings: [],
+      requiredBuildings: ['Port'],
     });
-    expect(payload.troopRecruitmentOptions).toContainEqual({
-      type: 'Shieldbearers',
-      canRecruit: false,
-      usesTradeAccess: false,
-      requiredBuildings: ['Armoursmith'],
-    });
-    expect(payload.troopRecruitmentOptions).toContainEqual({
-      type: 'Cavalry',
-      canRecruit: true,
+    expect(payload.shipConstructionOptions).toContainEqual({
+      type: 'Caravel',
+      canConstruct: true,
       usesTradeAccess: true,
-      requiredBuildings: ['Armoursmith', 'Weaponsmith', 'Stables'],
+      requiredBuildings: ['Port', 'Shipwrights', 'CannonFoundry'],
     });
-    expect(payload.troopRecruitmentOptionsBySettlement).toMatchObject({
+    expect(payload.shipConstructionOptions).toContainEqual({
+      type: 'Galleon',
+      canConstruct: false,
+      usesTradeAccess: false,
+      requiredBuildings: ['Port', 'Shipwrights', 'Dockyard', 'CannonFoundry'],
+    });
+    expect(payload.shipConstructionOptionsBySettlement).toMatchObject({
       'settlement-1': expect.arrayContaining([
         {
-          type: 'Spearmen',
-          canRecruit: true,
+          type: 'Galley',
+          canConstruct: true,
           usesTradeAccess: false,
-          requiredBuildings: [],
+          requiredBuildings: ['Port'],
         },
       ]),
     });
-    expect(ruleActionMocks.prepareRealmTroopRecruitment).toHaveBeenCalled();
   });
 
-  it('allows a player to create an army for their own realm', async () => {
-    uuidMock.mockReturnValue('army-1');
+  it('allows a player to create a fleet in their own coastal territory', async () => {
+    uuidMock.mockReturnValue('fleet-1');
     authMocks.requireOwnedRealmAccess.mockResolvedValue({
       realm: { id: 'realm-player' },
       realmId: 'realm-player',
       session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
     });
-    mapMocks.getDefaultArmyHexId.mockResolvedValue('hex-town');
-    dbMocks.dbGet.mockResolvedValue({ id: 'territory-1', realmId: 'realm-player' });
+    mapMocks.getWaterHexById.mockResolvedValue(null);
+    mapMocks.getDefaultFleetHexId.mockResolvedValue('hex-coast');
+    dbMocks.dbGet.mockResolvedValue({
+      id: 'territory-1',
+      realmId: 'realm-player',
+      hasRiverAccess: false,
+      hasSeaAccess: true,
+    });
 
-    const response = await POST(new Request('http://localhost/api/game/game-1/armies', {
+    const response = await POST(new Request('http://localhost/api/game/game-1/fleets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         realmId: 'realm-player',
-        name: 'First Army',
+        name: 'Western Fleet',
         locationTerritoryId: 'territory-1',
       }),
     }), {
@@ -199,50 +198,66 @@ describe('/api/game/[gameId]/armies', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      id: 'army-1',
+      id: 'fleet-1',
       realmId: 'realm-player',
-      name: 'First Army',
+      name: 'Western Fleet',
+      admiralId: null,
+      homeSettlementId: null,
       locationTerritoryId: 'territory-1',
-      locationHexId: 'hex-town',
-      destinationTerritoryId: null,
-      destinationHexId: null,
-    });
-    expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-player');
-    expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');
-    expect(dbMocks.insert).toHaveBeenCalledWith(armies);
-    expect(dbMocks.insertValues).toHaveBeenCalledWith({
-      id: 'army-1',
-      realmId: 'realm-player',
-      name: 'First Army',
-      generalId: null,
-      locationTerritoryId: 'territory-1',
-      locationHexId: 'hex-town',
+      locationHexId: 'hex-coast',
       destinationTerritoryId: null,
       destinationHexId: null,
       movementTurnsRemaining: 0,
+      waterZoneType: 'coast',
+    });
+    expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');
+    expect(dbMocks.insert).toHaveBeenCalledWith(fleets);
+    expect(dbMocks.insertValues).toHaveBeenCalledWith({
+      id: 'fleet-1',
+      realmId: 'realm-player',
+      name: 'Western Fleet',
+      admiralId: null,
+      homeSettlementId: null,
+      locationTerritoryId: 'territory-1',
+      locationHexId: 'hex-coast',
+      destinationTerritoryId: null,
+      destinationHexId: null,
+      movementTurnsRemaining: 0,
+      waterZoneType: 'coast',
     });
   });
 
-  it('rejects a player trying to create an army for another realm', async () => {
-    authMocks.requireOwnedRealmAccess.mockRejectedValue(
-      Object.assign(new Error('Realm ownership required'), { status: 403 })
-    );
+  it('rejects fleet creation when the territory has no usable water hex', async () => {
+    authMocks.requireOwnedRealmAccess.mockResolvedValue({
+      realm: { id: 'realm-player' },
+      realmId: 'realm-player',
+      session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
+    });
+    mapMocks.getWaterHexById.mockResolvedValue(null);
+    mapMocks.getDefaultFleetHexId.mockResolvedValue(null);
+    dbMocks.dbGet.mockResolvedValue({
+      id: 'territory-1',
+      realmId: 'realm-player',
+      hasRiverAccess: false,
+      hasSeaAccess: true,
+    });
 
-    const response = await POST(new Request('http://localhost/api/game/game-1/armies', {
+    const response = await POST(new Request('http://localhost/api/game/game-1/fleets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        realmId: 'realm-other',
-        name: 'First Army',
+        realmId: 'realm-player',
+        name: 'Stranded Fleet',
         locationTerritoryId: 'territory-1',
       }),
     }), {
       params: Promise.resolve({ gameId: 'game-1' }),
     });
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ error: 'Realm ownership required' });
-    expect(dbMocks.dbGet).not.toHaveBeenCalled();
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'No navigable water hex found for this territory',
+    });
     expect(dbMocks.insertValues).not.toHaveBeenCalled();
   });
 });

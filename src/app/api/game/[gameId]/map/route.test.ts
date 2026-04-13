@@ -58,6 +58,7 @@ describe('GET /api/game/[gameId]/map', () => {
       [{ id: 'feature-1', hexId: 'hex-1', featureType: 'river', name: 'Kingsrun', metadata: null }],
       [{ id: 'settlement-1', territoryId: 'territory-1', hexId: 'hex-1', realmId: 'realm-1', name: 'Stoneford', size: 'Town' }],
       [{ id: 'army-1', realmId: 'realm-1', name: 'First Banner', locationHexId: 'hex-1' }],
+      [{ id: 'fleet-1', realmId: 'realm-1', name: 'Blue Squadron', locationHexId: 'hex-1' }],
     );
 
     const response = await GET(new Request('http://localhost/api/game/game-1/map'), {
@@ -81,6 +82,7 @@ describe('GET /api/game/[gameId]/map', () => {
         landmarks: [{ name: 'Old Tower', kind: 'ruin', description: null }],
         settlement: { name: 'Stoneford', size: 'Town' },
         armies: [{ id: 'army-1', name: 'First Banner', realmId: 'realm-1' }],
+        fleets: [{ id: 'fleet-1', name: 'Blue Squadron', realmId: 'realm-1' }],
       }],
     });
   });

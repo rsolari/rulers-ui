@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { nobles, nobleTitles, realms, settlements, armies, guildsOrdersSocieties } from '@/db/schema';
+import { nobles, nobleTitles, realms, settlements, armies, fleets, guildsOrdersSocieties } from '@/db/schema';
 import type { EstateLevel, GovernanceState, Season, SettlementSize } from '@/types/game';
 import {
   GovernanceError,
@@ -404,6 +404,80 @@ export function assignArmyGeneral(
     nobleId: noble.id,
     armyId: army.id,
     description: input.notes?.trim() || `${noble.name} took command of ${army.name}.`,
+  });
+
+  return noble.id;
+}
+
+export function assignFleetAdmiral(
+  database: DatabaseExecutor,
+  input: {
+    gameId: string;
+    fleetId: string;
+    nobleId: string | null;
+    year: number;
+    season: Season;
+    notes?: string | null;
+  },
+) {
+  const fleet = database.select().from(fleets).where(eq(fleets.id, input.fleetId)).get();
+
+  if (!fleet) {
+    throw new GovernanceError('Fleet not found', 404);
+  }
+
+  const realm = requireRealm(database, input.gameId, fleet.realmId);
+  assertRealmNotFallen(realm);
+
+  revokeTitles(database, {
+    type: 'fleet_admiral',
+    fleetId: fleet.id,
+    year: input.year,
+    season: input.season,
+  });
+
+  if (!input.nobleId) {
+    database.update(fleets).set({ admiralId: null }).where(eq(fleets.id, fleet.id)).run();
+
+    createGovernanceEvent(database, {
+      gameId: input.gameId,
+      realmId: fleet.realmId,
+      year: input.year,
+      season: input.season,
+      eventType: 'office_removed',
+      fleetId: fleet.id,
+      description: input.notes?.trim() || `Command of ${fleet.name} was vacated.`,
+    });
+
+    return null;
+  }
+
+  const noble = requireRealmNoble(database, fleet.realmId, input.nobleId);
+  assertNobleCanHoldOffice(noble, fleet.realmId, 'the admiralty');
+
+  database.update(fleets).set({ admiralId: noble.id }).where(eq(fleets.id, fleet.id)).run();
+
+  grantTitle(database, {
+    gameId: input.gameId,
+    realmId: fleet.realmId,
+    nobleId: noble.id,
+    type: 'fleet_admiral',
+    label: `${fleet.name} Admiral`,
+    fleetId: fleet.id,
+    year: input.year,
+    season: input.season,
+    notes: input.notes ?? null,
+  });
+
+  createGovernanceEvent(database, {
+    gameId: input.gameId,
+    realmId: fleet.realmId,
+    year: input.year,
+    season: input.season,
+    eventType: 'office_assigned',
+    nobleId: noble.id,
+    fleetId: fleet.id,
+    description: input.notes?.trim() || `${noble.name} took command of ${fleet.name}.`,
   });
 
   return noble.id;
@@ -822,7 +896,7 @@ export function revokeStructuralTitlesForNoble(
   year: number,
   season: Season,
 ) {
-  const structuralTypes = ['settlement_governor', 'army_general', 'gos_leader', 'heir_designation'] as const;
+  const structuralTypes = ['settlement_governor', 'army_general', 'fleet_admiral', 'gos_leader', 'heir_designation'] as const;
 
   database.update(nobleTitles)
     .set({

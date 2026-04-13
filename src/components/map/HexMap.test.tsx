@@ -84,6 +84,11 @@ function createBenchmarkData(): GameMapData {
           name: `Army ${index}`,
           realmId: territory.realmId ?? realms[0].id,
         }] : [],
+        fleets: isWater && index % 41 === 0 ? [{
+          id: `fleet-${index}`,
+          name: `Fleet ${index}`,
+          realmId: realms[0].id,
+        }] : [],
       });
     }
   }

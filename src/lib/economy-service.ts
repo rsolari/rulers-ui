@@ -15,6 +15,7 @@ import {
   realms,
   resourceSites,
   settlements,
+  ships,
   siegeUnits,
   territories,
   tradeRoutes,
@@ -24,7 +25,7 @@ import {
   turnReports,
   turnResolutions,
 } from '@/db/schema';
-import { BUILDING_DEFS, getNextSeason, SEASONS, SETTLEMENT_DATA, TERRITORY_FOOD_CAP, TROOP_DEFS } from '@/lib/game-logic/constants';
+import { BUILDING_DEFS, getNextSeason, SEASONS, SETTLEMENT_DATA, SHIP_DEFS, TERRITORY_FOOD_CAP, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { parseStoredEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 import {
   buildRealmTurmoilSources,
@@ -54,6 +55,7 @@ import type {
   TaxType,
   TradeImportSelection,
   Tradition,
+  ShipType,
   TroopType,
   TurmoilSource,
   WinterUnrestLocationOption,
@@ -106,6 +108,7 @@ interface LoadedEconomyState {
   armyRows: Array<typeof armies.$inferSelect>;
   buildingRows: Array<typeof buildings.$inferSelect>;
   troopRows: Array<typeof troops.$inferSelect>;
+  shipRows: Array<typeof ships.$inferSelect>;
   siegeUnitRows: Array<typeof siegeUnits.$inferSelect>;
   reportRows: Array<typeof turnReports.$inferSelect>;
   actionRows: Array<typeof turnActions.$inferSelect>;
@@ -365,6 +368,10 @@ function loadGameEconomyState(
     ? database.select().from(armies).where(inArray(armies.realmId, realmIds)).all()
     : [];
 
+  const shipRows = realmIds.length > 0
+    ? database.select().from(ships).where(inArray(ships.realmId, realmIds)).all()
+    : [];
+
   const siegeUnitRows = realmIds.length > 0
     ? database.select().from(siegeUnits).where(inArray(siegeUnits.realmId, realmIds)).all()
     : [];
@@ -448,6 +455,13 @@ function loadGameEconomyState(
     const realmTroops = troopsByRealm.get(troop.realmId) ?? [];
     realmTroops.push(troop);
     troopsByRealm.set(troop.realmId, realmTroops);
+  }
+
+  const shipsByRealm = new Map<string, Array<typeof ships.$inferSelect>>();
+  for (const ship of shipRows) {
+    const realmShips = shipsByRealm.get(ship.realmId) ?? [];
+    realmShips.push(ship);
+    shipsByRealm.set(ship.realmId, realmShips);
   }
 
   const siegeUnitsByRealm = new Map<string, Array<typeof siegeUnits.$inferSelect>>();
@@ -669,6 +683,11 @@ function loadGameEconomyState(
       type: troop.type as EconomyRealmInput['troops'][number]['type'],
       recruitmentTurnsRemaining: troop.recruitmentTurnsRemaining,
       })),
+      ships: (shipsByRealm.get(realm.id) ?? []).map((ship) => ({
+      id: ship.id,
+      type: ship.type as ShipType,
+      constructionTurnsRemaining: ship.constructionTurnsRemaining,
+      })),
       siegeUnits: (siegeUnitsByRealm.get(realm.id) ?? []).map((unit) => ({
       id: unit.id,
       type: unit.type as EconomyRealmInput['siegeUnits'][number]['type'],
@@ -722,6 +741,7 @@ function loadGameEconomyState(
     armyRows,
     buildingRows,
     troopRows,
+    shipRows,
     siegeUnitRows,
     reportRows,
     actionRows,
@@ -1192,6 +1212,7 @@ export function createEconomyService(database: DB = defaultDb) {
             settlementId: entry.settlementId ?? null,
             buildingId: entry.buildingId ?? null,
             troopId: entry.troopId ?? null,
+            shipId: entry.shipId ?? null,
             siegeUnitId: entry.siegeUnitId ?? null,
             tradeRouteId: entry.tradeRouteId ?? null,
             reportId: entry.reportId ?? null,
@@ -1269,6 +1290,24 @@ export function createEconomyService(database: DB = defaultDb) {
             recruitmentTurnsRemaining: Math.max(pendingTroop.recruitmentTurnsRemaining - 1, 0),
           }).run();
         }
+
+        for (const pendingShip of result.pendingShips) {
+          const shipDef = SHIP_DEFS[pendingShip.type as ShipType];
+          tx.insert(ships).values({
+            id: uuid(),
+            realmId: realm.id,
+            type: pendingShip.type,
+            class: shipDef.class,
+            quality: shipDef.quality,
+            condition: 'Ready',
+            fleetId: pendingShip.fleetId ?? null,
+            garrisonSettlementId: pendingShip.garrisonSettlementId ?? null,
+            constructionSettlementId: pendingShip.garrisonSettlementId ?? null,
+            constructionYear: currentYear,
+            constructionSeason: currentSeason,
+            constructionTurnsRemaining: Math.max(pendingShip.constructionTurnsRemaining - 1, 0),
+          }).run();
+        }
       }
 
       for (const eventDraft of nextTurnEventDrafts) {
@@ -1292,6 +1331,14 @@ export function createEconomyService(database: DB = defaultDb) {
         tx.update(troops)
           .set({ recruitmentTurnsRemaining: Math.max(troop.recruitmentTurnsRemaining - 1, 0) })
           .where(eq(troops.id, troop.id))
+          .run();
+      }
+
+      for (const ship of state.shipRows) {
+        if (ship.constructionTurnsRemaining <= 0) continue;
+        tx.update(ships)
+          .set({ constructionTurnsRemaining: Math.max(ship.constructionTurnsRemaining - 1, 0) })
+          .where(eq(ships.id, ship.id))
           .run();
       }
 

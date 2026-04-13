@@ -10,6 +10,7 @@ import type {
   ResourceType,
   Season,
   SiegeUnitType,
+  ShipType,
   TaxType,
   TechnicalKnowledgeKey,
   TradeImportSelection,
@@ -23,6 +24,7 @@ import {
   ESTATE_COSTS,
   SEASONS,
   SETTLEMENT_DATA,
+  SHIP_DEFS,
   SIEGE_UNIT_DEFS,
   TERRITORY_FOOD_CAP,
   TAX_RATES,
@@ -39,6 +41,7 @@ import { calculateTradeWealthBonus, type RealmTradeState } from './trade';
 import {
   calculateNobleUpkeep,
   calculatePrisonerUpkeep,
+  calculateShipUpkeep,
   calculateSiegeUpkeep,
   calculateTroopUpkeep,
   calculateBuildingUpkeep,
@@ -102,6 +105,12 @@ export interface EconomyTroopInput {
 export interface EconomySiegeUnitInput {
   id: string;
   type: SiegeUnitType;
+  constructionTurnsRemaining: number;
+}
+
+export interface EconomyShipInput {
+  id: string;
+  type: ShipType;
   constructionTurnsRemaining: number;
 }
 
@@ -180,6 +189,7 @@ export interface EconomyRealmInput {
   settlements: EconomySettlementInput[];
   standaloneBuildings: EconomyStandaloneBuildingInput[];
   troops: EconomyTroopInput[];
+  ships?: EconomyShipInput[];
   siegeUnits: EconomySiegeUnitInput[];
   nobles: EconomyNobleInput[];
   tradeRoutes: EconomyTradeRouteInput[];
@@ -196,6 +206,7 @@ export interface EconomyLedgerEntry {
   settlementId?: string | null;
   buildingId?: string | null;
   troopId?: string | null;
+  shipId?: string | null;
   siegeUnitId?: string | null;
   tradeRouteId?: string | null;
   reportId?: string | null;
@@ -235,6 +246,14 @@ export interface EconomyPendingTroop {
   type: TroopType;
   garrisonSettlementId?: string | null;
   recruitmentTurnsRemaining: number;
+  reportId?: string | null;
+}
+
+export interface EconomyPendingShip {
+  type: ShipType;
+  garrisonSettlementId?: string | null;
+  fleetId?: string | null;
+  constructionTurnsRemaining: number;
   reportId?: string | null;
 }
 
@@ -285,6 +304,7 @@ export interface EconomyResult {
   ledgerEntries: EconomyLedgerEntry[];
   pendingBuildings: EconomyPendingBuilding[];
   pendingTroops: EconomyPendingTroop[];
+  pendingShips: EconomyPendingShip[];
   summary: Record<string, unknown>;
 }
 
@@ -515,6 +535,7 @@ function resolveTechnicalKnowledgeKey(
   if ('technicalKnowledgeKey' in action && action.technicalKnowledgeKey) return action.technicalKnowledgeKey;
   if (action.type === 'build') return action.buildingType;
   if (action.type === 'recruit') return action.troopType;
+  if (action.type === 'constructShip') return action.shipType;
   return null;
 }
 
@@ -525,6 +546,12 @@ function hasTechnicalKnowledgePrerequisite(action: FinancialAction) {
 
   if (action.type === 'recruit' && action.troopType) {
     return TROOP_DEFS[action.troopType]?.requires.some(
+      (buildingType) => BUILDING_DEFS[buildingType]?.prerequisites.includes('TechnicalKnowledge'),
+    ) ?? false;
+  }
+
+  if (action.type === 'constructShip' && action.shipType) {
+    return SHIP_DEFS[action.shipType]?.requires.some(
       (buildingType) => BUILDING_DEFS[buildingType]?.prerequisites.includes('TechnicalKnowledge'),
     ) ?? false;
   }
@@ -605,6 +632,7 @@ export function calculateRealmEconomy(
   const settlementBreakdown: SettlementEconomyBreakdown[] = [];
   const pendingBuildings: EconomyPendingBuilding[] = [];
   const pendingTroops: EconomyPendingTroop[] = [];
+  const pendingShips: EconomyPendingShip[] = [];
   const validSettlementIds = new Set(realm.settlements.map((settlement) => settlement.id));
   const settlementFoodProduced = resolveSettlementFoodProduction(realm);
   const standaloneFortCounts = realm.standaloneBuildings.reduce((counts, building) => {
@@ -770,6 +798,22 @@ export function calculateRealmEconomy(
     }));
   }
 
+  const shipUpkeep = calculateShipUpkeep(
+    (realm.ships ?? []).map((ship) => ({
+      type: ship.type,
+      isReady: ship.constructionTurnsRemaining <= 0,
+    })),
+  );
+  for (const ship of realm.ships ?? []) {
+    if (ship.constructionTurnsRemaining > 0) continue;
+    ledgerEntries.push(createCostEntry({
+      category: 'ship-upkeep',
+      label: `${ship.type} upkeep`,
+      amount: SHIP_DEFS[ship.type].upkeep,
+      shipId: ship.id,
+    }));
+  }
+
   const siegeUpkeep = calculateSiegeUpkeep(
     realm.siegeUnits.map((unit) => ({
       type: unit.type,
@@ -862,6 +906,23 @@ export function calculateRealmEconomy(
         warnings.push('A recruit action was recorded as a cost only because the troop type was missing.');
       }
     }
+
+    if (action.type === 'constructShip') {
+      if (action.shipType && SHIP_DEFS[action.shipType]) {
+        pendingShips.push({
+          type: action.shipType,
+          garrisonSettlementId:
+            action.settlementId && validSettlementIds.has(action.settlementId)
+              ? action.settlementId
+              : null,
+          fleetId: action.fleetId ?? null,
+          constructionTurnsRemaining: SHIP_DEFS[action.shipType].buildTime,
+          reportId: realm.report?.id ?? null,
+        });
+      } else {
+        warnings.push('A ship construction action was recorded as a cost only because the ship type was missing.');
+      }
+    }
   }
 
   for (const { action, cost } of actionCosts) {
@@ -871,6 +932,7 @@ export function calculateRealmEconomy(
         action.description ||
         (action.type === 'build' && action.buildingType ? `Construction: ${action.buildingType}` : null) ||
         (action.type === 'recruit' && action.troopType ? `Recruitment: ${action.troopType}` : null) ||
+        (action.type === 'constructShip' && action.shipType ? `Ship construction: ${action.shipType}` : null) ||
         (action.type === 'taxChange' && action.taxType ? `Tax change: ${action.taxType}` : null) ||
         'Turn report spending';
 
@@ -901,7 +963,7 @@ export function calculateRealmEconomy(
     }
   }
 
-  const nonBuildingCosts = troopUpkeep + siegeUpkeep + nobleUpkeep + prisonerUpkeep +
+  const nonBuildingCosts = troopUpkeep + shipUpkeep + siegeUpkeep + nobleUpkeep + prisonerUpkeep +
     actionCosts.reduce((sum, entry) => sum + entry.cost.totalCost, 0) +
     modifierCosts;
 
@@ -1060,6 +1122,7 @@ export function calculateRealmEconomy(
     consecutiveFoodRecoverySeasons: foodState.consecutiveRecoverySeasons,
     pendingBuildings: pendingBuildings.length,
     pendingTroops: pendingTroops.length,
+    pendingShips: pendingShips.length,
     seasonalModifierCount: seasonalModifiers.length,
     warningCount: warnings.length,
   };
@@ -1098,6 +1161,7 @@ export function calculateRealmEconomy(
     ledgerEntries,
     pendingBuildings,
     pendingTroops,
+    pendingShips,
     summary,
   };
 }

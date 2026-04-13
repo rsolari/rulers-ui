@@ -1,7 +1,8 @@
 import type {
   BuildingType, BuildingCategory, BuildingSize, TroopType, TroopClass,
   ArmourType, SiegeUnitType, SettlementSize, ResourceType, ResourceRarity,
-  TaxType, EstateLevel, GOSType, Tradition, Season,
+  TaxType, EstateLevel, GOSType, Tradition, Season, ShipClass, ShipCondition,
+  ShipQuality, ShipType, WaterZoneType,
 } from '@/types/game';
 
 // ============================================================
@@ -47,10 +48,13 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDef> = {
   Church:        { type: 'Church',        category: 'Civic',         size: 'Medium', prerequisites: ['Order'],           turmoilEffect: -2, description: 'Place of worship. Turmoil -2.' },
   Coliseum:      { type: 'Coliseum',      category: 'Civic',         size: 'Large',  prerequisites: [],                  turmoilEffect: -4, description: 'Allows hosting sporting events. Turmoil -4.' },
   College:       { type: 'College',       category: 'Civic',         size: 'Medium', prerequisites: ['Society'],                          description: 'Increases income of Society. Allows advanced study.' },
+  Dockyard:      { type: 'Dockyard',      category: 'Military',      size: 'Large',  prerequisites: ['Port', 'Timber'],                  description: 'Allows construction of capital ships.' },
   Fort:          { type: 'Fort',          category: 'Fortification', size: 'Medium', prerequisites: ['Timber'],                           description: 'Wooden defensive fortification.' },
   Gatehouse:     { type: 'Gatehouse',     category: 'Fortification', size: 'Small',  prerequisites: ['Timber|Stone'], takesBuildingSlot: false, description: 'Fortified gateway for walls.' },
   Gunsmith:      { type: 'Gunsmith',      category: 'Military',      size: 'Small',  prerequisites: ['Ore', 'TechnicalKnowledge'],       description: 'Allows recruitment of Harquebusiers.' },
   Port:          { type: 'Port',          category: 'Civic',         size: 'Medium', prerequisites: [],                                  description: 'Allows Trade Routes over water.' },
+  PowderMill:    { type: 'PowderMill',    category: 'Military',      size: 'Medium', prerequisites: ['Ore', 'TechnicalKnowledge'],       description: 'Allows construction of powder-based ships.' },
+  Shipwrights:   { type: 'Shipwrights',   category: 'Military',      size: 'Large',  prerequisites: ['Timber'],                          description: 'Allows advanced ship construction.' },
   SiegeWorkshop: { type: 'SiegeWorkshop', category: 'Military',      size: 'Large',  prerequisites: ['Timber'],                          description: 'Allows construction of Siege Weapons.' },
   Stables:       { type: 'Stables',       category: 'Military',      size: 'Medium', prerequisites: ['Food'],                            description: 'Allows recruitment of Cavalry.' },
   Theatre:       { type: 'Theatre',       category: 'Civic',         size: 'Medium', prerequisites: [],                  turmoilEffect: -2, description: 'Entertainment. Turmoil -2.' },
@@ -85,6 +89,13 @@ export type CombatBonusTarget =
 
 export interface CombatBonus {
   target: CombatBonusTarget;
+  value: number;
+}
+
+export type NavalCombatBonusTarget = 'Light' | 'Heavy' | 'CoastalZone' | 'OpenSea';
+
+export interface NavalCombatBonus {
+  target: NavalCombatBonusTarget;
   value: number;
 }
 
@@ -123,6 +134,141 @@ export const SIEGE_UNIT_DEFS: Record<SiegeUnitType, SiegeUnitDef> = {
   Ballista:     { type: 'Ballista',     requires: 'SiegeWorkshop',  upkeep: 750,  constructionTurns: 2, bonus: '+4 vs Troops',    combatBonuses: [{ target: 'Troops', value: 4 }] },
   BatteringRam: { type: 'BatteringRam', requires: 'SiegeWorkshop',  upkeep: 500,  constructionTurns: 1, bonus: '+4 vs Gates',     combatBonuses: [{ target: 'Gates', value: 4 }] },
   Cannon:       { type: 'Cannon',       requires: 'CannonFoundry',  upkeep: 1500, constructionTurns: 3, bonus: '+2 vs Walls',     combatBonuses: [{ target: 'Walls', value: 2 }] },
+};
+
+// ============================================================
+// Naval Unit Definitions
+// ============================================================
+
+export interface ShipDef {
+  type: ShipType;
+  class: ShipClass;
+  quality: ShipQuality;
+  condition: ShipCondition;
+  requires: BuildingType[];
+  buildCost: number;
+  upkeep: number;
+  buildTime: number;
+  bonus: string;
+  combatBonuses: NavalCombatBonus[];
+  minimumWeather: number;
+  supportedZones: WaterZoneType[];
+  technicalKnowledgeKey?: ShipType;
+}
+
+export const SHIP_DEFS: Record<ShipType, ShipDef> = {
+  Galley: {
+    type: 'Galley',
+    class: 'Light',
+    quality: 'Basic',
+    condition: 'Ready',
+    requires: ['Port'],
+    buildCost: 250,
+    upkeep: 250,
+    buildTime: 1,
+    bonus: '+1 in Coastal Zones',
+    combatBonuses: [{ target: 'CoastalZone', value: 1 }],
+    minimumWeather: 5,
+    supportedZones: ['river', 'coast'],
+  },
+  WarGalley: {
+    type: 'WarGalley',
+    class: 'Heavy',
+    quality: 'Elite',
+    condition: 'Ready',
+    requires: ['Port', 'CannonFoundry'],
+    buildCost: 500,
+    upkeep: 500,
+    buildTime: 1,
+    bonus: '+1 in Coastal Zones',
+    combatBonuses: [{ target: 'CoastalZone', value: 1 }],
+    minimumWeather: 5,
+    supportedZones: ['coast'],
+  },
+  Galleass: {
+    type: 'Galleass',
+    class: 'Heavy',
+    quality: 'Elite',
+    condition: 'Ready',
+    requires: ['Port', 'CannonFoundry'],
+    buildCost: 1000,
+    upkeep: 1000,
+    buildTime: 2,
+    bonus: '+1 in Coastal Zones, +1 vs Light',
+    combatBonuses: [{ target: 'CoastalZone', value: 1 }, { target: 'Light', value: 1 }],
+    minimumWeather: 5,
+    supportedZones: ['coast'],
+  },
+  Cog: {
+    type: 'Cog',
+    class: 'Heavy',
+    quality: 'Basic',
+    condition: 'Ready',
+    requires: ['Port'],
+    buildCost: 200,
+    upkeep: 100,
+    buildTime: 1,
+    bonus: '-',
+    combatBonuses: [],
+    minimumWeather: 3,
+    supportedZones: ['coast'],
+  },
+  Holk: {
+    type: 'Holk',
+    class: 'Heavy',
+    quality: 'Basic',
+    condition: 'Ready',
+    requires: ['Port', 'PowderMill'],
+    buildCost: 1000,
+    upkeep: 500,
+    buildTime: 2,
+    bonus: '+1 vs Light',
+    combatBonuses: [{ target: 'Light', value: 1 }],
+    minimumWeather: 3,
+    supportedZones: ['coast'],
+  },
+  Carrack: {
+    type: 'Carrack',
+    class: 'Heavy',
+    quality: 'Elite',
+    condition: 'Ready',
+    requires: ['Port', 'Shipwrights', 'CannonFoundry'],
+    buildCost: 1500,
+    upkeep: 750,
+    buildTime: 2,
+    bonus: '+1 vs Light',
+    combatBonuses: [{ target: 'Light', value: 1 }],
+    minimumWeather: 2,
+    supportedZones: ['coast', 'ocean'],
+  },
+  Galleon: {
+    type: 'Galleon',
+    class: 'Heavy',
+    quality: 'Elite',
+    condition: 'Ready',
+    requires: ['Port', 'Shipwrights', 'Dockyard', 'CannonFoundry'],
+    buildCost: 2000,
+    upkeep: 1000,
+    buildTime: 3,
+    bonus: '+2 vs Light',
+    combatBonuses: [{ target: 'Light', value: 2 }],
+    minimumWeather: 2,
+    supportedZones: ['coast', 'ocean'],
+  },
+  Caravel: {
+    type: 'Caravel',
+    class: 'Light',
+    quality: 'Basic',
+    condition: 'Ready',
+    requires: ['Port', 'Shipwrights', 'CannonFoundry'],
+    buildCost: 1500,
+    upkeep: 750,
+    buildTime: 2,
+    bonus: '+1 in Open Seas',
+    combatBonuses: [{ target: 'OpenSea', value: 1 }],
+    minimumWeather: 3,
+    supportedZones: ['river', 'coast', 'ocean'],
+  },
 };
 
 // ============================================================

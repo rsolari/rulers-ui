@@ -5,9 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { initializeDatabaseSchema } from '@/db/bootstrap';
 import * as schema from '@/db/schema';
 import {
+  createShipConstruction,
   createTroopRecruitment,
   prepareBuildingCreation,
   prepareResourceSiteCreation,
+  prepareShipConstruction,
   prepareTradeRouteCreation,
   prepareTroopRecruitment,
   RuleValidationError,
@@ -64,6 +66,39 @@ function createBuildingContext(overrides: Partial<Parameters<typeof prepareBuild
     localTechnicalKnowledge: [] as string[],
     tradedTechnicalKnowledge: [] as string[],
     hasFoodAccess: false,
+    ...overrides,
+  };
+}
+
+function createShipContext(overrides: Partial<Parameters<typeof prepareShipConstruction>[1]> = {}) {
+  return {
+    gameId: 'game-1',
+    realmId: 'realm-1',
+    settlement: {
+      id: 'settlement-1',
+      territoryId: 'territory-1',
+      realmId: 'realm-1',
+      name: 'Harbor',
+      size: 'Town' as const,
+    },
+    territory: {
+      id: 'territory-1',
+      gameId: 'game-1',
+      realmId: 'realm-1',
+      name: 'Coastland',
+      foodCapBase: 30,
+      foodCapBonus: 0,
+      hasRiverAccess: false,
+      hasSeaAccess: true,
+    },
+    settlementBuildings: ['Port'] as BuildingType[],
+    localBuildings: ['Port'] as BuildingType[],
+    tradedBuildings: [] as BuildingType[],
+    localTechnicalKnowledge: [] as string[],
+    tradedTechnicalKnowledge: [] as string[],
+    fleetId: null,
+    garrisonSettlementId: 'settlement-1',
+    fleetWaterZoneType: null,
     ...overrides,
   };
 }
@@ -280,6 +315,77 @@ describe('prepareTroopRecruitment', () => {
       total: 625,
       usesTradeAccess: true,
     });
+  });
+});
+
+describe('prepareShipConstruction', () => {
+  it('uses local naval infrastructure without a trade surcharge', () => {
+    const prepared = prepareShipConstruction({
+      realmId: 'realm-1',
+      type: 'WarGalley',
+      settlementId: 'settlement-1',
+    }, createShipContext({
+      localBuildings: ['Port', 'CannonFoundry'],
+      settlementBuildings: ['Port', 'CannonFoundry'],
+    }), () => 'ship-1');
+
+    expect(prepared.row).toMatchObject({
+      id: 'ship-1',
+      realmId: 'realm-1',
+      type: 'WarGalley',
+      garrisonSettlementId: 'settlement-1',
+      fleetId: null,
+    });
+    expect(prepared.cost).toEqual({
+      base: 500,
+      surcharge: 0,
+      total: 500,
+      usesTradeAccess: false,
+    });
+  });
+
+  it('applies the traded surcharge when advanced ship requirements come from trade', () => {
+    const prepared = prepareShipConstruction({
+      realmId: 'realm-1',
+      type: 'Caravel',
+      settlementId: 'settlement-1',
+      fleetId: 'fleet-1',
+    }, createShipContext({
+      localBuildings: ['Port'],
+      settlementBuildings: ['Port'],
+      tradedBuildings: ['Shipwrights', 'CannonFoundry'],
+      fleetId: 'fleet-1',
+      garrisonSettlementId: null,
+      fleetWaterZoneType: 'ocean',
+    }), () => 'ship-2');
+
+    expect(prepared.row).toMatchObject({
+      id: 'ship-2',
+      fleetId: 'fleet-1',
+      garrisonSettlementId: null,
+    });
+    expect(prepared.cost).toEqual({
+      base: 1500,
+      surcharge: 375,
+      total: 1875,
+      usesTradeAccess: true,
+    });
+  });
+
+  it('rejects assigning ships to fleets in unsupported water zones', () => {
+    const error = expectRuleError(() => prepareShipConstruction({
+      realmId: 'realm-1',
+      type: 'Cog',
+      settlementId: 'settlement-1',
+      fleetId: 'fleet-river',
+    }, createShipContext({
+      fleetId: 'fleet-river',
+      garrisonSettlementId: null,
+      fleetWaterZoneType: 'river',
+    }), () => 'ship-3'));
+
+    expect(error.code).toBe('ship_water_zone_mismatch');
+    expect(error.status).toBe(409);
   });
 });
 
@@ -526,6 +632,109 @@ describe('createTroopRecruitment', () => {
     })).rejects.toMatchObject({
       code: 'realm_troop_cap_exceeded',
       status: 409,
+    });
+
+    sqlite.close();
+  });
+});
+
+describe('createShipConstruction', () => {
+  function seedShipConstructionContext(
+    db: ReturnType<typeof createTestDatabase>['db'],
+    overrides: {
+      treasury?: number;
+      currentYear?: number;
+      currentSeason?: 'Spring' | 'Summer' | 'Autumn' | 'Winter';
+    } = {},
+  ) {
+    const {
+      treasury = 1000,
+      currentYear = 2,
+      currentSeason = 'Summer',
+    } = overrides;
+
+    db.insert(schema.games).values({
+      id: 'game-1',
+      name: 'Naval Rules Test',
+      gmCode: 'gm-1',
+      playerCode: 'player-1',
+      currentYear,
+      currentSeason,
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-1',
+      gameId: 'game-1',
+      name: 'Stormhold',
+      governmentType: 'Monarch',
+      treasury,
+      taxType: 'Tribute',
+      turmoilSources: '[]',
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-1',
+      gameId: 'game-1',
+      name: 'Storm Coast',
+      realmId: 'realm-1',
+      hasSeaAccess: true,
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-1',
+      territoryId: 'territory-1',
+      realmId: 'realm-1',
+      name: 'Stormport',
+      size: 'Town',
+    }).run();
+
+    db.insert(schema.buildings).values({
+      id: 'building-port-1',
+      territoryId: 'territory-1',
+      settlementId: 'settlement-1',
+      type: 'Port',
+      category: 'Military',
+      size: 'Medium',
+      material: null,
+      constructionTurnsRemaining: 0,
+      locationType: 'settlement',
+      takesBuildingSlot: true,
+      ownerGosId: null,
+      allottedGosId: null,
+    }).run();
+  }
+
+  it('deducts treasury and records the ship construction turn metadata', async () => {
+    const { sqlite, db } = createTestDatabase();
+    seedShipConstructionContext(db);
+
+    const created = await createShipConstruction('game-1', {
+      realmId: 'realm-1',
+      type: 'Galley',
+      settlementId: 'settlement-1',
+    }, {
+      database: db,
+      idGenerator: () => 'ship-1',
+    });
+
+    expect(created.cost.total).toBe(250);
+    expect(created.row).toMatchObject({
+      id: 'ship-1',
+      garrisonSettlementId: 'settlement-1',
+      constructionSettlementId: 'settlement-1',
+      constructionYear: 2,
+      constructionSeason: 'Summer',
+    });
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-1')).get();
+    const ship = db.select().from(schema.ships).where(eq(schema.ships.id, 'ship-1')).get();
+
+    expect(realm?.treasury).toBe(750);
+    expect(ship).toMatchObject({
+      constructionSettlementId: 'settlement-1',
+      constructionYear: 2,
+      constructionSeason: 'Summer',
     });
 
     sqlite.close();

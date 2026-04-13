@@ -3,6 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import {
   armies,
+  fleets,
   gameMaps,
   mapHexFeatures,
   mapHexes,
@@ -39,7 +40,7 @@ export async function GET(
   const territoryIds = territoryList.map((territory) => territory.id);
   const realmIds = realmList.map((realm) => realm.id);
 
-  const [features, settlementList, armyList] = await Promise.all([
+  const [features, settlementList, armyList, fleetList] = await Promise.all([
     hexIds.length > 0
     ? await db.select().from(mapHexFeatures).where(inArray(mapHexFeatures.hexId, hexIds))
       : [],
@@ -49,12 +50,16 @@ export async function GET(
     realmIds.length > 0
       ? await db.select().from(armies).where(inArray(armies.realmId, realmIds))
       : [],
+    realmIds.length > 0
+      ? await db.select().from(fleets).where(inArray(fleets.realmId, realmIds))
+      : [],
   ]);
 
   const featuresByHexId = new Map<string, typeof features>();
   const landmarksByHexId = new Map<string, typeof landmarks>();
   const settlementByHexId = new Map<string, typeof settlementList[number]>();
   const armiesByHexId = new Map<string, Array<typeof armyList[number]>>();
+  const fleetsByHexId = new Map<string, Array<typeof fleetList[number]>>();
 
   for (const feature of features) {
     const list = featuresByHexId.get(feature.hexId) ?? [];
@@ -82,6 +87,16 @@ export async function GET(
     const list = armiesByHexId.get(army.locationHexId) ?? [];
     list.push(army);
     armiesByHexId.set(army.locationHexId, list);
+  }
+
+  for (const fleet of fleetList) {
+    if (!fleet.locationHexId) {
+      continue;
+    }
+
+    const list = fleetsByHexId.get(fleet.locationHexId) ?? [];
+    list.push(fleet);
+    fleetsByHexId.set(fleet.locationHexId, list);
   }
 
   return NextResponse.json({
@@ -126,6 +141,11 @@ export async function GET(
           id: army.id,
           name: army.name,
           realmId: army.realmId,
+        })),
+        fleets: (fleetsByHexId.get(hex.id) ?? []).map((fleet) => ({
+          id: fleet.id,
+          name: fleet.name,
+          realmId: fleet.realmId,
         })),
       };
     }),

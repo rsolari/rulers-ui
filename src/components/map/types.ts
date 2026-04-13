@@ -34,6 +34,12 @@ export interface MapHexArmy {
   realmId: string;
 }
 
+export interface MapHexFleet {
+  id: string;
+  name: string;
+  realmId: string;
+}
+
 export interface MapHexData {
   id: string;
   q: number;
@@ -46,6 +52,7 @@ export interface MapHexData {
   landmarks: MapHexLandmark[];
   settlement: MapHexSettlement | null;
   armies: MapHexArmy[];
+  fleets: MapHexFleet[];
 }
 
 export interface GameMapData {

@@ -138,7 +138,7 @@ export async function POST(
       ? await getWaterHexById(db, body.locationHexId)
       : null;
 
-    let locationTerritoryId = body.locationTerritoryId as string | undefined;
+    const locationTerritoryId = body.locationTerritoryId as string | undefined;
 
     if (!locationTerritoryId) {
       return NextResponse.json({ error: 'locationTerritoryId required' }, { status: 400 });

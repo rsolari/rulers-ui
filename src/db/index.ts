@@ -4,12 +4,13 @@ import path from 'path';
 import fs from 'fs';
 import * as schema from './schema';
 import { initializeDatabaseSchema } from './bootstrap';
+import { resolveDatabasePath } from './path';
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
 function getDb() {
   if (!_db) {
-    const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'rulers.db');
+    const dbPath = resolveDatabasePath();
     const dbDir = path.dirname(dbPath);
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });

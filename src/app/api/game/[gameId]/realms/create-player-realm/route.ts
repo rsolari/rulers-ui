@@ -8,6 +8,12 @@ import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
 import { isSettlementHexAvailable } from '@/lib/game-logic/maps';
 import { initializeRealmCapital } from '@/lib/game-logic/realm-bootstrap';
 
+const REALM_COLORS = [
+  '#8b2020', '#2a4a7a', '#5a7a4a', '#8a5a24', '#7a3e6a',
+  '#7a6a2a', '#4a667a', '#5f3f2b', '#576636', '#7a4b4b',
+  '#3f5f66', '#6a4f2d',
+];
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ gameId: string }> }
@@ -47,6 +53,9 @@ export async function POST(
       return NextResponse.json({ error: 'Capital must be placed on an unoccupied land hex in your territory' }, { status: 400 });
     }
 
+    const existingRealms = await db.select().from(realms).where(eq(realms.gameId, gameId));
+    const color = REALM_COLORS[existingRealms.length % REALM_COLORS.length];
+
     await db.transaction((tx) => {
       tx.insert(realms).values({
         id: realmId,
@@ -62,6 +71,7 @@ export async function POST(
         treasury: 0,
         taxType: 'Tribute',
         turmoilSources: '[]',
+        color,
       }).run();
 
       initializeRealmCapital(tx, {

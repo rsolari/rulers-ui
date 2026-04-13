@@ -6,6 +6,12 @@ import { v4 as uuid } from 'uuid';
 import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
 import { getEconomyOverview } from '@/lib/economy-service';
 
+const REALM_COLORS = [
+  '#8b2020', '#2a4a7a', '#5a7a4a', '#8a5a24', '#7a3e6a',
+  '#7a6a2a', '#4a667a', '#5f3f2b', '#576636', '#7a4b4b',
+  '#3f5f66', '#6a4f2d',
+];
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ gameId: string }> }
@@ -34,6 +40,8 @@ export async function POST(
     const body = await request.json();
 
     const id = uuid();
+    const existingRealms = await db.select().from(realms).where(eq(realms.gameId, gameId));
+    const color = body.color ?? REALM_COLORS[existingRealms.length % REALM_COLORS.length];
     await db.insert(realms).values({
       id,
       gameId,
@@ -49,6 +57,7 @@ export async function POST(
       consecutiveFoodShortageSeasons: body.consecutiveFoodShortageSeasons ?? 0,
       consecutiveFoodRecoverySeasons: body.consecutiveFoodRecoverySeasons ?? 0,
       turmoilSources: '[]',
+      color,
     });
 
     return NextResponse.json({ id, ...body });

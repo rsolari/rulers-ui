@@ -8,6 +8,7 @@ import {
   economicSnapshots,
   games,
   guildsOrdersSocieties,
+  gosRealms,
   industries,
   gosUnrestStates,
   nobles,
@@ -381,7 +382,14 @@ function loadGameEconomyState(
     : [];
 
   const gosRows = realmIds.length > 0
-    ? database.select().from(guildsOrdersSocieties).where(inArray(guildsOrdersSocieties.realmId, realmIds)).all()
+    ? database.select({
+      realmId: gosRealms.realmId,
+      gos: guildsOrdersSocieties,
+    })
+      .from(gosRealms)
+      .innerJoin(guildsOrdersSocieties, eq(gosRealms.gosId, guildsOrdersSocieties.id))
+      .where(inArray(gosRealms.realmId, realmIds))
+      .all()
     : [];
   const nobleGrievanceRows = realmIds.length > 0
     ? database.select().from(nobleGrievances).where(inArray(nobleGrievances.realmId, realmIds)).all()
@@ -481,7 +489,7 @@ function loadGameEconomyState(
   const gosByRealm = new Map<string, Array<typeof guildsOrdersSocieties.$inferSelect>>();
   for (const gos of gosRows) {
     const realmGos = gosByRealm.get(gos.realmId) ?? [];
-    realmGos.push(gos);
+    realmGos.push(gos.gos);
     gosByRealm.set(gos.realmId, realmGos);
   }
 

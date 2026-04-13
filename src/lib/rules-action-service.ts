@@ -8,6 +8,7 @@ import {
   fleets,
   games,
   guildsOrdersSocieties,
+  gosRealms,
   mapHexes,
   realms,
   resourceSites,
@@ -1208,7 +1209,8 @@ function loadRealmRuleAccess(database: DatabaseLike, gameId: string, realmId: st
     type: guildsOrdersSocieties.type,
   })
     .from(guildsOrdersSocieties)
-    .where(eq(guildsOrdersSocieties.realmId, realm.id))
+    .innerJoin(gosRealms, eq(gosRealms.gosId, guildsOrdersSocieties.id))
+    .where(eq(gosRealms.realmId, realm.id))
     .all();
 
   return {

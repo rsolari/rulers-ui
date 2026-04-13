@@ -18,7 +18,8 @@ const dbMocks = vi.hoisted(() => {
 
     return chain;
   });
-  const from = vi.fn(() => ({ where }));
+  const innerJoin = vi.fn(() => ({ where }));
+  const from = vi.fn(() => ({ where, innerJoin }));
   const select = vi.fn(() => ({ from }));
   const insertValues = vi.fn();
   const insert = vi.fn(() => ({ values: insertValues }));

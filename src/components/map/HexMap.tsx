@@ -7,15 +7,16 @@ import { FleetMarker } from '@/components/map/FleetMarker';
 import { HexTile } from '@/components/map/HexTile';
 import { HexTooltip } from '@/components/map/HexTooltip';
 import { MapLegend } from '@/components/map/MapLegend';
+import { RealmFlag } from '@/components/map/RealmFlag';
 import { SettlementMarker } from '@/components/map/SettlementMarker';
 import { TerritoryLabel } from '@/components/map/TerritoryLabel';
 import type { GameMapData, HoveredHexData, MapHexData } from '@/components/map/types';
 import { computeTerritoryBorderSegments, computeViewBox, hexToPixel, hexVertices, type PixelPoint, type ViewBox } from '@/components/map/hex-utils';
 import { computeRiverPaths, type RiverHexInput } from '@/components/map/river-utils';
 
-const HEX_SIZE = 24;
+const HEX_SIZE = 30;
 const MIN_ZOOM_FACTOR = 0.45;
-const MAX_ZOOM_FACTOR = 3.5;
+const MAX_ZOOM_FACTOR = 8.0;
 const REALM_COLORS = [
   '#8b2020',
   '#2a4a7a',
@@ -121,7 +122,7 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
     [data.realms]
   );
   const realmColorById = useMemo(
-    () => new Map(data.realms.map((realm, index) => [realm.id, REALM_COLORS[index % REALM_COLORS.length]])),
+    () => new Map(data.realms.map((realm, index) => [realm.id, realm.color ?? REALM_COLORS[index % REALM_COLORS.length]])),
     [data.realms]
   );
   const hexById = useMemo(
@@ -410,19 +411,37 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
           />
         ))}
         {hex.settlement ? (
-          <SettlementMarker
-            x={hex.centerX}
-            y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -4 : 0)}
-            size={hex.settlement.size}
-          />
+          <>
+            <SettlementMarker
+              x={hex.centerX}
+              y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -4 : 0)}
+              size={hex.settlement.size}
+            />
+            {hex.settlement.realmId ? (
+              <RealmFlag
+                x={hex.centerX - 7}
+                y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -4 : 0)}
+                fill={realmColorById.get(hex.settlement.realmId) ?? '#4a3728'}
+              />
+            ) : null}
+          </>
         ) : null}
         {hex.armies.length > 0 ? (
-          <ArmyMarker
-            x={hex.centerX + (hex.settlement ? 10 : 0) - (hex.fleets.length > 0 ? 8 : 0)}
-            y={hex.centerY + 10}
-            fill={realmColorById.get(hex.armies[0].realmId) ?? '#4a3728'}
-            count={hex.armies.length}
-          />
+          <>
+            <ArmyMarker
+              x={hex.centerX + (hex.settlement ? 10 : 0) - (hex.fleets.length > 0 ? 8 : 0)}
+              y={hex.centerY + 10}
+              fill={realmColorById.get(hex.armies[0].realmId) ?? '#4a3728'}
+              count={hex.armies.length}
+            />
+            {!hex.settlement ? (
+              <RealmFlag
+                x={hex.centerX + (hex.settlement ? 10 : 0) - (hex.fleets.length > 0 ? 8 : 0) - 7}
+                y={hex.centerY + 10}
+                fill={realmColorById.get(hex.armies[0].realmId) ?? '#4a3728'}
+              />
+            ) : null}
+          </>
         ) : null}
         {hex.fleets.length > 0 ? (
           <FleetMarker
@@ -541,7 +560,7 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
       ref={wrapperRef}
       className="relative min-h-[560px] overflow-hidden rounded-2xl border border-ink-200 bg-[radial-gradient(circle_at_top,_rgba(253,248,240,0.92),_rgba(236,220,184,0.96))] shadow-[inset_0_0_0_1px_rgba(201,160,102,0.25),0_20px_60px_rgba(74,55,40,0.14)]"
     >
-      <MapLegend terrainColors={TERRAIN_COLORS} realms={data.realms.map((realm, index) => ({ name: realm.name, color: REALM_COLORS[index % REALM_COLORS.length], isPlayer: realm.id === playerRealmId }))} />
+      <MapLegend terrainColors={TERRAIN_COLORS} realms={data.realms.map((realm, index) => ({ name: realm.name, color: realm.color ?? REALM_COLORS[index % REALM_COLORS.length], isPlayer: realm.id === playerRealmId }))} />
       <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-ink-200 bg-parchment-50/90 px-3 py-2 text-sm text-ink-300 backdrop-blur-sm">
         Drag to pan. Scroll to zoom. Click a hex to highlight it.
       </div>

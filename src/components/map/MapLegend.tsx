@@ -74,6 +74,7 @@ export function MapLegend({ terrainColors, realms = [] }: MapLegendProps) {
         <div className="space-y-1 text-ink-300">
           <p>Red seal: settlement</p>
           <p>Shield: army</p>
+          <p>Pennant flag: realm ownership</p>
           <p>Colored lines: realm borders</p>
           <p>Gold border: your kingdom</p>
         </div>

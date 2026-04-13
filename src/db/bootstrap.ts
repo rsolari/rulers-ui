@@ -150,6 +150,7 @@ function createBaseSchema(database: Database.Database) {
       loan_repayment_seasons_remaining integer NOT NULL DEFAULT 0,
       turmoil_sources text NOT NULL DEFAULT '[]',
       capital_settlement_id text,
+      color text,
       FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (ruler_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (heir_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
@@ -1696,6 +1697,8 @@ export function initializeDatabaseSchema(database: Database.Database) {
   if (tableExists(database, 'player_slots') && !columnExists(database, 'player_slots', 'setup_state')) {
     database.exec("ALTER TABLE player_slots ADD COLUMN setup_state text NOT NULL DEFAULT 'unclaimed';");
   }
+
+  addColumnIfMissing(database, 'realms', 'color text', 'color');
 
   backfillInitStateFromLegacyGamePhase(database);
   backfillPlayerSlotSetupState(database);

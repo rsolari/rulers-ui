@@ -68,7 +68,7 @@ describe('GET /api/game/[gameId]/map', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       mapName: 'World Map v1',
-      realms: [{ id: 'realm-1', name: 'Aurelian March' }],
+      realms: [{ id: 'realm-1', name: 'Aurelian March', color: '#8b2020' }],
       territories: [{ id: 'territory-1', name: 'Northreach', realmId: 'realm-1' }],
       hexes: [{
         id: 'hex-1',
@@ -80,7 +80,7 @@ describe('GET /api/game/[gameId]/map', () => {
         territoryId: 'territory-1',
         features: [{ featureType: 'river', name: 'Kingsrun', riverIndex: null }],
         landmarks: [{ name: 'Old Tower', kind: 'ruin', description: null }],
-        settlement: { name: 'Stoneford', size: 'Town' },
+        settlement: { name: 'Stoneford', size: 'Town', realmId: 'realm-1' },
         armies: [{ id: 'army-1', name: 'First Banner', realmId: 'realm-1' }],
         fleets: [{ id: 'fleet-1', name: 'Blue Squadron', realmId: 'realm-1' }],
       }],

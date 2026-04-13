@@ -3,6 +3,7 @@ import type { MapFeatureType, MapHexKind, MapTerrainType, WaterHexKind } from '@
 export interface MapRealm {
   id: string;
   name: string;
+  color: string;
 }
 
 export interface MapTerritory {
@@ -26,6 +27,7 @@ export interface MapHexLandmark {
 export interface MapHexSettlement {
   name: string;
   size: string;
+  realmId: string | null;
 }
 
 export interface MapHexArmy {

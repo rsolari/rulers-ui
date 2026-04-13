@@ -13,6 +13,12 @@ import {
   territories,
 } from '@/db/schema';
 
+const REALM_COLORS = [
+  '#8b2020', '#2a4a7a', '#5a7a4a', '#8a5a24', '#7a3e6a',
+  '#7a6a2a', '#4a667a', '#5f3f2b', '#576636', '#7a4b4b',
+  '#3f5f66', '#6a4f2d',
+];
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ gameId: string }> }
@@ -101,9 +107,10 @@ export async function GET(
 
   return NextResponse.json({
     mapName: gameMap.name,
-    realms: realmList.map((realm) => ({
+    realms: realmList.map((realm, index) => ({
       id: realm.id,
       name: realm.name,
+      color: realm.color ?? REALM_COLORS[index % REALM_COLORS.length],
     })),
     territories: territoryList.map((territory) => ({
       id: territory.id,
@@ -136,6 +143,7 @@ export async function GET(
         settlement: settlement ? {
           name: settlement.name,
           size: settlement.size,
+          realmId: settlement.realmId ?? null,
         } : null,
         armies: (armiesByHexId.get(hex.id) ?? []).map((army) => ({
           id: army.id,

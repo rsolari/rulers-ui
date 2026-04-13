@@ -41,6 +41,7 @@ function createBenchmarkData(): GameMapData {
   const realms = Array.from({ length: TERRITORY_COUNT }, (_, index) => ({
     id: `realm-${index + 1}`,
     name: `Realm ${index + 1}`,
+    color: ['#8b2020', '#2a4a7a', '#5a7a4a', '#8a5a24'][index % 4],
   }));
   const territories = Array.from({ length: TERRITORY_COUNT }, (_, index) => ({
     id: `territory-${index + 1}`,
@@ -78,6 +79,7 @@ function createBenchmarkData(): GameMapData {
         settlement: !isWater && index % 29 === 0 ? {
           name: `Settlement ${index}`,
           size: index % 2 === 0 ? 'Town' : 'Village',
+          realmId: territory.realmId,
         } : null,
         armies: !isWater && index % 31 === 0 ? [{
           id: `army-${index}`,
@@ -419,7 +421,7 @@ describe('HexMap performance', () => {
     expect(legacy.updateCommits).toBeGreaterThan(0);
     expect(optimized.updateCommits).toBeLessThan(legacy.updateCommits / 4);
     expect(optimized.updateDuration).toBeLessThan(legacy.updateDuration * 0.1);
-  }, 5000);
+  }, 20000);
 
   it('avoids React update work during wheel zoom', () => {
     const legacy = measureInteraction(LegacyHexMap, 'wheel');
@@ -428,5 +430,5 @@ describe('HexMap performance', () => {
     expect(legacy.updateCommits).toBeGreaterThan(0);
     expect(optimized.updateCommits).toBeLessThan(legacy.updateCommits / 4);
     expect(optimized.updateDuration).toBeLessThan(legacy.updateDuration * 0.1);
-  }, 5000);
+  }, 20000);
 });

@@ -502,6 +502,12 @@ function loadGameEconomyState(
   for (const action of actionRows) {
     if (action.kind !== 'financial') continue;
     if (!financialActionStatuses.includes(action.status)) continue;
+    if (
+      action.status === 'executed'
+      && (action.financialType === 'build' || action.financialType === 'recruit')
+    ) {
+      continue;
+    }
 
     const existing = financialActionsByRealm.get(action.realmId) ?? [];
     existing.push(mapTurnActionRowToFinancialAction(action));

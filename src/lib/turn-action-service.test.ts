@@ -32,7 +32,7 @@ function seedRealm(db: ReturnType<typeof createTestDatabase>['db']) {
       gameId: 'game-1',
       name: 'Aster',
       governmentType: 'Monarch',
-      treasury: 1000,
+      treasury: 5000,
       taxType: 'Tribute',
     },
     {
@@ -40,7 +40,7 @@ function seedRealm(db: ReturnType<typeof createTestDatabase>['db']) {
       gameId: 'game-1',
       name: 'Bastion',
       governmentType: 'Council',
-      treasury: 1000,
+      treasury: 5000,
       taxType: 'Tribute',
     },
   ]).run();
@@ -91,7 +91,7 @@ describe('turn action service', () => {
     sqlite.close();
   });
 
-  it('submits draft actions and blocks invalid settlement ownership', () => {
+  it('submits political actions while auto-resolving build and recruit actions', () => {
     const { sqlite, db } = createTestDatabase();
     seedRealm(db);
     const service = createTurnActionService(db);
@@ -113,10 +113,19 @@ describe('turn action service', () => {
     service.createAction('game-1', 'realm-1', {
       kind: 'financial',
       financialType: 'build',
-      buildingType: 'Fort',
+      buildingType: 'Theatre',
       settlementId: 'settlement-1',
-      description: 'Raise a fort on the border.',
-      cost: 200,
+      description: 'Raise a public theatre.',
+      cost: 0,
+    });
+
+    service.createAction('game-1', 'realm-1', {
+      kind: 'financial',
+      financialType: 'recruit',
+      troopType: 'Spearmen',
+      settlementId: 'settlement-1',
+      description: 'Muster the town militia.',
+      cost: 0,
     });
 
     const result = service.submitTurn('game-1', 'realm-1', {
@@ -125,7 +134,75 @@ describe('turn action service', () => {
     });
 
     expect(result.report.status).toBe('submitted');
-    expect(result.actions.every((action) => action.status === 'submitted')).toBe(true);
+    expect(result.actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'political',
+        status: 'submitted',
+      }),
+      expect.objectContaining({
+        financialType: 'build',
+        status: 'executed',
+        outcome: 'success',
+        buildingSize: 'Medium',
+        cost: 1500,
+      }),
+      expect.objectContaining({
+        financialType: 'recruit',
+        status: 'executed',
+        outcome: 'success',
+        cost: 250,
+      }),
+    ]));
+
+    const building = db.select().from(schema.buildings).where(eq(schema.buildings.settlementId, 'settlement-1')).get();
+    expect(building).toMatchObject({
+      type: 'Theatre',
+      constructionTurnsRemaining: 3,
+    });
+
+    const troop = db.select().from(schema.troops).where(eq(schema.troops.realmId, 'realm-1')).get();
+    expect(troop).toMatchObject({
+      type: 'Spearmen',
+      garrisonSettlementId: 'settlement-1',
+      recruitmentSettlementId: 'settlement-1',
+      recruitmentTurnsRemaining: 1,
+    });
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-1')).get();
+    expect(realm?.treasury).toBe(3250);
+
+    sqlite.close();
+  });
+
+  it('rolls back submission when an auto-resolved financial action fails validation', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRealm(db);
+    const service = createTurnActionService(db);
+
+    db.update(schema.realms)
+      .set({ treasury: 1000 })
+      .where(eq(schema.realms.id, 'realm-1'))
+      .run();
+
+    service.createAction('game-1', 'realm-1', {
+      kind: 'financial',
+      financialType: 'build',
+      buildingType: 'Theatre',
+      settlementId: 'settlement-1',
+      description: 'Raise a public theatre.',
+      cost: 0,
+    });
+
+    expect(() => service.submitTurn('game-1', 'realm-1', {
+      role: 'player',
+      label: 'Aster Player',
+    })).toThrow(TurnActionError);
+
+    const building = db.select().from(schema.buildings).where(eq(schema.buildings.settlementId, 'settlement-1')).get();
+    expect(building).toBeUndefined();
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-1')).get();
+    expect(realm?.treasury).toBe(1000);
 
     sqlite.close();
   });

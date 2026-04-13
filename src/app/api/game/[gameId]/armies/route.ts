@@ -12,6 +12,10 @@ import type { TroopType } from '@/types/game';
 
 const TROOP_TYPES = Object.keys(TROOP_DEFS) as TroopType[];
 
+function normalizeOptionalString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function getTroopRecruitmentOptions(gameId: string, realmId: string, recruitmentSettlementId: string | null) {
   return TROOP_TYPES.map((type) => {
     if (!recruitmentSettlementId) {
@@ -132,22 +136,45 @@ export async function POST(
 ) {
   try {
     const { gameId } = await params;
-    const body = await request.json();
-    const access = await requireOwnedRealmAccess(gameId, body.realmId);
+    const body = await request.json() as Record<string, unknown>;
+    const name = normalizeOptionalString(body.name);
+    const requestedRealmId = normalizeOptionalString(body.realmId);
+
+    if (!name) {
+      return NextResponse.json({ error: 'Army name is required' }, { status: 400 });
+    }
+
+    const access = await requireOwnedRealmAccess(gameId, requestedRealmId);
     const realmId = access.realmId;
     const isPlayer = access.session.gameId === gameId && access.session.role === 'player';
-    const locationHex = body.locationHexId
-      ? await getLandHexById(db, body.locationHexId)
+    const locationHexIdInput = normalizeOptionalString(body.locationHexId);
+    const locationHex = locationHexIdInput
+      ? await getLandHexById(db, locationHexIdInput)
       : null;
 
-    let locationTerritoryId = body.locationTerritoryId as string | undefined;
+    let locationTerritoryId = normalizeOptionalString(body.locationTerritoryId);
 
     if (locationHex) {
-      locationTerritoryId = locationHex.territoryId ?? undefined;
+      locationTerritoryId = locationHex.territoryId ?? null;
     }
 
     if (!locationTerritoryId) {
-      return NextResponse.json({ error: 'locationTerritoryId or locationHexId required' }, { status: 400 });
+      const defaultRealmTerritory = await db.select({
+        id: territories.id,
+        realmId: territories.realmId,
+      })
+        .from(territories)
+        .where(and(
+          eq(territories.realmId, realmId),
+          eq(territories.gameId, gameId),
+        ))
+        .get();
+
+      locationTerritoryId = defaultRealmTerritory?.id ?? null;
+    }
+
+    if (!locationTerritoryId) {
+      return NextResponse.json({ error: 'Realm has no territory to place an army' }, { status: 400 });
     }
 
     const locationTerritory = await db.select({
@@ -169,23 +196,26 @@ export async function POST(
       return NextResponse.json({ error: 'Army must be placed in your territory' }, { status: 403 });
     }
 
-    if (body.locationHexId && !locationHex) {
+    if (locationHexIdInput && !locationHex) {
       return NextResponse.json({ error: 'Army must be placed on a land hex' }, { status: 400 });
     }
 
-    const destinationHex = body.destinationHexId
-      ? await getLandHexById(db, body.destinationHexId)
+    const destinationHexIdInput = normalizeOptionalString(body.destinationHexId);
+    const destinationHex = destinationHexIdInput
+      ? await getLandHexById(db, destinationHexIdInput)
       : null;
-    const destinationTerritoryId = destinationHex?.territoryId ?? body.destinationTerritoryId ?? null;
+    const destinationTerritoryId = destinationHex?.territoryId ?? normalizeOptionalString(body.destinationTerritoryId);
 
     const locationHexId = locationHex?.id
       ?? await getDefaultArmyHexId(db, locationTerritory.id, realmId);
 
-    if (body.generalId) {
+    const generalId = normalizeOptionalString(body.generalId);
+
+    if (generalId) {
       const general = await db.select({ id: nobles.id })
         .from(nobles)
         .where(and(
-          eq(nobles.id, body.generalId),
+          eq(nobles.id, generalId),
           eq(nobles.realmId, realmId),
         ))
         .get();
@@ -199,8 +229,8 @@ export async function POST(
     await db.insert(armies).values({
       id,
       realmId,
-      name: body.name,
-      generalId: body.generalId || null,
+      name,
+      generalId,
       locationTerritoryId: locationTerritory.id,
       destinationTerritoryId,
       locationHexId,
@@ -214,6 +244,8 @@ export async function POST(
       id,
       ...body,
       realmId,
+      name,
+      generalId,
       locationTerritoryId: locationTerritory.id,
       locationHexId,
       destinationTerritoryId,

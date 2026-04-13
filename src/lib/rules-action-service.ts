@@ -1247,87 +1247,128 @@ function loadTradeProductsForRealm(database: DatabaseLike, realmId: string) {
   );
 }
 
-export async function createBuilding(
+export function createBuilding(
   gameId: string,
   input: CreateBuildingInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+  options: { database?: DatabaseLike; idGenerator?: IdGenerator; chargeTreasury?: boolean } = {},
 ) {
   const database = resolveDatabase(options.database);
-  const requestedHex = loadLandHex(database, input.hexId ?? null);
-  const settlement = loadSettlement(database, input.settlementId ?? null);
-  if (input.settlementId && !settlement) {
-    throw new RuleValidationError('Settlement not found', 404, 'settlement_not_found', { settlementId: input.settlementId });
-  }
+  return database.transaction((tx) => {
+    const requestedHex = loadLandHex(tx, input.hexId ?? null);
+    const settlement = loadSettlement(tx, input.settlementId ?? null);
+    if (input.settlementId && !settlement) {
+      throw new RuleValidationError('Settlement not found', 404, 'settlement_not_found', { settlementId: input.settlementId });
+    }
 
-  if (input.hexId && !requestedHex) {
-    throw new RuleValidationError('Building must be placed on a land hex', 400, 'building_hex_invalid', {
-      hexId: input.hexId,
-    });
-  }
+    if (input.hexId && !requestedHex) {
+      throw new RuleValidationError('Building must be placed on a land hex', 400, 'building_hex_invalid', {
+        hexId: input.hexId,
+      });
+    }
 
-  if (settlement && requestedHex && requestedHex.territoryId !== settlement.territoryId) {
-    throw new RuleValidationError(
-      'Settlement hex must match the settlement territory',
-      400,
-      'building_settlement_hex_mismatch',
-      { settlementId: settlement.id, hexId: requestedHex.id, territoryId: settlement.territoryId },
-    );
-  }
+    if (settlement && requestedHex && requestedHex.territoryId !== settlement.territoryId) {
+      throw new RuleValidationError(
+        'Settlement hex must match the settlement territory',
+        400,
+        'building_settlement_hex_mismatch',
+        { settlementId: settlement.id, hexId: requestedHex.id, territoryId: settlement.territoryId },
+      );
+    }
 
-  const buildingType = assertKnownBuildingType(input.type);
-  const derivedTerritoryId = settlement?.territoryId ?? requestedHex?.territoryId ?? input.territoryId ?? null;
-  const territory = loadTerritory(database, gameId, derivedTerritoryId);
-  if (derivedTerritoryId && !territory) {
-    throw new RuleValidationError('Territory not found', 404, 'territory_not_found', { territoryId: derivedTerritoryId, gameId });
-  }
+    const buildingType = assertKnownBuildingType(input.type);
+    const derivedTerritoryId = settlement?.territoryId ?? requestedHex?.territoryId ?? input.territoryId ?? null;
+    const territory = loadTerritory(tx, gameId, derivedTerritoryId);
+    if (derivedTerritoryId && !territory) {
+      throw new RuleValidationError('Territory not found', 404, 'territory_not_found', { territoryId: derivedTerritoryId, gameId });
+    }
 
-  if (requestedHex && territory && requestedHex.territoryId !== territory.id) {
-    throw new RuleValidationError(
-      'Building hex does not belong to the specified territory',
-      400,
-      'building_hex_territory_mismatch',
-      { hexId: requestedHex.id, territoryId: territory.id },
-    );
-  }
+    if (requestedHex && territory && requestedHex.territoryId !== territory.id) {
+      throw new RuleValidationError(
+        'Building hex does not belong to the specified territory',
+        400,
+        'building_hex_territory_mismatch',
+        { hexId: requestedHex.id, territoryId: territory.id },
+      );
+    }
 
-  const effectiveHexId = settlement?.hexId
-    ?? requestedHex?.id
-    ?? loadFirstLandHexForTerritory(database, territory?.id ?? null)?.id
-    ?? null;
-  const realmId = settlement?.realmId ?? territory?.realmId ?? null;
-  const ruleAccess = loadRealmRuleAccess(database, gameId, realmId);
-  const existingBuildings = settlement
-    ? database.select({
-      id: buildings.id,
-      type: buildings.type,
-      takesBuildingSlot: buildings.takesBuildingSlot,
-      constructionTurnsRemaining: buildings.constructionTurnsRemaining,
-    })
-      .from(buildings)
-      .where(eq(buildings.settlementId, settlement.id))
-      .all()
-    : [];
+    const effectiveHexId = settlement?.hexId
+      ?? requestedHex?.id
+      ?? loadFirstLandHexForTerritory(tx, territory?.id ?? null)?.id
+      ?? null;
+    const realmId = settlement?.realmId ?? territory?.realmId ?? null;
+    const ruleAccess = loadRealmRuleAccess(tx, gameId, realmId);
+    const existingBuildings = settlement
+      ? tx.select({
+        id: buildings.id,
+        type: buildings.type,
+        takesBuildingSlot: buildings.takesBuildingSlot,
+        constructionTurnsRemaining: buildings.constructionTurnsRemaining,
+      })
+        .from(buildings)
+        .where(eq(buildings.settlementId, settlement.id))
+        .all()
+      : [];
 
-  const prepared = prepareBuildingCreation({
-    ...input,
-    type: buildingType,
-    territoryId: derivedTerritoryId,
-  }, {
-    gameId,
-    settlement,
-    territory,
-    existingBuildings,
-    ...ruleAccess,
-  }, options.idGenerator);
+    const prepared = prepareBuildingCreation({
+      ...input,
+      type: buildingType,
+      territoryId: derivedTerritoryId,
+    }, {
+      gameId,
+      settlement,
+      territory,
+      existingBuildings,
+      ...ruleAccess,
+    }, options.idGenerator);
 
-  const row = {
-    ...prepared.row,
-    hexId: effectiveHexId,
-  };
+    if (options.chargeTreasury) {
+      if (!realmId) {
+        throw new RuleValidationError(
+          'Building placement must belong to a realm before treasury can be charged',
+          409,
+          'building_realm_required',
+        );
+      }
 
-  database.insert(buildings).values(row).run();
-  prepared.row = row;
-  return prepared;
+      const realm = tx.select({
+        id: realms.id,
+        treasury: realms.treasury,
+      })
+        .from(realms)
+        .where(and(
+          eq(realms.id, realmId),
+          eq(realms.gameId, gameId),
+        ))
+        .get();
+
+      if (!realm) {
+        throw new RuleValidationError('Realm not found', 404, 'realm_not_found', { realmId, gameId });
+      }
+
+      if (realm.treasury < prepared.cost.total) {
+        throw new RuleValidationError(
+          'Realm treasury cannot afford this construction',
+          409,
+          'insufficient_treasury',
+          { realmId, treasury: realm.treasury, buildingCost: prepared.cost.total },
+        );
+      }
+
+      tx.update(realms)
+        .set({ treasury: realm.treasury - prepared.cost.total })
+        .where(eq(realms.id, realmId))
+        .run();
+    }
+
+    const row = {
+      ...prepared.row,
+      hexId: effectiveHexId,
+    };
+
+    tx.insert(buildings).values(row).run();
+    prepared.row = row;
+    return prepared;
+  });
 }
 
 export function prepareRealmBuildingCreation(
@@ -1410,7 +1451,7 @@ export async function createResourceSite(
   return prepared;
 }
 
-export async function createTroopRecruitment(
+export function createTroopRecruitment(
   gameId: string,
   input: CreateTroopInput,
   options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},

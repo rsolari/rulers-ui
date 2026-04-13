@@ -202,6 +202,7 @@ describe('/api/game/[gameId]/armies', () => {
       id: 'army-1',
       realmId: 'realm-player',
       name: 'First Army',
+      generalId: null,
       locationTerritoryId: 'territory-1',
       locationHexId: 'hex-town',
       destinationTerritoryId: null,
@@ -221,6 +222,72 @@ describe('/api/game/[gameId]/armies', () => {
       destinationHexId: null,
       movementTurnsRemaining: 0,
     });
+  });
+
+  it('trims army names and falls back to the realm territory when no location is provided', async () => {
+    uuidMock.mockReturnValue('army-1');
+    authMocks.requireOwnedRealmAccess.mockResolvedValue({
+      realm: { id: 'realm-player' },
+      realmId: 'realm-player',
+      session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
+    });
+    mapMocks.getDefaultArmyHexId.mockResolvedValue('hex-town');
+    dbMocks.dbGet
+      .mockResolvedValueOnce({ id: 'territory-1', realmId: 'realm-player' })
+      .mockResolvedValueOnce({ id: 'territory-1', realmId: 'realm-player' });
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/armies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-player',
+        name: '  First Army  ',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      id: 'army-1',
+      realmId: 'realm-player',
+      name: 'First Army',
+      generalId: null,
+      locationTerritoryId: 'territory-1',
+      locationHexId: 'hex-town',
+      destinationTerritoryId: null,
+      destinationHexId: null,
+    });
+    expect(dbMocks.insertValues).toHaveBeenCalledWith({
+      id: 'army-1',
+      realmId: 'realm-player',
+      name: 'First Army',
+      generalId: null,
+      locationTerritoryId: 'territory-1',
+      locationHexId: 'hex-town',
+      destinationTerritoryId: null,
+      destinationHexId: null,
+      movementTurnsRemaining: 0,
+    });
+  });
+
+  it('rejects blank army names before writing to the database', async () => {
+    const response = await POST(new Request('http://localhost/api/game/game-1/armies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-player',
+        name: '   ',
+        locationTerritoryId: 'territory-1',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Army name is required' });
+    expect(authMocks.requireOwnedRealmAccess).not.toHaveBeenCalled();
+    expect(dbMocks.insertValues).not.toHaveBeenCalled();
   });
 
   it('rejects a player trying to create an army for another realm', async () => {

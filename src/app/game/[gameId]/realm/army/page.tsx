@@ -76,6 +76,7 @@ interface SettlementSummary {
   id: string;
   name: string;
   size: string;
+  territoryId: string;
 }
 
 interface TroopRecruitmentOption {
@@ -97,6 +98,9 @@ type ShipConstructionOptionsBySettlement = Record<string, ShipConstructionOption
 
 async function fetchArmyData(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/armies?realmId=${realmId}`);
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Failed to load armies'));
+  }
   const data = await response.json();
 
   return {
@@ -122,7 +126,19 @@ async function fetchFleetData(gameId: string, realmId: string) {
 
 async function fetchRealmSettlements(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Failed to load settlements'));
+  }
   return response.json() as Promise<SettlementSummary[]>;
+}
+
+async function getErrorMessage(response: Response, fallback: string) {
+  const data = await response.json().catch(() => null);
+  if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' && data.error) {
+    return data.error;
+  }
+
+  return fallback;
 }
 
 export default function ArmyPage() {
@@ -153,6 +169,8 @@ export default function ArmyPage() {
   const [recruitOpen, setRecruitOpen] = useState<string | null>(null);
   const [constructShipOpen, setConstructShipOpen] = useState<string | null>(null);
   const [newArmyName, setNewArmyName] = useState('');
+  const [createArmyError, setCreateArmyError] = useState('');
+  const [isCreatingArmy, setIsCreatingArmy] = useState(false);
   const [newFleetName, setNewFleetName] = useState('');
   const [selectedTroopType, setSelectedTroopType] = useState<TroopType>('Spearmen');
   const [selectedShipType, setSelectedShipType] = useState<ShipType>('Galley');
@@ -212,7 +230,7 @@ export default function ArmyPage() {
   )
     ? recruitmentSettlementIdOverride
     : (settlements[0]?.id ?? '');
-
+  const defaultArmyTerritoryId = territoryId ?? settlements[0]?.territoryId ?? '';
   const selectedConstructionSettlementId = settlements.some(
     (settlement) => settlement.id === constructionSettlementIdOverride,
   )
@@ -248,18 +266,54 @@ export default function ArmyPage() {
     }
   }, [activeShipConstructionOptions, selectedShipType]);
 
-  async function createArmy() {
-    if (!newArmyName.trim() || !realmId || !territoryId) return;
-
-    await fetch(`/api/game/${gameId}/armies`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ realmId, name: newArmyName, locationTerritoryId: territoryId }),
-    });
-
-    await refreshMilitaryState(gameId, realmId);
-    setNewArmyName('');
+  function closeCreateArmyDialog() {
     setCreateArmyOpen(false);
+    setNewArmyName('');
+    setCreateArmyError('');
+    setIsCreatingArmy(false);
+  }
+
+  async function createArmy() {
+    const trimmedName = newArmyName.trim();
+    if (!trimmedName) {
+      setCreateArmyError('Enter an army name.');
+      return;
+    }
+
+    if (!realmId) {
+      setCreateArmyError('No realm selected.');
+      return;
+    }
+
+    setCreateArmyError('');
+    setIsCreatingArmy(true);
+
+    try {
+      const response = await fetch(`/api/game/${gameId}/armies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          realmId,
+          name: trimmedName,
+          locationTerritoryId: defaultArmyTerritoryId || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, 'Failed to create army'));
+      }
+
+      const data = await fetchArmyData(gameId, realmId);
+      setArmies(data.armies);
+      setTroops(data.troops);
+      setSiege(data.siegeUnits);
+      setTroopRecruitmentOptions(data.troopRecruitmentOptions);
+      closeCreateArmyDialog();
+    } catch (error) {
+      setCreateArmyError(error instanceof Error ? error.message : 'Failed to create army');
+    } finally {
+      setIsCreatingArmy(false);
+    }
   }
 
   async function createFleet() {
@@ -364,7 +418,15 @@ export default function ArmyPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Armies & Troops</h2>
-        <Button variant="accent" onClick={() => setCreateArmyOpen(true)}>+ New Army</Button>
+        <Button
+          variant="accent"
+          onClick={() => {
+            setCreateArmyError('');
+            setCreateArmyOpen(true);
+          }}
+        >
+          + New Army
+        </Button>
       </div>
 
       <Card>
@@ -499,14 +561,23 @@ export default function ArmyPage() {
       />
 
       {createArmyOpen ? (
-        <Dialog open onClose={() => setCreateArmyOpen(false)}>
+        <Dialog open onClose={closeCreateArmyDialog}>
           <DialogTitle>Create Army</DialogTitle>
           <DialogContent>
-            <Input label="Army Name" value={newArmyName} onChange={(event) => setNewArmyName(event.target.value)} />
+            <div className="space-y-4">
+              <Input label="Army Name" value={newArmyName} onChange={(event) => setNewArmyName(event.target.value)} />
+              {createArmyError ? <p className="text-sm text-red-500">{createArmyError}</p> : null}
+            </div>
           </DialogContent>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateArmyOpen(false)}>Cancel</Button>
-            <Button variant="accent" onClick={createArmy}>Create</Button>
+            <Button variant="ghost" onClick={closeCreateArmyDialog}>Cancel</Button>
+            <Button
+              variant="accent"
+              onClick={() => void createArmy()}
+              disabled={!newArmyName.trim() || !realmId || isCreatingArmy}
+            >
+              {isCreatingArmy ? 'Creating...' : 'Create Army'}
+            </Button>
           </DialogFooter>
         </Dialog>
       ) : null}

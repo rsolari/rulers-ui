@@ -49,3 +49,28 @@ export function generateChildCount(): number {
 export function generateNobleSkill(): number {
   return countSuccesses(rollDice(6, 5));
 }
+
+const MALE_NAMES = [
+  'Aldric', 'Baldwin', 'Cedric', 'Desmond', 'Edmund', 'Florian', 'Gareth',
+  'Harold', 'Ivo', 'Jasper', 'Konrad', 'Leofric', 'Marcus', 'Nolan',
+  'Osmund', 'Percival', 'Quintus', 'Roderic', 'Sigmund', 'Theron',
+  'Ulric', 'Valerian', 'Werner', 'Alaric', 'Bertram', 'Cassius',
+  'Darius', 'Elric', 'Frederick', 'Godwin', 'Henrik', 'Ingram',
+  'Julian', 'Leopold', 'Maximilian', 'Norbert', 'Otto', 'Roland',
+  'Sebastian', 'Theodoric',
+];
+
+const FEMALE_NAMES = [
+  'Adelaide', 'Beatrice', 'Cecilia', 'Dorothea', 'Eleanor', 'Felicity',
+  'Gwendolyn', 'Helena', 'Isolde', 'Juliana', 'Katarina', 'Liliana',
+  'Marguerite', 'Nicolette', 'Octavia', 'Philippa', 'Rosalind', 'Seraphina',
+  'Theodosia', 'Ursula', 'Vivienne', 'Wilhelmina', 'Adelheid', 'Brunhild',
+  'Constance', 'Eleanora', 'Genevieve', 'Hildegard', 'Ingrid', 'Johanna',
+  'Lenora', 'Mathilda', 'Nerissa', 'Ophelia', 'Petra', 'Regina',
+  'Sabine', 'Tatiana', 'Valentina', 'Yvette',
+];
+
+export function generateNobleName(gender: Gender): string {
+  const names = gender === 'Male' ? MALE_NAMES : FEMALE_NAMES;
+  return names[Math.floor(Math.random() * names.length)];
+}

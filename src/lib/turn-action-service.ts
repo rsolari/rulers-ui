@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB } from '@/db';
 import { actionComments, games, realms, settlements, territories, turnActions, turnReports } from '@/db/schema';
 import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
+import { createBuilding, createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
 import type {
   ActionCommentCreateDto,
   ActionCommentRecord,
@@ -625,6 +626,104 @@ function syncReportStatus(database: DatabaseExecutor, reportId: string) {
   return status;
 }
 
+function toTurnActionError(error: unknown) {
+  if (isRuleValidationError(error)) {
+    return new TurnActionError(error.message, error.status, error.code, error.details);
+  }
+
+  if (isTurnActionError(error)) {
+    return error;
+  }
+
+  return null;
+}
+
+function resolveAutomatedFinancialAction(
+  database: DatabaseExecutor,
+  gameId: string,
+  action: TurnActionRow,
+  actor: TurnActor,
+) {
+  const financialType = getFinancialActionType(action.financialType);
+  if (action.kind !== 'financial' || (financialType !== 'build' && financialType !== 'recruit')) {
+    return false;
+  }
+
+  const now = new Date();
+
+  try {
+    if (financialType === 'build') {
+      const created = createBuilding(gameId, {
+        settlementId: action.settlementId,
+        territoryId: action.territoryId,
+        type: action.buildingType as string,
+        technicalKnowledgeKey: action.technicalKnowledgeKey,
+        material: action.material,
+        ownerGosId: action.ownerGosId,
+        allottedGosId: action.allottedGosId,
+        wallSize: action.wallSize as BuildingSize | null,
+      }, {
+        database,
+        chargeTreasury: true,
+      });
+
+      database.update(turnActions)
+        .set({
+          status: 'executed',
+          outcome: 'success',
+          settlementId: created.row.settlementId,
+          territoryId: created.row.territoryId,
+          material: created.row.material as FortificationMaterial | null,
+          ownerGosId: created.row.ownerGosId,
+          allottedGosId: created.row.allottedGosId,
+          locationType: created.row.locationType,
+          buildingSize: created.effectiveSize,
+          takesBuildingSlot: created.row.takesBuildingSlot,
+          constructionTurns: created.constructionTurns,
+          cost: created.cost.total,
+          resolutionSummary: action.resolutionSummary ?? 'Construction began automatically on submission.',
+          submittedAt: action.submittedAt ?? now,
+          submittedBy: action.submittedBy ?? actor.label,
+          executedAt: now,
+          executedBy: actor.label,
+          updatedAt: now,
+        })
+        .where(eq(turnActions.id, action.id))
+        .run();
+
+      return true;
+    }
+
+    const created = createTroopRecruitment(gameId, {
+      realmId: action.realmId,
+      type: action.troopType as string,
+      recruitmentSettlementId: action.settlementId,
+      garrisonSettlementId: action.settlementId,
+    }, {
+      database,
+    });
+
+    database.update(turnActions)
+      .set({
+        status: 'executed',
+        outcome: 'success',
+        cost: created.cost.total,
+        resolutionSummary: action.resolutionSummary ?? 'Recruitment began automatically on submission.',
+        submittedAt: action.submittedAt ?? now,
+        submittedBy: action.submittedBy ?? actor.label,
+        executedAt: now,
+        executedBy: actor.label,
+        updatedAt: now,
+      })
+      .where(eq(turnActions.id, action.id))
+      .run();
+
+    return true;
+  } catch (error) {
+    throw toTurnActionError(error) ?? error;
+  }
+}
+
 function getGame(database: DatabaseExecutor, gameId: string) {
   const game = database.select().from(games).where(eq(games.id, gameId)).get();
   if (!game) {
@@ -967,6 +1066,11 @@ export function createTurnActionService(database: DB = defaultDb) {
         assertSubmittableAction(action, validSettlementIds, validTerritoryIds);
       }
 
+      for (const action of actions) {
+        if (action.status === 'executed') continue;
+        resolveAutomatedFinancialAction(tx, gameId, action, actor);
+      }
+
       tx.update(turnActions)
         .set({
           status: 'submitted',
@@ -980,10 +1084,7 @@ export function createTurnActionService(database: DB = defaultDb) {
         ))
         .run();
 
-      tx.update(turnReports)
-        .set({ status: 'submitted' })
-        .where(eq(turnReports.id, report.id))
-        .run();
+      syncReportStatus(tx, report.id);
 
       const updatedActions = tx.select().from(turnActions).where(eq(turnActions.turnReportId, report.id)).all();
       const actionIds = updatedActions.map((action) => action.id);

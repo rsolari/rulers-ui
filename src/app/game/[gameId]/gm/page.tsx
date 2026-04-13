@@ -197,6 +197,9 @@ export default function GMDashboard() {
   const [expandedTerritory, setExpandedTerritory] = useState<string | null>(null);
   const [editingTerritoryId, setEditingTerritoryId] = useState<string | null>(null);
   const [editingSettlementId, setEditingSettlementId] = useState<string | null>(null);
+  const [transferringSettlementId, setTransferringSettlementId] = useState<string | null>(null);
+  const [transferTargetRealmId, setTransferTargetRealmId] = useState('');
+  const [transferTerritory, setTransferTerritory] = useState(false);
   const [gameMapData, setGameMapData] = useState<GameMapData | null>(null);
   const [addingSettlement, setAddingSettlement] = useState<{ territoryId: string; name: string; size: string; hexId: string | null } | null>(null);
 
@@ -439,6 +442,24 @@ export default function GMDashboard() {
     await loadDashboard();
   }
 
+  async function transferSettlement(settlementId: string) {
+    if (!transferTargetRealmId) return;
+    setError('');
+    const response = await fetch(`/api/game/${gameId}/settlements/${settlementId}/transfer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetRealmId: transferTargetRealmId, transferTerritory }),
+    });
+    if (!response.ok) {
+      setError(await getErrorMessage(response, 'Failed to transfer settlement'));
+      return;
+    }
+    setTransferringSettlementId(null);
+    setTransferTargetRealmId('');
+    setTransferTerritory(false);
+    await loadDashboard();
+  }
+
   async function addSettlement(territoryId: string, name: string, size: string, hexId: string | null) {
     setError('');
     const territory = territories.find((t) => t.id === territoryId);
@@ -558,13 +579,29 @@ export default function GMDashboard() {
         <Link href={`/game/${gameId}/map`}>
           <Button variant="outline">Map</Button>
         </Link>
+        <Button
+          variant="outline"
+          onClick={() => {
+            const a = document.createElement('a');
+            a.href = `/api/game/${gameId}/export`;
+            a.download = '';
+            a.click();
+          }}
+        >
+          Export Database
+        </Button>
       </div>
 
       {!isActive && (
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Player Slots</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Player Slots</CardTitle>
+                <Link href={`/game/${gameId}/gm/realm-slots`}>
+                  <Button variant="outline" size="sm">Manage Realm Slots</Button>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -956,6 +993,19 @@ export default function GMDashboard() {
                                     <Button variant="ghost" size="sm" onClick={() => setEditingSettlementId(isEditingSett ? null : settlement.id)}>
                                       {isEditingSett ? 'Cancel' : 'Edit'}
                                     </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => {
+                                      if (transferringSettlementId === settlement.id) {
+                                        setTransferringSettlementId(null);
+                                        setTransferTargetRealmId('');
+                                        setTransferTerritory(false);
+                                      } else {
+                                        setTransferringSettlementId(settlement.id);
+                                        setTransferTargetRealmId('');
+                                        setTransferTerritory(false);
+                                      }
+                                    }}>
+                                      {transferringSettlementId === settlement.id ? 'Cancel' : 'Transfer'}
+                                    </Button>
                                     <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete ${settlement.name}?`)) void deleteSettlement(settlement.id); }}>
                                       Delete
                                     </Button>
@@ -989,6 +1039,45 @@ export default function GMDashboard() {
                                     }}>
                                       Save Settlement
                                     </Button>
+                                  </div>
+                                )}
+
+                                {transferringSettlementId === settlement.id && (
+                                  <div className="p-2 border border-gold-500/50 rounded space-y-2 bg-parchment-50/70">
+                                    <p className="font-heading text-sm font-semibold">Transfer Settlement</p>
+                                    <div className="space-y-2">
+                                      <Select
+                                        label="Transfer to Realm"
+                                        placeholder="Select realm..."
+                                        options={realms.filter((r) => r.id !== settlement.realmId).map((r) => ({ value: r.id, label: r.name }))}
+                                        value={transferTargetRealmId}
+                                        onChange={(e) => setTransferTargetRealmId(e.target.value)}
+                                      />
+                                      <label className="flex items-center gap-2 text-sm">
+                                        <input
+                                          type="checkbox"
+                                          checked={transferTerritory}
+                                          onChange={(e) => setTransferTerritory(e.target.checked)}
+                                        />
+                                        Also transfer parent territory
+                                      </label>
+                                      <p className="text-xs text-ink-400">
+                                        Adds turmoil to both the losing and gaining realms. Governor will be cleared.
+                                      </p>
+                                      <Button
+                                        variant="accent"
+                                        size="sm"
+                                        disabled={!transferTargetRealmId}
+                                        onClick={() => {
+                                          const targetName = realms.find((r) => r.id === transferTargetRealmId)?.name ?? 'selected realm';
+                                          if (confirm(`Transfer ${settlement.name} to ${targetName}?`)) {
+                                            void transferSettlement(settlement.id);
+                                          }
+                                        }}
+                                      >
+                                        Confirm Transfer
+                                      </Button>
+                                    </div>
                                   </div>
                                 )}
 

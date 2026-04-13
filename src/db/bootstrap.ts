@@ -26,6 +26,7 @@ const APP_TABLES = [
   'armies',
   'fleets',
   'trade_routes',
+  'gos_realms',
   'guilds_orders_societies',
   'nobles',
   'noble_families',
@@ -461,6 +462,14 @@ function createBaseSchema(database: Database.Database) {
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (leader_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (first_building_id) REFERENCES buildings(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS gos_realms (
+      gos_id text NOT NULL,
+      realm_id text NOT NULL,
+      PRIMARY KEY (gos_id, realm_id),
+      FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS noble_titles (
@@ -1438,6 +1447,25 @@ function ensureEconomySchema(database: Database.Database) {
     `);
   }
 
+  if (!tableExists(database, 'gos_realms')) {
+    database.exec(`
+      CREATE TABLE gos_realms (
+        gos_id text NOT NULL,
+        realm_id text NOT NULL,
+        PRIMARY KEY (gos_id, realm_id),
+        FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+        FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+      );
+    `);
+  }
+
+  database.exec(`
+    INSERT OR IGNORE INTO gos_realms (gos_id, realm_id)
+    SELECT id, realm_id
+    FROM guilds_orders_societies
+    WHERE realm_id IS NOT NULL;
+  `);
+
   backfillResourceIndustryState(database);
 }
 
@@ -1613,6 +1641,10 @@ function createIndexes(database: Database.Database) {
       ON turn_resolutions (game_id, year, season);
     CREATE UNIQUE INDEX IF NOT EXISTS turn_resolutions_game_idempotency_unique
       ON turn_resolutions (game_id, idempotency_key);
+    CREATE INDEX IF NOT EXISTS gos_realms_realm_idx
+      ON gos_realms (realm_id);
+    CREATE INDEX IF NOT EXISTS gos_realms_gos_idx
+      ON gos_realms (gos_id);
   `);
 }
 

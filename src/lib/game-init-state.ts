@@ -3,7 +3,7 @@ import { db } from '@/db';
 import {
   armies,
   games,
-  guildsOrdersSocieties,
+  gosRealms,
   nobles,
   playerSlots,
   realms,
@@ -195,8 +195,8 @@ async function getPlayerSetupStatuses(gameId: string): Promise<PlayerSetupStatus
       : Promise.resolve([]),
     realmIds.length > 0
       ? db.select({
-        realmId: guildsOrdersSocieties.realmId,
-      }).from(guildsOrdersSocieties).where(inArray(guildsOrdersSocieties.realmId, realmIds))
+        realmId: gosRealms.realmId,
+      }).from(gosRealms).where(inArray(gosRealms.realmId, realmIds))
       : Promise.resolve([]),
     realmIds.length > 0
       ? db.select({

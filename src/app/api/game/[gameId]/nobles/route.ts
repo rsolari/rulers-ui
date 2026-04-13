@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { armies, guildsOrdersSocieties, nobleFamilies, nobles, realms, settlements } from '@/db/schema';
+import { armies, gosRealms, guildsOrdersSocieties, nobleFamilies, nobles, realms, settlements } from '@/db/schema';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { ESTATE_COSTS } from '@/lib/game-logic/constants';
 import { getDisplayEstateLevelsForRealm, getPaidEstateLevelsForRealm } from '@/lib/game-logic/governance';
@@ -46,7 +46,10 @@ export async function GET(
       id: guildsOrdersSocieties.id,
       name: guildsOrdersSocieties.name,
       leaderId: guildsOrdersSocieties.leaderId,
-    }).from(guildsOrdersSocieties).where(eq(guildsOrdersSocieties.realmId, realmId)),
+    })
+      .from(guildsOrdersSocieties)
+      .innerJoin(gosRealms, eq(gosRealms.gosId, guildsOrdersSocieties.id))
+      .where(eq(gosRealms.realmId, realmId)),
   ]);
 
   const governsByNobleId = new Map<string, string[]>();

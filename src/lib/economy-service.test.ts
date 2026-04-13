@@ -863,6 +863,10 @@ describe('createEconomyService.advanceGameTurn', () => {
       type: 'Guild',
       treasury: 0,
     }).run();
+    db.insert(schema.gosRealms).values({
+      gosId: 'guild-growth',
+      realmId: 'realm-growth',
+    }).run();
 
     db.insert(schema.buildings).values([
       {

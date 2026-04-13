@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { armies, gosRealms, guildsOrdersSocieties, nobleFamilies, nobles, realms, settlements } from '@/db/schema';
+import { armies, fleets, gosRealms, guildsOrdersSocieties, nobleFamilies, nobles, realms, settlements } from '@/db/schema';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { ESTATE_COSTS } from '@/lib/game-logic/constants';
 import { getDisplayEstateLevelsForRealm, getPaidEstateLevelsForRealm } from '@/lib/game-logic/governance';
@@ -24,7 +24,7 @@ export async function GET(
     return NextResponse.json({ error: 'realmId required' }, { status: 400 });
   }
 
-  const [realm, nobleList, settlementList, armyList, gosList] = await Promise.all([
+  const [realm, nobleList, settlementList, armyList, fleetList, gosList] = await Promise.all([
     db.select({
       rulerNobleId: realms.rulerNobleId,
       heirNobleId: realms.heirNobleId,
@@ -43,6 +43,11 @@ export async function GET(
       generalId: armies.generalId,
     }).from(armies).where(eq(armies.realmId, realmId)),
     db.select({
+      id: fleets.id,
+      name: fleets.name,
+      admiralId: fleets.admiralId,
+    }).from(fleets).where(eq(fleets.realmId, realmId)),
+    db.select({
       id: guildsOrdersSocieties.id,
       name: guildsOrdersSocieties.name,
       leaderId: guildsOrdersSocieties.leaderId,
@@ -53,10 +58,16 @@ export async function GET(
   ]);
 
   const governsByNobleId = new Map<string, string[]>();
+  const officeAssignmentsByNobleId = new Map<string, string[]>();
   const addGovernanceLabel = (nobleId: string, label: string) => {
     const labels = governsByNobleId.get(nobleId) ?? [];
     labels.push(label);
     governsByNobleId.set(nobleId, labels);
+  };
+  const addOfficeAssignment = (nobleId: string, label: string) => {
+    const labels = officeAssignmentsByNobleId.get(nobleId) ?? [];
+    labels.push(label);
+    officeAssignmentsByNobleId.set(nobleId, labels);
   };
 
   if (realm?.rulerNobleId) {
@@ -64,17 +75,30 @@ export async function GET(
   }
   for (const settlement of settlementList) {
     if (settlement.governingNobleId) {
-      addGovernanceLabel(settlement.governingNobleId, `${settlement.name} Governor`);
+      const label = `${settlement.name} Governor`;
+      addGovernanceLabel(settlement.governingNobleId, label);
+      addOfficeAssignment(settlement.governingNobleId, label);
     }
   }
   for (const army of armyList) {
     if (army.generalId) {
-      addGovernanceLabel(army.generalId, `${army.name} General`);
+      const label = `${army.name} General`;
+      addGovernanceLabel(army.generalId, label);
+      addOfficeAssignment(army.generalId, label);
+    }
+  }
+  for (const fleet of fleetList) {
+    if (fleet.admiralId) {
+      const label = `${fleet.name} Admiral`;
+      addGovernanceLabel(fleet.admiralId, label);
+      addOfficeAssignment(fleet.admiralId, label);
     }
   }
   for (const gos of gosList) {
     if (gos.leaderId) {
-      addGovernanceLabel(gos.leaderId, `${gos.name} Leader`);
+      const label = `${gos.name} Leader`;
+      addGovernanceLabel(gos.leaderId, label);
+      addOfficeAssignment(gos.leaderId, label);
     }
   }
 
@@ -98,6 +122,7 @@ export async function GET(
       isActingRuler: noble.id === realm?.actingRulerNobleId,
       title: governs[0] ?? null,
       governs,
+      officeAssignments: officeAssignmentsByNobleId.get(noble.id) ?? [],
       estateLevel: displayEstateByNobleId.get(noble.id) ?? null,
       estateCost: paidEstateLevel ? ESTATE_COSTS[paidEstateLevel] : 0,
     };

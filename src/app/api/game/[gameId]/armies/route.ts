@@ -7,6 +7,7 @@ import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 import { getDefaultArmyHexId, getLandHexById } from '@/lib/game-logic/maps';
 import { TROOP_DEFS } from '@/lib/game-logic/constants';
 import { recomputeGameInitState } from '@/lib/game-init-state';
+import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
 import { isRuleValidationError, prepareRealmTroopRecruitment } from '@/lib/rules-action-service';
 import type { TroopType } from '@/types/game';
 
@@ -212,8 +213,7 @@ export async function POST(
     const generalId = normalizeOptionalString(body.generalId);
 
     if (generalId) {
-      const general = await db.select({ id: nobles.id })
-        .from(nobles)
+      const general = await db.select().from(nobles)
         .where(and(
           eq(nobles.id, generalId),
           eq(nobles.realmId, realmId),
@@ -223,6 +223,8 @@ export async function POST(
       if (!general) {
         return NextResponse.json({ error: 'General not found for this realm' }, { status: 404 });
       }
+
+      assertNobleCanHoldExclusiveOffice(db, general, realmId, 'the generalship');
     }
 
     const id = uuid();
@@ -253,6 +255,10 @@ export async function POST(
     });
   } catch (error) {
     if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isGovernanceError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

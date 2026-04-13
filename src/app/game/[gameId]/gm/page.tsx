@@ -1331,6 +1331,7 @@ interface GovNoble {
   isHeir: boolean;
   isActingRuler?: boolean;
   title: string | null;
+  officeAssignments: string[];
   isPrisoner: boolean;
   isAlive?: boolean;
   gmStatusText: string | null;
@@ -1429,6 +1430,10 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
     return null;
   }
 
+  function getOfficeEligibleNobles(currentNobleId: string | null) {
+    return nobles.filter((noble) => noble.id === currentNobleId || noble.officeAssignments.length === 0);
+  }
+
   return (
     <div className="space-y-6">
       {error && <p className="text-sm text-red-500">{error}</p>}
@@ -1457,7 +1462,7 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
                   <NobleAssignmentSelect
                     key={s.id}
                     label={`${s.name} (${s.size})`}
-                    nobles={nobles}
+                    nobles={getOfficeEligibleNobles(s.governingNobleId)}
                     currentNobleId={s.governingNobleId}
                     onAssign={(nobleId) => assignGovernor(s.id, nobleId)}
                   />
@@ -1475,7 +1480,7 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
                   <NobleAssignmentSelect
                     key={a.id}
                     label={a.name}
-                    nobles={nobles}
+                    nobles={getOfficeEligibleNobles(a.generalId)}
                     currentNobleId={a.generalId}
                     onAssign={(nobleId) => assignGeneral(a.id, nobleId)}
                   />
@@ -1493,7 +1498,7 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
                   <NobleAssignmentSelect
                     key={g.id}
                     label={`${g.name} (${g.type})`}
-                    nobles={nobles}
+                    nobles={getOfficeEligibleNobles(g.leaderId)}
                     currentNobleId={g.leaderId}
                     onAssign={(nobleId) => assignLeader(g.id, nobleId)}
                   />

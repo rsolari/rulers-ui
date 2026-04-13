@@ -7,6 +7,7 @@ import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
 import { getDefaultFleetHexId, getWaterHexById } from '@/lib/game-logic/maps';
 import { SHIP_DEFS } from '@/lib/game-logic/constants';
 import { recomputeGameInitState } from '@/lib/game-init-state';
+import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
 import { isRuleValidationError, prepareRealmShipConstruction } from '@/lib/rules-action-service';
 import type { ShipType, WaterZoneType } from '@/types/game';
 
@@ -203,8 +204,7 @@ export async function POST(
     }
 
     if (body.admiralId) {
-      const admiral = await db.select({ id: nobles.id })
-        .from(nobles)
+      const admiral = await db.select().from(nobles)
         .where(and(
           eq(nobles.id, body.admiralId),
           eq(nobles.realmId, realmId),
@@ -214,6 +214,8 @@ export async function POST(
       if (!admiral) {
         return NextResponse.json({ error: 'Admiral not found for this realm' }, { status: 404 });
       }
+
+      assertNobleCanHoldExclusiveOffice(db, admiral, realmId, 'the admiralty');
     }
 
     const locationHexId = locationHex?.id
@@ -255,6 +257,10 @@ export async function POST(
     });
   } catch (error) {
     if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (isGovernanceError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

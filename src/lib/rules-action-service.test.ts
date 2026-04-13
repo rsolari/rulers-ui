@@ -482,7 +482,7 @@ describe('createTroopRecruitment', () => {
       }).run();
     }
 
-    await expect(createTroopRecruitment('game-1', {
+    const error = expectRuleError(() => createTroopRecruitment('game-1', {
       realmId: 'realm-1',
       type: 'Spearmen',
       garrisonSettlementId: 'settlement-1',
@@ -490,7 +490,9 @@ describe('createTroopRecruitment', () => {
     }, {
       database: db,
       idGenerator: () => 'troop-5',
-    })).rejects.toMatchObject({
+    }));
+
+    expect(error).toMatchObject({
       code: 'settlement_recruitment_cap_exceeded',
       status: 409,
     });
@@ -515,7 +517,7 @@ describe('createTroopRecruitment', () => {
       }).run();
     }
 
-    await expect(createTroopRecruitment('game-1', {
+    const error = expectRuleError(() => createTroopRecruitment('game-1', {
       realmId: 'realm-1',
       type: 'Spearmen',
       garrisonSettlementId: 'settlement-1',
@@ -523,7 +525,9 @@ describe('createTroopRecruitment', () => {
     }, {
       database: db,
       idGenerator: () => 'troop-7',
-    })).rejects.toMatchObject({
+    }));
+
+    expect(error).toMatchObject({
       code: 'realm_troop_cap_exceeded',
       status: 409,
     });

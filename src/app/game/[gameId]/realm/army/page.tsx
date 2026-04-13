@@ -49,6 +49,7 @@ interface SettlementSummary {
   id: string;
   name: string;
   size: string;
+  territoryId: string;
 }
 
 interface TroopRecruitmentOption {
@@ -60,6 +61,9 @@ interface TroopRecruitmentOption {
 
 async function fetchArmyData(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/armies?realmId=${realmId}`);
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Failed to load armies'));
+  }
   const data = await response.json();
 
   return {
@@ -72,7 +76,19 @@ async function fetchArmyData(gameId: string, realmId: string) {
 
 async function fetchRealmSettlements(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Failed to load settlements'));
+  }
   return response.json() as Promise<SettlementSummary[]>;
+}
+
+async function getErrorMessage(response: Response, fallback: string) {
+  const data = await response.json().catch(() => null);
+  if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' && data.error) {
+    return data.error;
+  }
+
+  return fallback;
 }
 
 export default function ArmyPage() {
@@ -91,6 +107,8 @@ export default function ArmyPage() {
   const [createArmyOpen, setCreateArmyOpen] = useState(false);
   const [recruitOpen, setRecruitOpen] = useState<string | null>(null); // armyId or 'garrison'
   const [newArmyName, setNewArmyName] = useState('');
+  const [createArmyError, setCreateArmyError] = useState('');
+  const [isCreatingArmy, setIsCreatingArmy] = useState(false);
   const [selectedTroopType, setSelectedTroopType] = useState<TroopType>('Spearmen');
   const [recruitmentSettlementIdOverride, setRecruitmentSettlementIdOverride] = useState('');
 
@@ -123,21 +141,56 @@ export default function ArmyPage() {
     ? recruitmentSettlementIdOverride
     : (settlements[0]?.id ?? '');
 
-  async function createArmy() {
-    if (!newArmyName.trim() || !realmId || !territoryId) return;
+  const defaultArmyTerritoryId = territoryId ?? settlements[0]?.territoryId ?? '';
 
-    await fetch(`/api/game/${gameId}/armies`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ realmId, name: newArmyName, locationTerritoryId: territoryId }),
-    });
-    const data = await fetchArmyData(gameId, realmId);
-    setNewArmyName('');
+  function closeCreateArmyDialog() {
     setCreateArmyOpen(false);
-    setArmies(data.armies);
-    setTroops(data.troops);
-    setSiege(data.siegeUnits);
-    setTroopRecruitmentOptions(data.troopRecruitmentOptions);
+    setNewArmyName('');
+    setCreateArmyError('');
+    setIsCreatingArmy(false);
+  }
+
+  async function createArmy() {
+    const trimmedName = newArmyName.trim();
+    if (!trimmedName) {
+      setCreateArmyError('Enter an army name.');
+      return;
+    }
+
+    if (!realmId) {
+      setCreateArmyError('No realm selected.');
+      return;
+    }
+
+    setCreateArmyError('');
+    setIsCreatingArmy(true);
+
+    try {
+      const response = await fetch(`/api/game/${gameId}/armies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          realmId,
+          name: trimmedName,
+          locationTerritoryId: defaultArmyTerritoryId || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, 'Failed to create army'));
+      }
+
+      const data = await fetchArmyData(gameId, realmId);
+      setArmies(data.armies);
+      setTroops(data.troops);
+      setSiege(data.siegeUnits);
+      setTroopRecruitmentOptions(data.troopRecruitmentOptions);
+      closeCreateArmyDialog();
+    } catch (error) {
+      setCreateArmyError(error instanceof Error ? error.message : 'Failed to create army');
+    } finally {
+      setIsCreatingArmy(false);
+    }
   }
 
   async function recruitTroop() {
@@ -207,7 +260,15 @@ export default function ArmyPage() {
       </nav>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Armies & Troops</h1>
-        <Button variant="accent" onClick={() => setCreateArmyOpen(true)}>+ New Army</Button>
+        <Button
+          variant="accent"
+          onClick={() => {
+            setCreateArmyError('');
+            setCreateArmyOpen(true);
+          }}
+        >
+          + New Army
+        </Button>
       </div>
 
       {/* Garrison */}
@@ -271,14 +332,23 @@ export default function ArmyPage() {
 
       {/* Create army dialog */}
       {createArmyOpen && (
-        <Dialog open onClose={() => setCreateArmyOpen(false)}>
+        <Dialog open onClose={closeCreateArmyDialog}>
           <DialogTitle>Create Army</DialogTitle>
           <DialogContent>
-            <Input label="Army Name" value={newArmyName} onChange={e => setNewArmyName(e.target.value)} />
+            <div className="space-y-4">
+              <Input label="Army Name" value={newArmyName} onChange={e => setNewArmyName(e.target.value)} />
+              {createArmyError ? <p className="text-sm text-red-500">{createArmyError}</p> : null}
+            </div>
           </DialogContent>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateArmyOpen(false)}>Cancel</Button>
-            <Button variant="accent" onClick={createArmy}>Create</Button>
+            <Button variant="ghost" onClick={closeCreateArmyDialog}>Cancel</Button>
+            <Button
+              variant="accent"
+              onClick={() => void createArmy()}
+              disabled={!newArmyName.trim() || !realmId || isCreatingArmy}
+            >
+              {isCreatingArmy ? 'Creating...' : 'Create Army'}
+            </Button>
           </DialogFooter>
         </Dialog>
       )}

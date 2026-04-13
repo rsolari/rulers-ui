@@ -169,28 +169,32 @@ export default function SettlementsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="flex items-center gap-3 mb-4 p-3 rounded medieval-border bg-parchment-800/30">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-gold-400 text-lg shrink-0">👑</span>
+                    <span className="font-heading font-semibold text-sm shrink-0">Governor:</span>
+                    {isSetup ? (
+                      <div className="flex-1 min-w-[200px]">
+                        <NobleAssignmentSelect
+                          label=""
+                          nobles={nobles}
+                          currentNobleId={settlement.governingNobleId}
+                          onAssign={(nobleId) => assignGovernor(settlement.id, nobleId)}
+                        />
+                      </div>
+                    ) : (
+                      <span className={settlement.governingNoble ? 'font-semibold text-ink-100' : 'text-ink-400 italic'}>
+                        {settlement.governingNoble ? settlement.governingNoble.name : 'Unassigned'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-4">
                   <p className="text-sm"><strong>Food Need:</strong> {data.foodNeed}</p>
                   <p className="text-sm"><strong>Max Troops:</strong> {data.maxTroops}</p>
                   <p className="text-sm"><strong>Recruit/Season:</strong> {data.recruitPerSeason}</p>
-                  <p className="text-sm">
-                    <strong>Governor:</strong>{' '}
-                    {settlement.governingNoble
-                      ? settlement.governingNoble.name
-                      : <span className="text-ink-300">None</span>}
-                  </p>
                 </div>
-
-                {isSetup && (
-                  <div className="mb-4">
-                    <NobleAssignmentSelect
-                      label="Assign Governor"
-                      nobles={nobles}
-                      currentNobleId={settlement.governingNobleId}
-                      onAssign={(nobleId) => assignGovernor(settlement.id, nobleId)}
-                    />
-                  </div>
-                )}
 
                 <p className="font-heading font-semibold mb-2">Buildings</p>
                 <div className="space-y-1">

@@ -64,7 +64,7 @@ npm run test:coverage
 
 ## Data Storage
 
-The app uses a local SQLite database at `data/rulers.db`. The database directory is created automatically at runtime and is ignored by git.
+The app uses a local SQLite database at `data/rulers.db` by default. If `DATABASE_PATH` is set, that path wins. If a mounted `/data` directory exists, the app prefers `/data/rulers.db` automatically so Railway-style persistent volumes still work when the env var is missing.
 
 Fresh clones currently do not include checked-in migrations or a prebuilt database file. That means the UI can start with `npm run dev`, but game creation and other write flows need the SQLite schema from `src/db/schema.ts` to be applied before they will work end-to-end.
 

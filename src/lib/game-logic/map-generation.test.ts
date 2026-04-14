@@ -2,11 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   generateTerritoryResources,
   generateRealmStartingPackage,
-  REALM_STARTING_COMMON_RESOURCES,
-  REALM_STARTING_LUXURY_RESOURCES,
-  REALM_STARTING_VILLAGES,
-  REALM_STARTING_TOWNS,
-  REALM_STARTING_SETTLEMENTS,
+  REALM_STARTING_COMMON_TABLE_ROLLS,
+  REALM_STARTING_LUXURY_TABLE_ROLLS,
   REALM_STARTING_TROOPS,
 } from './map-generation';
 import { RESOURCE_RARITY } from './constants';
@@ -43,7 +40,31 @@ describe('generateTerritoryResources', () => {
     expect(resources[3]?.rarity).toBe('Luxury');
   });
 
-  it('keeps realm territories at exactly three common resources and one luxury', () => {
+  it('rolls twice when expanded luxury hits 10', () => {
+    const randomSpy = vi.spyOn(Math, 'random');
+
+    randomSpy
+      .mockReturnValueOnce(0.01)
+      .mockReturnValueOnce(0.31)
+      .mockReturnValueOnce(0.81)
+      .mockReturnValueOnce(0.91)
+      .mockReturnValueOnce(0.91)
+      .mockReturnValueOnce(0.01)
+      .mockReturnValueOnce(0.11);
+
+    const resources = generateTerritoryResources('Realm');
+
+    expect(resources.map((resource) => resource.resourceType)).toEqual([
+      'Timber',
+      'Clay',
+      'Stone',
+      'Gold',
+      'Spices',
+    ]);
+    expect(resources.every((resource) => resource.settlement.size === 'Village')).toBe(true);
+  });
+
+  it('cascades a common-table 10 into a luxury resource without rerolling the slot', () => {
     const randomSpy = vi.spyOn(Math, 'random');
 
     randomSpy
@@ -51,18 +72,21 @@ describe('generateTerritoryResources', () => {
       .mockReturnValueOnce(0.11)
       .mockReturnValueOnce(0.01)
       .mockReturnValueOnce(0.31)
-      .mockReturnValueOnce(0.81)
       .mockReturnValueOnce(0.51);
 
     const resources = generateTerritoryResources('Realm');
 
-    expect(resources.filter((resource) => resource.rarity === 'Common')).toHaveLength(3);
-    expect(resources.filter((resource) => resource.rarity === 'Luxury')).toHaveLength(1);
     expect(resources.map((resource) => resource.resourceType)).toEqual([
+      'Gold',
       'Timber',
       'Clay',
-      'Stone',
       'Lacquer',
+    ]);
+    expect(resources.map((resource) => resource.rarity)).toEqual([
+      'Luxury',
+      'Common',
+      'Common',
+      'Luxury',
     ]);
   });
 
@@ -95,26 +119,34 @@ describe('generateTerritoryResources', () => {
     ]);
   });
 
-  it('keeps neutral territories at exactly two common resources and two luxuries', () => {
+  it('can produce extra luxury resources from neutral common-table rolls', () => {
     const randomSpy = vi.spyOn(Math, 'random');
 
     randomSpy
       .mockReturnValueOnce(0.91)
       .mockReturnValueOnce(0.01)
       .mockReturnValueOnce(0.75)
-      .mockReturnValueOnce(0.31)
       .mockReturnValueOnce(0.81)
       .mockReturnValueOnce(0.11)
-      .mockReturnValueOnce(0.65)
       .mockReturnValueOnce(0.41)
+      .mockReturnValueOnce(0.65)
+      .mockReturnValueOnce(0.31)
       .mockReturnValueOnce(0.55);
 
     const resources = generateTerritoryResources('Neutral');
 
-    expect(resources.filter((resource) => resource.rarity === 'Common')).toHaveLength(2);
-    expect(resources.filter((resource) => resource.rarity === 'Luxury')).toHaveLength(2);
-    expect(resources.slice(0, 2).every((resource) => resource.rarity === 'Common')).toBe(true);
-    expect(resources.slice(2).every((resource) => resource.rarity === 'Luxury')).toBe(true);
+    expect(resources.map((resource) => resource.resourceType)).toEqual([
+      'Gold',
+      'Stone',
+      'Lacquer',
+      'Porcelain',
+    ]);
+    expect(resources.map((resource) => resource.rarity)).toEqual([
+      'Luxury',
+      'Common',
+      'Luxury',
+      'Luxury',
+    ]);
   });
 });
 
@@ -131,25 +163,12 @@ describe('RESOURCE_RARITY', () => {
 });
 
 describe('starting package constants', () => {
-  it('defines exactly 3 common resources', () => {
-    expect(REALM_STARTING_COMMON_RESOURCES).toBe(3);
+  it('defines exactly 3 common-table rolls', () => {
+    expect(REALM_STARTING_COMMON_TABLE_ROLLS).toBe(3);
   });
 
-  it('defines exactly 1 luxury resource', () => {
-    expect(REALM_STARTING_LUXURY_RESOURCES).toBe(1);
-  });
-
-  it('defines exactly 4 villages', () => {
-    expect(REALM_STARTING_VILLAGES).toBe(4);
-  });
-
-  it('defines exactly 1 town', () => {
-    expect(REALM_STARTING_TOWNS).toBe(1);
-  });
-
-  it('defines 5 total settlements (4 villages + 1 town)', () => {
-    expect(REALM_STARTING_SETTLEMENTS).toBe(5);
-    expect(REALM_STARTING_SETTLEMENTS).toBe(REALM_STARTING_VILLAGES + REALM_STARTING_TOWNS);
+  it('defines exactly 1 luxury-table roll', () => {
+    expect(REALM_STARTING_LUXURY_TABLE_ROLLS).toBe(1);
   });
 
   it('defines a standing army of 5 troops', () => {
@@ -158,22 +177,17 @@ describe('starting package constants', () => {
 });
 
 describe('generateRealmStartingPackage', () => {
-  it('produces exactly 3 common and 1 luxury resource', () => {
+  it('produces at least one resource site per table roll', () => {
     const pkg = generateRealmStartingPackage();
 
-    const common = pkg.resources.filter((r) => r.rarity === 'Common');
-    const luxury = pkg.resources.filter((r) => r.rarity === 'Luxury');
-
-    expect(common).toHaveLength(REALM_STARTING_COMMON_RESOURCES);
-    expect(luxury).toHaveLength(REALM_STARTING_LUXURY_RESOURCES);
-    expect(pkg.resources).toHaveLength(REALM_STARTING_COMMON_RESOURCES + REALM_STARTING_LUXURY_RESOURCES);
+    expect(pkg.resources.length).toBeGreaterThanOrEqual(
+      REALM_STARTING_COMMON_TABLE_ROLLS + REALM_STARTING_LUXURY_TABLE_ROLLS
+    );
   });
 
-  it('produces 4 village settlements on resource sites', () => {
+  it('produces village settlements on every generated resource site', () => {
     const pkg = generateRealmStartingPackage();
 
-    const villages = pkg.resources.filter((r) => r.settlement.size === 'Village');
-    expect(villages).toHaveLength(REALM_STARTING_VILLAGES);
     expect(pkg.resources.every((r) => r.settlement.size === 'Village')).toBe(true);
   });
 

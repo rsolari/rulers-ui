@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/u
 import { Select } from '@/components/ui/select';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { useRole } from '@/hooks/use-role';
-import { SETTLEMENT_DATA } from '@/lib/game-logic/constants';
+import { BUILDING_DEFS, SETTLEMENT_DATA } from '@/lib/game-logic/constants';
 import type { SettlementSize } from '@/types/game';
 
 interface GoverningNoble {
@@ -32,6 +32,7 @@ interface Settlement {
     size: string;
     takesBuildingSlot?: boolean;
     constructionTurnsRemaining: number;
+    ownerGosId?: string | null;
   }>;
 }
 
@@ -40,6 +41,24 @@ interface Noble {
   name: string;
   officeAssignments: string[];
 }
+
+interface GOSOption {
+  id: string;
+  name: string;
+  type: string;
+}
+
+const GOS_UNLOCKED_BUILDINGS: Record<string, string[]> = (() => {
+  const map: Record<string, string[]> = { Guild: [], Order: [], Society: [] };
+  for (const [type, def] of Object.entries(BUILDING_DEFS)) {
+    for (const prereq of def.prerequisites) {
+      if (prereq === 'Guild' || prereq === 'Order' || prereq === 'Society') {
+        map[prereq].push(type);
+      }
+    }
+  }
+  return map;
+})();
 
 interface BuildingOption {
   type: string;
@@ -82,6 +101,7 @@ export default function SettlementsPage() {
   const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [nobles, setNobles] = useState<Noble[]>([]);
+  const [gosOptions, setGosOptions] = useState<GOSOption[]>([]);
 
   const isSetup = initState === 'parallel_final_setup' || initState === 'ready_to_start' || isGmManaging;
 
@@ -95,6 +115,10 @@ export default function SettlementsPage() {
     fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`)
       .then((r) => r.json())
       .then(setNobles);
+
+    fetch(`/api/game/${gameId}/gos?realmId=${realmId}`)
+      .then((r) => r.json())
+      .then((list: GOSOption[]) => setGosOptions(list));
   }, [gameId, realmId]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -164,6 +188,19 @@ export default function SettlementsPage() {
     // Refresh settlements
     await refreshSettlements();
     return null;
+  }
+
+  async function assignBuildingOwner(buildingId: string, ownerGosId: string | null) {
+    const response = await fetch(`/api/game/${gameId}/buildings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ buildingId, ownerGosId }),
+    });
+
+    if (!response.ok) return;
+
+    const res = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
+    setSettlements(await res.json());
   }
 
   async function openBuildDialog(settlementId: string) {
@@ -312,6 +349,32 @@ export default function SettlementsPage() {
           : 'Manage your settlements and construct new buildings.'}
       </p>
 
+      {gosOptions.length > 0 && (
+        <div className="mb-6 p-4 medieval-border rounded bg-parchment-800/30">
+          <p className="font-heading font-semibold text-sm mb-2">GOS Presence &amp; Building Unlocks</p>
+          <div className="space-y-2">
+            {(['Guild', 'Order', 'Society'] as const).map((gosType) => {
+              const present = gosOptions.filter((g) => g.type === gosType);
+              const unlocked = GOS_UNLOCKED_BUILDINGS[gosType];
+              if (unlocked.length === 0) return null;
+              return (
+                <div key={gosType} className="flex flex-wrap items-start gap-x-3 gap-y-1 text-sm">
+                  <span className="font-semibold min-w-[60px]">{gosType}:</span>
+                  {present.length > 0 ? (
+                    <>
+                      <span className="text-green-700">{present.map((g) => g.name).join(', ')}</span>
+                      <span className="text-ink-300">— unlocks {unlocked.join(', ')}</span>
+                    </>
+                  ) : (
+                    <span className="text-ink-400 italic">None present — would unlock {unlocked.join(', ')}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         {settlements.map((settlement) => {
           const data = SETTLEMENT_DATA[settlement.size];
@@ -388,28 +451,51 @@ export default function SettlementsPage() {
                   <Button variant="outline" size="sm" onClick={() => openBuildDialog(settlement.id)}>+ Build</Button>
                 </div>
                 <div className="space-y-1">
-                  {settlement.buildings?.map((building) => (
-                    <div key={building.id} className="flex items-center justify-between p-2 medieval-border rounded">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{building.type}</span>
-                        <Badge>{building.category}</Badge>
-                        <Badge>{building.size}</Badge>
+                  {settlement.buildings?.map((building) => {
+                    const ownerGos = gosOptions.find((g) => g.id === building.ownerGosId);
+                    return (
+                      <div key={building.id} className="flex items-center justify-between p-2 medieval-border rounded">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{building.type}</span>
+                          <Badge>{building.category}</Badge>
+                          <Badge>{building.size}</Badge>
+                          {ownerGos && !isSetup && (
+                            <span className="text-xs text-ink-300">({ownerGos.name})</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {building.constructionTurnsRemaining > 0 && (
+                            <Badge variant="gold">{building.constructionTurnsRemaining} turns left</Badge>
+                          )}
+                          {isSetup && gosOptions.length > 0 && (
+                            <select
+                              className="text-xs bg-input-bg border border-input-border rounded px-1.5 py-1 cursor-pointer"
+                              value={building.ownerGosId ?? ''}
+                              onChange={(e) => void assignBuildingOwner(building.id, e.target.value || null)}
+                            >
+                              <option value="">No GOS owner</option>
+                              {gosOptions.map((g) => (
+                                <option key={g.id} value={g.id}>{g.name} ({g.type})</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {building.constructionTurnsRemaining > 0 ? (
+                            <Badge variant="gold">{building.constructionTurnsRemaining} turns left</Badge>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openUpgradeDialog(settlement.id, building.id, building.type)}
+                            >
+                              Upgrade
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {building.constructionTurnsRemaining > 0 ? (
-                          <Badge variant="gold">{building.constructionTurnsRemaining} turns left</Badge>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openUpgradeDialog(settlement.id, building.id, building.type)}
-                          >
-                            Upgrade
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {(!settlement.buildings || settlement.buildings.length === 0) && (
                     <p className="text-ink-300 text-sm">No buildings yet.</p>
                   )}
@@ -458,7 +544,21 @@ export default function SettlementsPage() {
                     <p><strong>Build Time:</strong> {selectedOption.constructionTurns} turn(s)</p>
                     <p><strong>Uses Slot:</strong> {selectedOption.takesBuildingSlot ? 'Yes' : 'No'}</p>
                     {selectedOption.prerequisites.length > 0 && (
-                      <p><strong>Requires:</strong> {selectedOption.prerequisites.join(', ')}</p>
+                      <div>
+                        <strong>Requires:</strong>{' '}
+                        {selectedOption.prerequisites.map((prereq, i) => {
+                          const isGosPrereq = prereq === 'Guild' || prereq === 'Order' || prereq === 'Society';
+                          const gosPresent = isGosPrereq && gosOptions.some((g) => g.type === prereq);
+                          return (
+                            <span key={prereq}>
+                              {i > 0 && ', '}
+                              <span className={isGosPrereq ? (gosPresent ? 'text-green-700' : 'text-red-700') : ''}>
+                                {prereq}{isGosPrereq ? (gosPresent ? ' ✓' : ' ✗') : ''}
+                              </span>
+                            </span>
+                          );
+                        })}
+                      </div>
                     )}
                     <p className="text-ink-300 italic">{selectedOption.description}</p>
                     {selectedOption.usesTradeAccess && (

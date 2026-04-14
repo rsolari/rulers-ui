@@ -79,6 +79,14 @@ interface SettlementSummary {
   territoryId: string;
 }
 
+interface RealmNoble {
+  id: string;
+  name: string;
+  officeAssignments: string[];
+  isAlive?: boolean;
+  isPrisoner: boolean;
+}
+
 interface TroopRecruitmentOption {
   type: TroopType;
   canRecruit: boolean;
@@ -132,6 +140,14 @@ async function fetchRealmSettlements(gameId: string, realmId: string) {
   return response.json() as Promise<SettlementSummary[]>;
 }
 
+async function fetchRealmNobles(gameId: string, realmId: string) {
+  const response = await fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`);
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Failed to load nobles'));
+  }
+  return response.json() as Promise<RealmNoble[]>;
+}
+
 async function getErrorMessage(response: Response, fallback: string) {
   const data = await response.json().catch(() => null);
   if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' && data.error) {
@@ -163,12 +179,16 @@ export default function ArmyPage() {
   const [shipConstructionOptionsBySettlement, setShipConstructionOptionsBySettlement] = useState<ShipConstructionOptionsBySettlement>({});
 
   const [settlements, setSettlements] = useState<SettlementSummary[]>([]);
+  const [nobles, setNobles] = useState<RealmNoble[]>([]);
 
   const [createArmyOpen, setCreateArmyOpen] = useState(false);
   const [createFleetOpen, setCreateFleetOpen] = useState(false);
-  const [recruitOpen, setRecruitOpen] = useState<string | null>(null);
+  const [recruitOpen, setRecruitOpen] = useState(false);
   const [constructShipOpen, setConstructShipOpen] = useState<string | null>(null);
   const [newArmyName, setNewArmyName] = useState('');
+  const [newArmyGeneralId, setNewArmyGeneralId] = useState('');
+  const [newArmySource, setNewArmySource] = useState('');
+  const [newArmyTroopIds, setNewArmyTroopIds] = useState<string[]>([]);
   const [createArmyError, setCreateArmyError] = useState('');
   const [isCreatingArmy, setIsCreatingArmy] = useState(false);
   const [newFleetName, setNewFleetName] = useState('');
@@ -178,10 +198,11 @@ export default function ArmyPage() {
   const [constructionSettlementIdOverride, setConstructionSettlementIdOverride] = useState('');
 
   async function refreshMilitaryState(currentGameId: string, currentRealmId: string) {
-    const [armyData, fleetData, settlementData] = await Promise.all([
+    const [armyData, fleetData, settlementData, nobleData] = await Promise.all([
       fetchArmyData(currentGameId, currentRealmId),
       fetchFleetData(currentGameId, currentRealmId),
       fetchRealmSettlements(currentGameId, currentRealmId),
+      fetchRealmNobles(currentGameId, currentRealmId),
     ]);
 
     setArmies(armyData.armies);
@@ -194,6 +215,7 @@ export default function ArmyPage() {
     setShipConstructionOptions(fleetData.shipConstructionOptions);
     setShipConstructionOptionsBySettlement(fleetData.shipConstructionOptionsBySettlement);
     setSettlements(settlementData);
+    setNobles(nobleData);
   }
 
   useEffect(() => {
@@ -205,7 +227,8 @@ export default function ArmyPage() {
       fetchArmyData(gameId, realmId),
       fetchFleetData(gameId, realmId),
       fetchRealmSettlements(gameId, realmId),
-    ]).then(([armyData, fleetData, settlementData]) => {
+      fetchRealmNobles(gameId, realmId),
+    ]).then(([armyData, fleetData, settlementData, nobleData]) => {
       if (cancelled) return;
 
       setArmies(armyData.armies);
@@ -218,6 +241,7 @@ export default function ArmyPage() {
       setShipConstructionOptions(fleetData.shipConstructionOptions);
       setShipConstructionOptionsBySettlement(fleetData.shipConstructionOptionsBySettlement);
       setSettlements(settlementData);
+      setNobles(nobleData);
     });
 
     return () => {
@@ -241,6 +265,7 @@ export default function ArmyPage() {
     ?? troopRecruitmentOptions;
   const activeShipConstructionOptions = shipConstructionOptionsBySettlement[selectedConstructionSettlementId]
     ?? shipConstructionOptions;
+  const settlementById = new Map(settlements.map((settlement) => [settlement.id, settlement]));
 
   useEffect(() => {
     const selectedOption = activeTroopRecruitmentOptions.find((option) => option.type === selectedTroopType);
@@ -269,14 +294,30 @@ export default function ArmyPage() {
   function closeCreateArmyDialog() {
     setCreateArmyOpen(false);
     setNewArmyName('');
+    setNewArmyGeneralId('');
+    setNewArmySource('');
+    setNewArmyTroopIds([]);
     setCreateArmyError('');
     setIsCreatingArmy(false);
+  }
+
+  function openCreateArmyDialog() {
+    setCreateArmyError('');
+    setNewArmyGeneralId('');
+    setNewArmySource(availableArmySources[0]?.value ?? '');
+    setNewArmyTroopIds([]);
+    setCreateArmyOpen(true);
   }
 
   async function createArmy() {
     const trimmedName = newArmyName.trim();
     if (!trimmedName) {
       setCreateArmyError('Enter an army name.');
+      return;
+    }
+
+    if (newArmyTroopIds.length === 0) {
+      setCreateArmyError('Select at least one ready troop.');
       return;
     }
 
@@ -295,7 +336,9 @@ export default function ArmyPage() {
         body: JSON.stringify({
           realmId,
           name: trimmedName,
-          locationTerritoryId: defaultArmyTerritoryId || undefined,
+          generalId: newArmyGeneralId || undefined,
+          troopIds: newArmyTroopIds,
+          locationTerritoryId: selectedArmySource?.territoryId || defaultArmyTerritoryId || undefined,
         }),
       });
 
@@ -303,11 +346,7 @@ export default function ArmyPage() {
         throw new Error(await getErrorMessage(response, 'Failed to create army'));
       }
 
-      const data = await fetchArmyData(gameId, realmId);
-      setArmies(data.armies);
-      setTroops(data.troops);
-      setSiege(data.siegeUnits);
-      setTroopRecruitmentOptions(data.troopRecruitmentOptions);
+      await refreshMilitaryState(gameId, realmId);
       closeCreateArmyDialog();
     } catch (error) {
       setCreateArmyError(error instanceof Error ? error.message : 'Failed to create army');
@@ -339,14 +378,13 @@ export default function ArmyPage() {
       body: JSON.stringify({
         realmId,
         type: selectedTroopType,
-        armyId: recruitOpen === 'garrison' ? null : recruitOpen,
-        garrisonSettlementId: recruitOpen === 'garrison' ? selectedRecruitmentSettlementId : null,
+        garrisonSettlementId: selectedRecruitmentSettlementId,
         recruitmentSettlementId: selectedRecruitmentSettlementId,
       }),
     });
 
     await refreshMilitaryState(gameId, realmId);
-    setRecruitOpen(null);
+    setRecruitOpen(false);
   }
 
   async function constructShip() {
@@ -401,6 +439,12 @@ export default function ArmyPage() {
     value: settlement.id,
     label: `${settlement.name} (${settlement.size})`,
   }));
+  const eligibleGeneralOptions = nobles
+    .filter((noble) => noble.officeAssignments.length === 0 && noble.isAlive !== false && !noble.isPrisoner)
+    .map((noble) => ({
+      value: noble.id,
+      label: noble.name,
+    }));
 
   const selectedTroopRecruitmentOption = activeTroopRecruitmentOptions.find(
     (option) => option.type === selectedTroopType,
@@ -412,31 +456,71 @@ export default function ArmyPage() {
   const hasConstructibleShips = activeShipConstructionOptions.some((option) => option.canConstruct);
 
   const garrisonTroops = allTroops.filter((troop) => !troop.armyId);
+  const availableArmyTroops = garrisonTroops.filter((troop) => troop.recruitmentTurnsRemaining === 0);
+  const garrisonGroupMap = new Map<string, Troop[]>();
+  for (const troop of availableArmyTroops) {
+    const key = troop.garrisonSettlementId ?? 'unassigned';
+    const list = garrisonGroupMap.get(key) ?? [];
+    list.push(troop);
+    garrisonGroupMap.set(key, list);
+  }
+  const availableArmySources = settlements
+    .map((settlement) => {
+      const troops = garrisonGroupMap.get(settlement.id) ?? [];
+      if (troops.length === 0) {
+        return null;
+      }
+
+      return {
+        value: settlement.id,
+        label: `${settlement.name} garrison (${troops.length} ready)`,
+        troops,
+        territoryId: settlement.territoryId,
+      };
+    })
+    .filter((group): group is {
+      value: string;
+      label: string;
+      troops: Troop[];
+      territoryId: string;
+    } => Boolean(group));
+  const unassignedArmyTroops = garrisonGroupMap.get('unassigned') ?? [];
+  if (unassignedArmyTroops.length > 0) {
+    availableArmySources.push({
+      value: 'unassigned',
+      label: `Unassigned pool (${unassignedArmyTroops.length} ready)`,
+      troops: unassignedArmyTroops,
+      territoryId: defaultArmyTerritoryId,
+    });
+  }
+  const selectedArmySourceValue = availableArmySources.some((source) => source.value === newArmySource)
+    ? newArmySource
+    : (availableArmySources[0]?.value ?? '');
+  const selectedArmySource = availableArmySources.find((source) => source.value === selectedArmySourceValue) ?? null;
+  const selectedArmyTroops = selectedArmySource?.troops ?? [];
+  const selectedArmyTroopIdsSet = new Set(newArmyTroopIds);
+  const allSelectedArmyTroops = selectedArmyTroops.length > 0
+    && selectedArmyTroops.every((troop) => selectedArmyTroopIdsSet.has(troop.id));
   const harborShips = allShips.filter((ship) => !ship.fleetId);
 
   const landContent = (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Armies & Troops</h2>
-        <Button
-          variant="accent"
-          onClick={() => {
-            setCreateArmyError('');
-            setCreateArmyOpen(true);
-          }}
-        >
-          + New Army
-        </Button>
+        <Button variant="accent" onClick={openCreateArmyDialog}>+ New Army</Button>
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Garrison (Unassigned)</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setRecruitOpen('garrison')}>+ Recruit</Button>
+            <CardTitle>Settlement Garrisons & Unassigned</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => setRecruitOpen(true)}>+ Recruit Troops</Button>
           </div>
         </CardHeader>
         <CardContent>
+          <p className="mb-3 text-sm text-ink-300">
+            Recruitment adds new troops to a settlement garrison. Use Create Army to organize ready troops into the field.
+          </p>
           <TroopList troops={garrisonTroops} />
         </CardContent>
       </Card>
@@ -461,7 +545,6 @@ export default function ArmyPage() {
                       <Badge variant="gold">Moving ({army.movementTurnsRemaining} turns)</Badge>
                     )}
                     <Badge>{armyTroops.length} troops</Badge>
-                    <Button variant="outline" size="sm" onClick={() => setRecruitOpen(army.id)}>+ Recruit</Button>
                   </div>
                 </div>
               </CardHeader>
@@ -563,9 +646,94 @@ export default function ArmyPage() {
       {createArmyOpen ? (
         <Dialog open onClose={closeCreateArmyDialog}>
           <DialogTitle>Create Army</DialogTitle>
-          <DialogContent>
+          <DialogContent className="space-y-4">
+            <p className="text-sm text-ink-300">
+              Creating an army reorganizes ready troops from one garrison or the unassigned pool. Recruitment stays at the settlement level.
+            </p>
+            <Input label="Army Name" value={newArmyName} onChange={(event) => setNewArmyName(event.target.value)} />
+            <Select
+              label="General"
+              options={eligibleGeneralOptions}
+              placeholder="No general assigned"
+              value={newArmyGeneralId}
+              onChange={(event) => setNewArmyGeneralId(event.target.value)}
+            />
+            <Select
+              label="Form From"
+              options={availableArmySources}
+              value={selectedArmySourceValue}
+              onChange={(event) => {
+                setNewArmySource(event.target.value);
+                setNewArmyTroopIds([]);
+              }}
+              disabled={availableArmySources.length === 0}
+            />
             <div className="space-y-4">
-              <Input label="Army Name" value={newArmyName} onChange={(event) => setNewArmyName(event.target.value)} />
+              {selectedArmySource ? (
+                <div className="max-h-64 space-y-2 overflow-y-auto rounded p-3 medieval-border">
+                  <div className="flex items-center justify-between">
+                    <p className="font-heading font-semibold">
+                      Ready Troops
+                    </p>
+                    {selectedArmyTroops.length > 0 ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setNewArmyTroopIds(
+                            allSelectedArmyTroops ? [] : selectedArmyTroops.map((troop) => troop.id),
+                          );
+                        }}
+                      >
+                        {allSelectedArmyTroops ? 'Clear All' : 'Select All'}
+                      </Button>
+                    ) : null}
+                  </div>
+                  {selectedArmyTroops.length > 0 ? (
+                    selectedArmyTroops.map((troop) => {
+                      const sourceLabel = troop.garrisonSettlementId
+                        ? `${settlementById.get(troop.garrisonSettlementId)?.name ?? 'Unknown garrison'}`
+                        : 'Unassigned pool';
+
+                      return (
+                        <label key={troop.id} className="flex items-center justify-between gap-3 rounded px-2 py-2 medieval-border">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={newArmyTroopIds.includes(troop.id)}
+                              aria-label={`Select ${troop.type} ${troop.id}`}
+                              onChange={(event) => {
+                                if (event.target.checked) {
+                                  setNewArmyTroopIds((current) => [...current, troop.id]);
+                                  return;
+                                }
+
+                                setNewArmyTroopIds((current) => current.filter((id) => id !== troop.id));
+                              }}
+                            />
+                            <div>
+                              <p className="font-semibold">{troop.type}</p>
+                              <p className="text-xs text-ink-300">{sourceLabel}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge>{troop.class}</Badge>
+                            <Badge>{troop.armourType}</Badge>
+                          </div>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-ink-300">No ready troops available in this source.</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-ink-300">
+                  {garrisonTroops.length === 0
+                    ? 'No troops are currently available outside armies.'
+                    : 'Only ready troops can be organized into a new army.'}
+                </p>
+              )}
               {createArmyError ? <p className="text-sm text-red-500">{createArmyError}</p> : null}
             </div>
           </DialogContent>
@@ -574,7 +742,7 @@ export default function ArmyPage() {
             <Button
               variant="accent"
               onClick={() => void createArmy()}
-              disabled={!newArmyName.trim() || !realmId || isCreatingArmy}
+              disabled={!newArmyName.trim() || !realmId || newArmyTroopIds.length === 0 || isCreatingArmy}
             >
               {isCreatingArmy ? 'Creating...' : 'Create Army'}
             </Button>
@@ -596,7 +764,7 @@ export default function ArmyPage() {
       ) : null}
 
       {recruitOpen ? (
-        <Dialog open onClose={() => setRecruitOpen(null)}>
+        <Dialog open onClose={() => setRecruitOpen(false)}>
           <DialogTitle>Recruit Troop</DialogTitle>
           <DialogContent>
             <Select
@@ -619,6 +787,9 @@ export default function ArmyPage() {
                 No troops are currently recruitable with this realm&apos;s available buildings.
               </p>
             ) : null}
+            <p className="mt-3 text-sm text-ink-300">
+              Recruited troops enter the selected settlement&apos;s garrison first. Use Create Army to organize ready troops afterward.
+            </p>
             {TROOP_DEFS[selectedTroopType] ? (
               <div className="mt-3 space-y-1 rounded p-3 text-sm medieval-border">
                 <p><strong>Class:</strong> {TROOP_DEFS[selectedTroopType].class}</p>
@@ -638,10 +809,10 @@ export default function ArmyPage() {
             ) : null}
           </DialogContent>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRecruitOpen(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setRecruitOpen(false)}>Cancel</Button>
             <Button
               variant="accent"
-              onClick={recruitTroop}
+              onClick={() => void recruitTroop()}
               disabled={!selectedRecruitmentSettlementId || !selectedTroopRecruitmentOption?.canRecruit}
             >
               Recruit

@@ -13,55 +13,45 @@ export type TerritoryType = 'Realm' | 'Neutral';
 
 // Common Resources (1d10)
 // 1-3 Timber, 4-6 Clay, 7-8 Iron(Ore), 9 Stone, 10 Luxury*
-function rollCommonResource(): ResourceType {
+function rollCommonResources(): ResourceType[] {
   const roll = Math.ceil(Math.random() * 10);
-  if (roll <= 3) return 'Timber';
-  if (roll <= 6) return 'Clay';
-  if (roll <= 8) return 'Ore';
-  if (roll === 9) return 'Stone';
+  if (roll <= 3) return ['Timber'];
+  if (roll <= 6) return ['Clay'];
+  if (roll <= 8) return ['Ore'];
+  if (roll === 9) return ['Stone'];
   // 10 -> roll on luxury table
-  return rollLuxuryResource();
-}
-
-function rollGuaranteedCommonResource(): ResourceType {
-  let resourceType = rollCommonResource();
-
-  while (RESOURCE_RARITY[resourceType] !== 'Common') {
-    resourceType = rollCommonResource();
-  }
-
-  return resourceType;
+  return rollLuxuryResources();
 }
 
 // Luxury Resources (1d10)
 // 1-2 Silver→Gold, 3-4 Porcelain, 5-6 Lacquer, 7 Jewels, 8 Cotton→Silk, 9 Marble, 10 Expanded*
-function rollLuxuryResource(): ResourceType {
+function rollLuxuryResources(): ResourceType[] {
   const roll = Math.ceil(Math.random() * 10);
-  if (roll <= 2) return 'Gold';
-  if (roll <= 4) return 'Porcelain';
-  if (roll <= 6) return 'Lacquer';
-  if (roll === 7) return 'Jewels';
-  if (roll === 8) return 'Silk';
-  if (roll === 9) return 'Marble';
+  if (roll <= 2) return ['Gold'];
+  if (roll <= 4) return ['Porcelain'];
+  if (roll <= 6) return ['Lacquer'];
+  if (roll === 7) return ['Jewels'];
+  if (roll === 8) return ['Silk'];
+  if (roll === 9) return ['Marble'];
   // 10 -> expanded luxury
-  return rollExpandedLuxury();
+  return rollExpandedLuxuryResources();
 }
 
 // Expanded Luxury (1d10)
-// 1 Gold, 2 Spices, 3 Tea, 4 Coffee, 5 Tobacco, 6 Opium, 7 Silk, 8 Salt, 9 Sugar, 10 Roll Twice (pick first)
-function rollExpandedLuxury(): ResourceType {
+// 1 Gold, 2 Spices, 3 Tea, 4 Coffee, 5 Tobacco, 6 Opium, 7 Silk, 8 Salt, 9 Sugar, 10 Roll Twice
+function rollExpandedLuxuryResources(): ResourceType[] {
   const roll = Math.ceil(Math.random() * 10);
-  if (roll === 1) return 'Gold';
-  if (roll === 2) return 'Spices';
-  if (roll === 3) return 'Tea';
-  if (roll === 4) return 'Coffee';
-  if (roll === 5) return 'Tobacco';
-  if (roll === 6) return 'Opium';
-  if (roll === 7) return 'Silk';
-  if (roll === 8) return 'Salt';
-  if (roll === 9) return 'Sugar';
-  // 10 -> roll twice, pick first
-  return rollLuxuryResource();
+  if (roll === 1) return ['Gold'];
+  if (roll === 2) return ['Spices'];
+  if (roll === 3) return ['Tea'];
+  if (roll === 4) return ['Coffee'];
+  if (roll === 5) return ['Tobacco'];
+  if (roll === 6) return ['Opium'];
+  if (roll === 7) return ['Silk'];
+  if (roll === 8) return ['Salt'];
+  if (roll === 9) return ['Sugar'];
+  // 10 -> roll twice on the expanded table
+  return [...rollExpandedLuxuryResources(), ...rollExpandedLuxuryResources()];
 }
 
 // ============================================================
@@ -118,8 +108,8 @@ export interface GeneratedResource {
 /**
  * Generate resources for a territory based on its type.
  *
- * Realm territories: 3 common rolls + 1 luxury roll
- * Neutral territories: 2 common rolls + 2 luxury rolls
+ * Realm territories: 3 rolls on the common table + 1 roll on the luxury table.
+ * Neutral territories: 2 rolls on the common table + 2 rolls on the luxury table.
  *
  * Each resource site gets a settlement (per rules).
  */
@@ -127,38 +117,43 @@ export function generateTerritoryResources(type: TerritoryType): GeneratedResour
   const resources: GeneratedResource[] = [];
 
   if (type === 'Realm') {
-    // 3 common + 1 luxury, all starting as villages during setup.
+    // Realm setup rolls the common table three times, so a d10 result of 10
+    // correctly cascades into a luxury resource in that slot.
     for (let i = 0; i < 3; i++) {
-      const resourceType = rollGuaranteedCommonResource();
+      for (const resourceType of rollCommonResources()) {
+        resources.push({
+          resourceType,
+          rarity: RESOURCE_RARITY[resourceType],
+          settlement: createRealmSettlement(resources.length, 'Village'),
+        });
+      }
+    }
+    for (const resourceType of rollLuxuryResources()) {
       resources.push({
         resourceType,
         rarity: RESOURCE_RARITY[resourceType],
-        settlement: createRealmSettlement(i, 'Village'),
+        settlement: createRealmSettlement(resources.length, 'Village'),
       });
     }
-    const luxuryType = rollLuxuryResource();
-    resources.push({
-      resourceType: luxuryType,
-      rarity: RESOURCE_RARITY[luxuryType],
-      settlement: createRealmSettlement(resources.length, 'Village'),
-    });
   } else {
-    // Neutral: 2 common + 2 luxury
+    // Neutral territories follow the same common-table cascade rule.
     for (let i = 0; i < 2; i++) {
-      const resourceType = rollGuaranteedCommonResource();
-      resources.push({
-        resourceType,
-        rarity: RESOURCE_RARITY[resourceType],
-        settlement: rollSettlement(),
-      });
+      for (const resourceType of rollCommonResources()) {
+        resources.push({
+          resourceType,
+          rarity: RESOURCE_RARITY[resourceType],
+          settlement: rollSettlement(),
+        });
+      }
     }
     for (let i = 0; i < 2; i++) {
-      const luxuryType = rollLuxuryResource();
-      resources.push({
-        resourceType: luxuryType,
-        rarity: RESOURCE_RARITY[luxuryType],
-        settlement: rollSettlement(),
-      });
+      for (const resourceType of rollLuxuryResources()) {
+        resources.push({
+          resourceType,
+          rarity: RESOURCE_RARITY[resourceType],
+          settlement: rollSettlement(),
+        });
+      }
     }
   }
 
@@ -181,11 +176,8 @@ export function generateMap(
 // Realm Starting Package
 // ============================================================
 
-export const REALM_STARTING_COMMON_RESOURCES = 3;
-export const REALM_STARTING_LUXURY_RESOURCES = 1;
-export const REALM_STARTING_VILLAGES = 4;
-export const REALM_STARTING_TOWNS = 1;
-export const REALM_STARTING_SETTLEMENTS = REALM_STARTING_VILLAGES + REALM_STARTING_TOWNS;
+export const REALM_STARTING_COMMON_TABLE_ROLLS = 3;
+export const REALM_STARTING_LUXURY_TABLE_ROLLS = 1;
 export const REALM_STARTING_TROOPS = 5;
 
 export interface GeneratedTroop {
@@ -202,7 +194,7 @@ export interface RealmStartingPackage {
 /**
  * Generate the canonical starting package for a new player realm.
  *
- * - 3 common resources + 1 luxury resource, each on a Village
+ * - 3 rolls on the common table + 1 roll on the luxury table, each on a Village
  * - 5 basic Spearmen troops (to be garrisoned in the player's town)
  *
  * The town itself is created separately during realm creation since

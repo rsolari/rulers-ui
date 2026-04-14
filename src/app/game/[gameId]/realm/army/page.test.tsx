@@ -55,7 +55,18 @@ describe('ArmyPage', () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(jsonResponse({
         armies: [],
-        troops: [],
+        troops: [
+          {
+            id: 'troop-1',
+            type: 'Spearmen',
+            class: 'Infantry',
+            armourType: 'Light',
+            condition: 'Healthy',
+            armyId: null,
+            garrisonSettlementId: 'settlement-1',
+            recruitmentTurnsRemaining: 0,
+          },
+        ],
         siegeUnits: [],
         troopRecruitmentOptions: [],
         troopRecruitmentOptionsBySettlement: {},
@@ -69,14 +80,23 @@ describe('ArmyPage', () => {
       .mockResolvedValueOnce(jsonResponse([
         { id: 'settlement-1', name: 'Capital', size: 'Town', territoryId: 'territory-1' },
       ]))
+      .mockResolvedValueOnce(jsonResponse([
+        {
+          id: 'noble-1',
+          name: 'General Rowan',
+          officeAssignments: [],
+          isAlive: true,
+          isPrisoner: false,
+        },
+      ]))
       .mockResolvedValueOnce(jsonResponse({ id: 'army-1' }))
       .mockResolvedValueOnce(jsonResponse({
         armies: [
           {
             id: 'army-1',
             name: 'First Army',
-            generalId: null,
-            general: null,
+            generalId: 'noble-1',
+            general: { id: 'noble-1', name: 'General Rowan' },
             locationTerritoryId: 'territory-1',
             movementTurnsRemaining: 0,
           },
@@ -94,6 +114,15 @@ describe('ArmyPage', () => {
       }))
       .mockResolvedValueOnce(jsonResponse([
         { id: 'settlement-1', name: 'Capital', size: 'Town', territoryId: 'territory-1' },
+      ]))
+      .mockResolvedValueOnce(jsonResponse([
+        {
+          id: 'noble-1',
+          name: 'General Rowan',
+          officeAssignments: [],
+          isAlive: true,
+          isPrisoner: false,
+        },
       ])));
   });
 
@@ -107,24 +136,28 @@ describe('ArmyPage', () => {
     render(<ArmyPage />);
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(fetch).toHaveBeenCalledTimes(4);
     });
 
     await user.click(screen.getByRole('button', { name: /\+ new army/i }));
     await user.type(screen.getByLabelText('Army Name'), 'First Army');
+    await user.selectOptions(screen.getByLabelText('General'), 'noble-1');
+    await user.click(screen.getByLabelText('Select Spearmen troop-1'));
     await user.click(screen.getByText('Create Army', { selector: 'button' }));
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(5);
+      expect(fetch).toHaveBeenCalledTimes(9);
     });
 
-    const postCall = vi.mocked(fetch).mock.calls[3];
+    const postCall = vi.mocked(fetch).mock.calls[4];
     const requestInit = postCall?.[1] as RequestInit | undefined;
     expect(postCall?.[0]).toBe('/api/game/game-1/armies');
     expect(requestInit).toMatchObject({ method: 'POST' });
     expect(JSON.parse(String(requestInit?.body))).toEqual({
       realmId: 'realm-managed',
       name: 'First Army',
+      generalId: 'noble-1',
+      troopIds: ['troop-1'],
       locationTerritoryId: 'territory-1',
     });
 
@@ -132,5 +165,6 @@ describe('ArmyPage', () => {
       expect(screen.queryByLabelText('Army Name')).not.toBeInTheDocument();
     });
     expect(screen.getByText('First Army')).toBeInTheDocument();
+    expect(screen.getByText(/General:\s*General Rowan/i)).toBeInTheDocument();
   });
 });

@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { gosRealms, guildsOrdersSocieties, nobles, realms } from '@/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { isAuthError, requireRealmOwner } from '@/lib/auth';
+import { isAuthError, requireGM, requireRealmOwner } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
 
@@ -186,6 +186,70 @@ export async function POST(
     }
 
     if (isGovernanceError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
+) {
+  try {
+    const { gameId } = await params;
+    await requireGM(gameId);
+    const body = await request.json();
+
+    if (!body.gosId) {
+      return NextResponse.json({ error: 'gosId required' }, { status: 400 });
+    }
+
+    const gos = await db.select().from(guildsOrdersSocieties)
+      .where(eq(guildsOrdersSocieties.id, body.gosId))
+      .get();
+
+    if (!gos) {
+      return NextResponse.json({ error: 'GOS not found' }, { status: 404 });
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (body.name !== undefined) updates.name = body.name;
+    if (body.type !== undefined) updates.type = body.type;
+    if (body.focus !== undefined) updates.focus = body.focus || null;
+    if (body.treasury !== undefined) updates.treasury = Number(body.treasury) || 0;
+    if (body.monopolyProduct !== undefined) updates.monopolyProduct = body.monopolyProduct || null;
+    if (body.alcoveNames !== undefined) updates.alcoveNames = Array.isArray(body.alcoveNames) ? JSON.stringify(body.alcoveNames) : null;
+    if (body.centreNames !== undefined) updates.centreNames = Array.isArray(body.centreNames) ? JSON.stringify(body.centreNames) : null;
+    if (body.firstBuildingId !== undefined) updates.firstBuildingId = body.firstBuildingId || null;
+
+    db.transaction((tx) => {
+      if (Object.keys(updates).length > 0) {
+        tx.update(guildsOrdersSocieties)
+          .set(updates)
+          .where(eq(guildsOrdersSocieties.id, body.gosId))
+          .run();
+      }
+
+      if (Array.isArray(body.realmIds)) {
+        const filtered = (body.realmIds as unknown[])
+          .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          .map((v) => v.trim());
+        const newRealmIds = [...new Set(filtered)];
+
+        if (newRealmIds.length > 0) {
+          tx.delete(gosRealms).where(eq(gosRealms.gosId, body.gosId)).run();
+          tx.insert(gosRealms).values(
+            newRealmIds.map((realmId) => ({ gosId: body.gosId as string, realmId })),
+          ).run();
+        }
+      }
+    });
+
+    return NextResponse.json({ updated: true });
+  } catch (error) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

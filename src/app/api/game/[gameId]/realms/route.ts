@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
 import { getEconomyOverview } from '@/lib/economy-service';
+import { sanitizeTechnicalKnowledge } from '@/lib/technical-knowledge';
 
 const REALM_COLORS = [
   '#8b2020', '#2a4a7a', '#5a7a4a', '#8a5a24', '#7a3e6a',
@@ -38,6 +39,7 @@ export async function POST(
     const { gameId } = await params;
     await requireGM(gameId);
     const body = await request.json();
+    const technicalKnowledge = sanitizeTechnicalKnowledge(body.technicalKnowledge);
 
     const id = uuid();
     const existingRealms = await db.select().from(realms).where(eq(realms.gameId, gameId));
@@ -56,11 +58,12 @@ export async function POST(
       foodBalance: body.foodBalance ?? 0,
       consecutiveFoodShortageSeasons: body.consecutiveFoodShortageSeasons ?? 0,
       consecutiveFoodRecoverySeasons: body.consecutiveFoodRecoverySeasons ?? 0,
+      technicalKnowledge: JSON.stringify(technicalKnowledge),
       turmoilSources: '[]',
       color,
     });
 
-    return NextResponse.json({ id, ...body });
+    return NextResponse.json({ id, ...body, technicalKnowledge });
   } catch (error) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -103,6 +106,7 @@ export async function PATCH(
         'foodBalance',
         'consecutiveFoodShortageSeasons',
         'consecutiveFoodRecoverySeasons',
+        'technicalKnowledge',
       ]
       : ['name', 'governmentType', 'traditions'];
 
@@ -125,6 +129,9 @@ export async function PATCH(
     }
     if (isGM && body.consecutiveFoodRecoverySeasons !== undefined) {
       updates.consecutiveFoodRecoverySeasons = body.consecutiveFoodRecoverySeasons;
+    }
+    if (isGM && body.technicalKnowledge !== undefined) {
+      updates.technicalKnowledge = JSON.stringify(sanitizeTechnicalKnowledge(body.technicalKnowledge));
     }
 
     await db.update(realms)

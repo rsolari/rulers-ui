@@ -75,6 +75,20 @@ interface BuildingOption {
   reasonMessage?: string;
 }
 
+interface BuildingUpgradeOption {
+  targetType: string;
+  category: string;
+  targetSize: string;
+  canUpgrade: boolean;
+  cost: number;
+  usesTradeAccess: boolean;
+  constructionTurns: number;
+  prerequisites: string[];
+  description: string;
+  reason?: string;
+  reasonMessage?: string;
+}
+
 const FORTIFICATION_MATERIAL_TYPES = new Set(['Gatehouse', 'Walls', 'Watchtower']);
 
 export default function SettlementsPage() {
@@ -118,6 +132,19 @@ export default function SettlementsPage() {
   const [selectedMaterial, setSelectedMaterial] = useState<string>('Timber');
   const [buildingLoading, setBuildingLoading] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
+  const [upgradeSettlementId, setUpgradeSettlementId] = useState<string | null>(null);
+  const [upgradeBuildingId, setUpgradeBuildingId] = useState<string | null>(null);
+  const [upgradeBuildingLabel, setUpgradeBuildingLabel] = useState('');
+  const [upgradeOptions, setUpgradeOptions] = useState<BuildingUpgradeOption[]>([]);
+  const [selectedUpgradeType, setSelectedUpgradeType] = useState('');
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  async function refreshSettlements() {
+    if (!realmId) return;
+    const res = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
+    setSettlements(await res.json());
+  }
 
   async function renameSettlement(settlementId: string, name: string) {
     const trimmed = name.trim();
@@ -134,8 +161,7 @@ export default function SettlementsPage() {
     if (!response.ok) return;
 
     setEditingId(null);
-    const res = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
-    setSettlements(await res.json());
+    await refreshSettlements();
   }
 
   function startEditing(settlement: Settlement) {
@@ -160,8 +186,7 @@ export default function SettlementsPage() {
     }
 
     // Refresh settlements
-    const res = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
-    setSettlements(await res.json());
+    await refreshSettlements();
     return null;
   }
 
@@ -219,15 +244,70 @@ export default function SettlementsPage() {
       }
 
       setBuildSettlementId(null);
-      const refreshRes = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
-      setSettlements(await refreshRes.json());
+      await refreshSettlements();
     } finally {
       setBuildingLoading(false);
     }
   }
 
+  async function openUpgradeDialog(settlementId: string, buildingId: string, buildingType: string) {
+    setUpgradeSettlementId(settlementId);
+    setUpgradeBuildingId(buildingId);
+    setUpgradeBuildingLabel(buildingType);
+    setUpgradeOptions([]);
+    setSelectedUpgradeType('');
+    setUpgradeError(null);
+    setUpgradeLoading(true);
+
+    try {
+      const res = await fetch(`/api/game/${gameId}/settlements/${settlementId}/buildings/${buildingId}/upgrade`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setUpgradeError(data.error ?? 'Failed to load upgrade options');
+        return;
+      }
+
+      const options = (data.options ?? []) as BuildingUpgradeOption[];
+      setUpgradeOptions(options);
+      const firstUpgradeable = options.find((option) => option.canUpgrade);
+      setSelectedUpgradeType(firstUpgradeable?.targetType ?? options[0]?.targetType ?? '');
+    } finally {
+      setUpgradeLoading(false);
+    }
+  }
+
+  async function applyUpgrade() {
+    if (!upgradeSettlementId || !upgradeBuildingId || !selectedUpgradeType) return;
+    setUpgradeError(null);
+    setUpgradeLoading(true);
+
+    try {
+      const res = await fetch(`/api/game/${gameId}/settlements/${upgradeSettlementId}/buildings/${upgradeBuildingId}/upgrade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetType: selectedUpgradeType }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setUpgradeError(data.error ?? 'Upgrade failed');
+        return;
+      }
+
+      setUpgradeSettlementId(null);
+      setUpgradeBuildingId(null);
+      setUpgradeBuildingLabel('');
+      await refreshSettlements();
+    } finally {
+      setUpgradeLoading(false);
+    }
+  }
+
   const selectedOption = buildingOptions.find((o) => o.type === selectedBuildingType);
   const hasBuildableOptions = buildingOptions.some((o) => o.canBuild);
+  const selectedUpgradeOption = upgradeOptions.find((option) => option.targetType === selectedUpgradeType);
+  const hasUpgradeableOptions = upgradeOptions.some((option) => option.canUpgrade);
 
   const buildingSelectOptions = buildingOptions.map((option) => {
     const statusLabel = option.canBuild
@@ -238,6 +318,18 @@ export default function SettlementsPage() {
       value: option.type,
       label: `${option.type} [${option.category}]${statusLabel}`,
       disabled: !option.canBuild,
+    };
+  });
+
+  const upgradeSelectOptions = upgradeOptions.map((option) => {
+    const statusLabel = option.canUpgrade
+      ? option.usesTradeAccess ? ' (via trade)' : ''
+      : ` - ${option.reasonMessage ?? 'unavailable'}`;
+
+    return {
+      value: option.targetType,
+      label: `${option.targetType} [${option.category}]${statusLabel}`,
+      disabled: !option.canUpgrade,
     };
   });
 
@@ -388,6 +480,19 @@ export default function SettlementsPage() {
                             </select>
                           )}
                         </div>
+                        <div className="flex items-center gap-2">
+                          {building.constructionTurnsRemaining > 0 ? (
+                            <Badge variant="gold">{building.constructionTurnsRemaining} turns left</Badge>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openUpgradeDialog(settlement.id, building.id, building.type)}
+                            >
+                              Upgrade
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -478,6 +583,83 @@ export default function SettlementsPage() {
               disabled={!selectedOption?.canBuild || buildingLoading}
             >
               Build
+            </Button>
+          </DialogFooter>
+        </Dialog>
+      ) : null}
+
+      {upgradeSettlementId && upgradeBuildingId ? (
+        <Dialog
+          open
+          onClose={() => {
+            setUpgradeSettlementId(null);
+            setUpgradeBuildingId(null);
+            setUpgradeBuildingLabel('');
+          }}
+        >
+          <DialogTitle>Upgrade {upgradeBuildingLabel}</DialogTitle>
+          <DialogContent>
+            {upgradeLoading && upgradeOptions.length === 0 ? (
+              <p className="text-ink-300 text-sm">Loading upgrade options...</p>
+            ) : (
+              <>
+                <Select
+                  label="Upgrade Target"
+                  options={upgradeSelectOptions}
+                  value={selectedUpgradeType}
+                  onChange={(e) => setSelectedUpgradeType(e.target.value)}
+                />
+                {upgradeOptions.length === 0 && (
+                  <p className="mt-3 text-sm text-ink-300">
+                    No larger upgrade paths are available for this building.
+                  </p>
+                )}
+                {!hasUpgradeableOptions && upgradeOptions.length > 0 && (
+                  <p className="mt-3 text-sm text-ink-300">
+                    No upgrades are currently available for this building.
+                  </p>
+                )}
+                {selectedUpgradeOption && (
+                  <div className="mt-3 space-y-1 rounded p-3 text-sm medieval-border">
+                    <p><strong>Category:</strong> {selectedUpgradeOption.category}</p>
+                    <p><strong>Target Size:</strong> {selectedUpgradeOption.targetSize}</p>
+                    <p><strong>Upgrade Cost:</strong> {selectedUpgradeOption.cost.toLocaleString()}gc</p>
+                    <p><strong>Upgrade Time:</strong> {selectedUpgradeOption.constructionTurns} turn(s)</p>
+                    {selectedUpgradeOption.prerequisites.length > 0 && (
+                      <p><strong>Requires:</strong> {selectedUpgradeOption.prerequisites.join(', ')}</p>
+                    )}
+                    <p className="text-ink-300 italic">{selectedUpgradeOption.description}</p>
+                    {selectedUpgradeOption.usesTradeAccess && (
+                      <p><strong>Source:</strong> Available via traded access.</p>
+                    )}
+                    {!selectedUpgradeOption.canUpgrade && (
+                      <p className="text-red-700"><strong>Status:</strong> {selectedUpgradeOption.reasonMessage ?? 'Unavailable'}</p>
+                    )}
+                  </div>
+                )}
+                {upgradeError && (
+                  <p className="mt-2 text-sm text-red-700">{upgradeError}</p>
+                )}
+              </>
+            )}
+          </DialogContent>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setUpgradeSettlementId(null);
+                setUpgradeBuildingId(null);
+                setUpgradeBuildingLabel('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="accent"
+              onClick={applyUpgrade}
+              disabled={!selectedUpgradeOption?.canUpgrade || upgradeLoading}
+            >
+              Upgrade
             </Button>
           </DialogFooter>
         </Dialog>

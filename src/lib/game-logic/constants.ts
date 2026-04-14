@@ -64,6 +64,25 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDef> = {
   Weaponsmith:   { type: 'Weaponsmith',   category: 'Military',      size: 'Medium', prerequisites: ['Ore'],                              description: 'Allows recruitment of certain Troops.' },
 };
 
+const BUILDING_SIZE_ORDER: BuildingSize[] = ['Tiny', 'Small', 'Medium', 'Large', 'Colossal'];
+
+export const BUILDING_UPGRADE_PATHS: Partial<Record<BuildingType, BuildingType[]>> = {
+  Academy: ['College', 'University'],
+  Chapel: ['Church', 'Cathedral'],
+  Church: ['Cathedral'],
+  Fort: ['Castle'],
+};
+
+export function getEligibleBuildingUpgradeTargets(
+  buildingType: BuildingType,
+  currentSize: BuildingSize = BUILDING_DEFS[buildingType].size,
+) {
+  const currentRank = BUILDING_SIZE_ORDER.indexOf(currentSize);
+  return (BUILDING_UPGRADE_PATHS[buildingType] ?? []).filter((targetType) => (
+    BUILDING_SIZE_ORDER.indexOf(BUILDING_DEFS[targetType].size) > currentRank
+  ));
+}
+
 // ============================================================
 // Troop Definitions
 // ============================================================
@@ -524,6 +543,13 @@ export const TRADITION_DEFS: Record<Tradition, TraditionDef> = {
   TheImmortals:      { name: 'TheImmortals',      displayName: 'The Immortals',      category: 'Military',   effect: '+3 Combat, +2 Morale for one specific Troop.' },
   EncouragedLabour:  { name: 'EncouragedLabour',  displayName: 'Encouraged Labour',  category: 'Military',   effect: 'Fortifications take 1 less turn to build (min 1).' },
 };
+
+export function getTraditionGrantedBuildings(traditions: readonly Tradition[]) {
+  return [...new Set(traditions.flatMap((tradition) => {
+    const buildingType = TRADITION_DEFS[tradition].grantsBuilding;
+    return buildingType ? [buildingType] : [];
+  }))];
+}
 
 // ============================================================
 // Seasons order

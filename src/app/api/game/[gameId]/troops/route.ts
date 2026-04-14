@@ -44,10 +44,12 @@ export async function POST(
   try {
     const { gameId } = await params;
     const body = await request.json();
-    const { realmId } = await requireOwnedRealmAccess(gameId, body.realmId);
+    const { realmId, session } = await requireOwnedRealmAccess(gameId, body.realmId);
+    const isGm = session.role === 'gm' && session.gameId === gameId;
     const created = await createTroopRecruitment(gameId, {
       ...body,
       realmId,
+      gmOverride: isGm ? body.gmOverride : undefined,
     });
 
     await recomputeGameInitState(gameId);

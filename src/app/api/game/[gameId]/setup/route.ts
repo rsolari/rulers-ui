@@ -277,6 +277,7 @@ export async function POST(
             territoryId,
             capitalHexId,
             capitalName: `${territory.owner?.realmName?.trim() || territory.name} Capital`,
+            traditions: territory.owner?.traditions || [],
           });
         }
       }

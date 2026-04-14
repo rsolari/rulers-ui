@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildings, playerSlots, realms, settlements, territories, troops } from '@/db/schema';
+import {
+  buildings,
+  games,
+  industries,
+  playerSlots,
+  realms,
+  resourceSites,
+  settlements,
+  territories,
+  troops,
+} from '@/db/schema';
 
 const mocks = vi.hoisted(() => {
   const operations: Array<{
@@ -8,9 +18,16 @@ const mocks = vi.hoisted(() => {
     values: Record<string, unknown>;
   }> = [];
 
-  const selectGet = vi.fn();
-  const selectWhere = vi.fn(() => ({ get: selectGet }));
-  const selectFrom = vi.fn(() => ({ where: selectWhere }));
+  const queryGetByTable = new Map<unknown, unknown>();
+  const queryAllByTable = new Map<unknown, unknown[]>();
+  const selectFrom = vi.fn((table: unknown) => ({
+    where: vi.fn(() => ({
+      get: () => queryGetByTable.get(table) ?? null,
+      all: () => queryAllByTable.get(table) ?? [],
+    })),
+    get: () => queryGetByTable.get(table) ?? null,
+    all: () => queryAllByTable.get(table) ?? [],
+  }));
   const select = vi.fn(() => ({ from: selectFrom }));
 
   const tx = {
@@ -37,7 +54,8 @@ const mocks = vi.hoisted(() => {
   return {
     db: { select, transaction },
     operations,
-    selectGet,
+    queryAllByTable,
+    queryGetByTable,
     transaction,
   };
 });
@@ -71,17 +89,41 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
     vi.clearAllMocks();
     mocks.operations.length = 0;
     uuidMock.mockReset();
+    mocks.queryGetByTable.clear();
+    mocks.queryAllByTable.clear();
     authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'parallel_final_setup' });
     authMocks.requirePlayerSlot.mockResolvedValue({
       id: 'slot-1',
       territoryId: 'territory-1',
       realmId: null,
     });
-    mocks.selectGet.mockReturnValue({
+    mocks.queryGetByTable.set(territories, {
       id: 'territory-1',
       gameId: 'game-1',
       name: 'Westreach',
+      foodCapBase: 30,
+      foodCapBonus: 0,
     });
+    mocks.queryGetByTable.set(games, {
+      id: 'game-1',
+      currentYear: 1,
+      currentSeason: 'Spring',
+    });
+    mocks.queryAllByTable.set(realms, []);
+    mocks.queryAllByTable.set(settlements, [
+      { id: 'settlement-1', territoryId: 'territory-1', name: 'Village 1', size: 'Village' },
+      { id: 'settlement-2', territoryId: 'territory-1', name: 'Village 2', size: 'Village' },
+      { id: 'settlement-3', territoryId: 'territory-1', name: 'Village 3', size: 'Village' },
+      { id: 'settlement-4', territoryId: 'territory-1', name: 'Village 4', size: 'Village' },
+    ]);
+    mocks.queryAllByTable.set(buildings, []);
+    mocks.queryAllByTable.set(resourceSites, [
+      { id: 'resource-1', territoryId: 'territory-1', settlementId: 'settlement-1', resourceType: 'Timber', rarity: 'Common' },
+      { id: 'resource-2', territoryId: 'territory-1', settlementId: 'settlement-2', resourceType: 'Clay', rarity: 'Common' },
+      { id: 'resource-3', territoryId: 'territory-1', settlementId: 'settlement-3', resourceType: 'Ore', rarity: 'Common' },
+      { id: 'resource-4', territoryId: 'territory-1', settlementId: 'settlement-4', resourceType: 'Gold', rarity: 'Luxury' },
+    ]);
+    mocks.queryAllByTable.set(industries, []);
     mapMocks.isSettlementHexAvailable.mockResolvedValue(true);
     gameInitStateMocks.recomputeGameInitState.mockResolvedValue(undefined);
   });
@@ -119,9 +161,10 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
           actingRulerNobleId: null,
           traditions: JSON.stringify([]),
           isNPC: false,
-          treasury: 0,
+          treasury: 13350,
           taxType: 'Tribute',
           turmoilSources: '[]',
+          color: '#8b2020',
         },
       },
       {
@@ -283,6 +326,56 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
       name: 'Aster',
       governmentType: 'Monarch',
       traditions: [],
+      townId: 'uuid-2',
+    });
+  });
+
+  it('places tradition-granted capital buildings even when they exceed the normal town size limit', async () => {
+    let uuidCounter = 0;
+    uuidMock.mockImplementation(() => `uuid-${++uuidCounter}`);
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/realms/create-player-realm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Aster',
+        governmentType: 'Monarch',
+        traditions: ['Pious'],
+        townName: 'Highgate',
+        hexId: 'hex-1',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.operations).toContainEqual({
+      kind: 'insert',
+      table: buildings,
+      values: {
+        id: 'uuid-5',
+        settlementId: 'uuid-2',
+        territoryId: 'territory-1',
+        hexId: 'hex-1',
+        locationType: 'settlement',
+        type: 'Cathedral',
+        category: 'Civic',
+        size: 'Large',
+        material: null,
+        takesBuildingSlot: true,
+        isOperational: true,
+        maintenanceState: 'active',
+        constructionTurnsRemaining: 0,
+        ownerGosId: null,
+        allottedGosId: null,
+        customDefinitionId: null,
+      },
+    });
+    await expect(response.json()).resolves.toEqual({
+      id: 'uuid-1',
+      name: 'Aster',
+      governmentType: 'Monarch',
+      traditions: ['Pious'],
       townId: 'uuid-2',
     });
   });

@@ -10,14 +10,16 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { TechnicalKnowledgeBadges } from '@/components/technical-knowledge/technical-knowledge-badges';
 import { useRole } from '@/hooks/use-role';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
+import { parseTechnicalKnowledge } from '@/lib/technical-knowledge';
 import type { TaxType } from '@/types/game';
 import { TurmoilSummaryCard } from '@/components/turmoil/turmoil-summary-card';
 import { PlayerTurnReportPanel } from '@/components/turn-actions/player-turn-report-panel';
-import type { GovernmentType, Tradition, PlayerSetupState } from '@/types/game';
+import type { GovernmentType, PlayerSetupState, TechnicalKnowledgeKey, Tradition } from '@/types/game';
 import type { PlayerSetupChecklist } from '@/lib/game-init-state';
 
 const GOVERNMENT_OPTIONS = [
@@ -52,10 +54,15 @@ interface Realm {
   treasury: number;
   taxType: string;
   traditions: string;
+  technicalKnowledge: TechnicalKnowledgeKey[];
   projectedTurmoil?: number | null;
   openTurmoilEventId?: string | null;
   winterUnrestPending?: boolean;
   capitalSettlementId?: string | null;
+}
+
+interface RealmResponse extends Omit<Realm, 'technicalKnowledge'> {
+  technicalKnowledge: string;
 }
 
 interface Territory {
@@ -145,8 +152,11 @@ export default function RealmDashboard() {
       ]);
 
       const gameData = await gameResponse.json();
-      const realmList: Realm[] = await realmsResponse.json();
-      const realmData = realmList.find((entry: Realm) => entry.id === realmId) || null;
+      const realmList: Realm[] = (await realmsResponse.json() as RealmResponse[]).map((entry) => ({
+        ...entry,
+        technicalKnowledge: parseTechnicalKnowledge(entry.technicalKnowledge),
+      }));
+      const realmData = realmList.find((entry) => entry.id === realmId) || null;
       const allTerritories: Territory[] = await territoriesResponse.json();
       const settlementsList = await settlementsResponse.json();
       const rulerData = await rulerResponse.json();
@@ -475,6 +485,17 @@ export default function RealmDashboard() {
             <div className="flex items-center justify-between">
               <span>Settlements</span>
               <strong>{settlements.length}</strong>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span>Technical Knowledge</span>
+                <strong>{realm.technicalKnowledge.length}</strong>
+              </div>
+              <TechnicalKnowledgeBadges
+                knowledge={realm.technicalKnowledge}
+                emptyLabel="No technical knowledge assigned."
+                variant="gold"
+              />
             </div>
             <div className="flex items-center justify-between">
               <span>Net Income / Season</span>

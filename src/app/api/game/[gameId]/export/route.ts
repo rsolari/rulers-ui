@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
-import path from 'path';
+import { resolveDatabasePath } from '@/db/path';
 import { requireGM, isAuthError } from '@/lib/auth';
 
 export async function GET(
@@ -11,7 +11,7 @@ export async function GET(
     const { gameId } = await params;
     await requireGM(gameId);
 
-    const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'rulers.db');
+    const dbPath = resolveDatabasePath();
 
     if (!fs.existsSync(dbPath)) {
       return NextResponse.json({ error: 'Database file not found' }, { status: 404 });

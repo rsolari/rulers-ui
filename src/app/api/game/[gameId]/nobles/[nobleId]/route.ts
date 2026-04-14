@@ -27,6 +27,10 @@ const GM_EDITABLE_FIELDS = new Set([
   'greatestDesire',
   'reasonSkill',
   'cunningSkill',
+  'isAlive',
+  'isPrisoner',
+  'locationTerritoryId',
+  'locationHexId',
   'gmStatusText',
 ]);
 
@@ -197,6 +201,30 @@ export async function PATCH(
 
       if (isGmSession && hasOwn(body, 'cunningSkill')) {
         updates.cunningSkill = normalizeSkill(body.cunningSkill, 'cunningSkill');
+      }
+
+      if (isGmSession && hasOwn(body, 'isAlive')) {
+        if (typeof body.isAlive !== 'boolean') {
+          throw new Error('isAlive must be a boolean');
+        }
+
+        updates.isAlive = body.isAlive;
+      }
+
+      if (isGmSession && hasOwn(body, 'isPrisoner')) {
+        if (typeof body.isPrisoner !== 'boolean') {
+          throw new Error('isPrisoner must be a boolean');
+        }
+
+        updates.isPrisoner = body.isPrisoner;
+      }
+
+      if (isGmSession && hasOwn(body, 'locationTerritoryId')) {
+        updates.locationTerritoryId = body.locationTerritoryId === null ? null : normalizeRequiredString(body.locationTerritoryId, 'locationTerritoryId');
+      }
+
+      if (isGmSession && hasOwn(body, 'locationHexId')) {
+        updates.locationHexId = body.locationHexId === null ? null : normalizeRequiredString(body.locationHexId, 'locationHexId');
       }
 
       if (isGmSession && hasOwn(body, 'gmStatusText')) {

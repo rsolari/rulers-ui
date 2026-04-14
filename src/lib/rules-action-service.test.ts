@@ -5,14 +5,17 @@ import { describe, expect, it } from 'vitest';
 import { initializeDatabaseSchema } from '@/db/bootstrap';
 import * as schema from '@/db/schema';
 import {
+  createBuilding,
   createShipConstruction,
   createTroopRecruitment,
   prepareBuildingCreation,
+  prepareRealmBuildingUpgrade,
   prepareResourceSiteCreation,
   prepareShipConstruction,
   prepareTradeRouteCreation,
   prepareTroopRecruitment,
   RuleValidationError,
+  upgradeBuilding,
 } from './rules-action-service';
 import type { BuildingType, GOSType, ResourceType } from '@/types/game';
 
@@ -476,6 +479,177 @@ describe('prepareTradeRouteCreation', () => {
     }, () => 'trade-2'));
 
     expect(error.code).toBe('trade_route_port_required');
+  });
+});
+
+describe('createBuilding', () => {
+  function seedBuildingConstructionContext(
+    db: ReturnType<typeof createTestDatabase>['db'],
+    overrides: {
+      treasury?: number;
+      settlementSize?: 'Village' | 'Town' | 'City';
+    } = {},
+  ) {
+    const { treasury = 1000, settlementSize = 'Village' } = overrides;
+
+    db.insert(schema.games).values({
+      id: 'game-1',
+      name: 'Building Rules Test',
+      gmCode: 'gm-1',
+      playerCode: 'player-1',
+      currentYear: 2,
+      currentSeason: 'Summer',
+      turnPhase: 'Submission',
+    }).run();
+
+    db.insert(schema.realms).values({
+      id: 'realm-1',
+      gameId: 'game-1',
+      name: 'Stonewatch',
+      governmentType: 'Monarch',
+      treasury,
+      taxType: 'Tribute',
+      turmoilSources: '[]',
+    }).run();
+
+    db.insert(schema.territories).values({
+      id: 'territory-1',
+      gameId: 'game-1',
+      realmId: 'realm-1',
+      name: 'Stonewatch Vale',
+    }).run();
+
+    db.insert(schema.settlements).values({
+      id: 'settlement-1',
+      territoryId: 'territory-1',
+      realmId: 'realm-1',
+      name: 'Stonewatch',
+      size: settlementSize,
+    }).run();
+  }
+
+  it('deducts treasury when chargeTreasury is enabled', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedBuildingConstructionContext(db, { treasury: 2000 });
+
+    const created = createBuilding('game-1', {
+      settlementId: 'settlement-1',
+      type: 'Theatre',
+    }, {
+      database: db,
+      idGenerator: () => 'building-1',
+      chargeTreasury: true,
+    });
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-1')).get();
+    const building = db.select().from(schema.buildings).where(eq(schema.buildings.id, 'building-1')).get();
+
+    expect(created.cost.total).toBeGreaterThan(0);
+    expect(realm?.treasury).toBe(2000 - created.cost.total);
+    expect(building).toMatchObject({
+      id: 'building-1',
+      settlementId: 'settlement-1',
+      territoryId: 'territory-1',
+      type: 'Theatre',
+    });
+
+    sqlite.close();
+  });
+
+  it('rejects construction when the realm treasury is too low', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedBuildingConstructionContext(db, { treasury: 0 });
+
+    const error = expectRuleError(() => createBuilding('game-1', {
+      settlementId: 'settlement-1',
+      type: 'Theatre',
+    }, {
+      database: db,
+      idGenerator: () => 'building-2',
+      chargeTreasury: true,
+    }));
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-1')).get();
+    const building = db.select().from(schema.buildings).where(eq(schema.buildings.id, 'building-2')).get();
+
+    expect(error).toMatchObject({
+      code: 'insufficient_treasury',
+      status: 409,
+    });
+    expect(realm?.treasury).toBe(0);
+    expect(building).toBeUndefined();
+
+    sqlite.close();
+  });
+
+  it('upgrades a building by charging only the size difference and applying only the upgrade turns', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedBuildingConstructionContext(db, { treasury: 5000, settlementSize: 'Town' });
+
+    db.insert(schema.resourceSites).values({
+      id: 'resource-1',
+      territoryId: 'territory-1',
+      settlementId: 'settlement-1',
+      resourceType: 'Stone',
+      rarity: 'Common',
+    }).run();
+
+    db.insert(schema.buildings).values({
+      id: 'building-1',
+      settlementId: 'settlement-1',
+      territoryId: 'territory-1',
+      locationType: 'settlement',
+      type: 'Fort',
+      category: 'Fortification',
+      size: 'Medium',
+      material: null,
+      takesBuildingSlot: true,
+      isOperational: true,
+      maintenanceState: 'active',
+      constructionTurnsRemaining: 0,
+      ownerGosId: null,
+      allottedGosId: null,
+      customDefinitionId: null,
+    }).run();
+
+    const preview = prepareRealmBuildingUpgrade('game-1', 'realm-1', {
+      buildingId: 'building-1',
+      targetType: 'Castle',
+    }, {
+      database: db,
+    });
+
+    expect(preview.cost).toMatchObject({
+      base: 1500,
+      surcharge: 0,
+      total: 1500,
+      usesTradeAccess: false,
+    });
+    expect(preview.constructionTurns).toBe(1);
+
+    const upgraded = upgradeBuilding('game-1', {
+      buildingId: 'building-1',
+      targetType: 'Castle',
+    }, {
+      database: db,
+      chargeTreasury: true,
+    });
+
+    const realm = db.select().from(schema.realms).where(eq(schema.realms.id, 'realm-1')).get();
+    const building = db.select().from(schema.buildings).where(eq(schema.buildings.id, 'building-1')).get();
+
+    expect(upgraded.previousType).toBe('Fort');
+    expect(upgraded.row.type).toBe('Castle');
+    expect(realm?.treasury).toBe(3500);
+    expect(building).toMatchObject({
+      id: 'building-1',
+      type: 'Castle',
+      size: 'Large',
+      constructionTurnsRemaining: 1,
+      isOperational: false,
+    });
+
+    sqlite.close();
   });
 });
 

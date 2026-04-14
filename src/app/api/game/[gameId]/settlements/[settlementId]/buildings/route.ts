@@ -114,6 +114,8 @@ export async function POST(
     const created = await createBuilding(gameId, {
       ...body,
       settlementId,
+    }, {
+      chargeTreasury: true,
     });
 
     return NextResponse.json({

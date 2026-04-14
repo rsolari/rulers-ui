@@ -1,12 +1,25 @@
 import { NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
-import { playerSlots, realms, settlements, territories } from '@/db/schema';
+import {
+  buildings,
+  games,
+  industries,
+  playerSlots,
+  realms,
+  resourceSites,
+  settlements,
+  territories,
+} from '@/db/schema';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
 import { isSettlementHexAvailable } from '@/lib/game-logic/maps';
-import { initializeRealmCapital } from '@/lib/game-logic/realm-bootstrap';
+import {
+  calculatePlayerRealmStartingTreasury,
+  initializeRealmCapital,
+} from '@/lib/game-logic/realm-bootstrap';
+import type { Season } from '@/types/game';
 
 const REALM_COLORS = [
   '#8b2020', '#2a4a7a', '#5a7a4a', '#8a5a24', '#7a3e6a',
@@ -53,7 +66,49 @@ export async function POST(
       return NextResponse.json({ error: 'Capital must be placed on an unoccupied land hex in your territory' }, { status: 400 });
     }
 
-    const existingRealms = await db.select().from(realms).where(eq(realms.gameId, gameId));
+    const game = await db.select().from(games)
+      .where(eq(games.id, gameId))
+      .get();
+
+    if (!game) {
+      return NextResponse.json({ error: 'Game not found' }, { status: 404 });
+    }
+
+    const territorySettlements = await db.select().from(settlements)
+      .where(eq(settlements.territoryId, territory.id))
+      .all();
+
+    const territoryBuildings = await db.select().from(buildings)
+      .where(eq(buildings.territoryId, territory.id))
+      .all();
+
+    const territoryResourceSites = await db.select().from(resourceSites)
+      .where(eq(resourceSites.territoryId, territory.id))
+      .all();
+
+    const territoryIndustries = territoryResourceSites.length > 0
+      ? await db.select().from(industries)
+        .where(inArray(industries.resourceSiteId, territoryResourceSites.map((resourceSite) => resourceSite.id)))
+        .all()
+      : [];
+
+    const startingTreasury = calculatePlayerRealmStartingTreasury({
+      realmId,
+      realmName: body.name,
+      territory,
+      settlements: territorySettlements,
+      buildings: territoryBuildings,
+      resourceSites: territoryResourceSites,
+      industries: territoryIndustries,
+      capitalSettlementId: townId,
+      capitalName: body.townName,
+      currentYear: game.currentYear,
+      currentSeason: game.currentSeason as Season,
+      traditions: body.traditions || [],
+      taxType: 'Tribute',
+    });
+
+    const existingRealms = await db.select().from(realms).where(eq(realms.gameId, gameId)).all();
     const color = REALM_COLORS[existingRealms.length % REALM_COLORS.length];
 
     await db.transaction((tx) => {
@@ -68,7 +123,7 @@ export async function POST(
         actingRulerNobleId: null,
         traditions: JSON.stringify(body.traditions || []),
         isNPC: false,
-        treasury: 0,
+        treasury: startingTreasury,
         taxType: 'Tribute',
         turmoilSources: '[]',
         color,
@@ -80,6 +135,7 @@ export async function POST(
         capitalHexId: settlementHexId,
         capitalName: body.townName,
         capitalSettlementId: townId,
+        traditions: body.traditions || [],
       });
 
       tx.update(settlements)

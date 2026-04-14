@@ -18,10 +18,19 @@ import {
   tradeRoutes,
   troops,
 } from '@/db/schema';
-import { BUILDING_DEFS, BUILDING_SIZE_DATA, RESOURCE_RARITY, SETTLEMENT_DATA, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
+import {
+  BUILDING_DEFS,
+  BUILDING_SIZE_DATA,
+  RESOURCE_RARITY,
+  SETTLEMENT_DATA,
+  SHIP_DEFS,
+  TROOP_DEFS,
+  getEligibleBuildingUpgradeTargets,
+} from '@/lib/game-logic/constants';
 import {
   canRecruitTroop,
   getBuildingCost,
+  getBuildCostForSize,
   getRecruitmentUpkeep,
   getRecruitPerSeason,
   getSettlementTroopCap,
@@ -211,6 +220,17 @@ export interface PreparedBuildingCreation {
   effectiveSize: BuildingSize;
 }
 
+export interface PreparedBuildingUpgrade {
+  buildingId: string;
+  previousType: BuildingType;
+  previousSize: BuildingSize;
+  row: typeof buildings.$inferInsert;
+  cost: CostSummary;
+  notes: RuleNote[];
+  constructionTurns: number;
+  effectiveSize: BuildingSize;
+}
+
 export interface PreparedResourceSiteCreation {
   row: typeof resourceSites.$inferInsert;
 }
@@ -244,6 +264,12 @@ export interface CreateBuildingInput {
   ownerGosId?: string | null;
   allottedGosId?: string | null;
   wallSize?: BuildingSize | null;
+  gmOverride?: boolean;
+}
+
+export interface UpgradeBuildingInput {
+  buildingId: string;
+  targetType: string;
 }
 
 export interface CreateShipInput {
@@ -269,6 +295,7 @@ export interface CreateTroopInput {
   garrisonSettlementId?: string | null;
   recruitmentSettlementId?: string | null;
   instant?: boolean;
+  gmOverride?: boolean;
 }
 
 interface CreateTradeRouteInput {
@@ -309,6 +336,14 @@ function assertKnownBuildingType(type: string): BuildingType {
   }
 
   return type as BuildingType;
+}
+
+function assertKnownBuildingSize(size: string): BuildingSize {
+  if (!(size in SIZE_ORDER)) {
+    throw new RuleValidationError('Unknown building size', 400, 'unknown_building_size', { size });
+  }
+
+  return size as BuildingSize;
 }
 
 function assertKnownTroopType(type: string): TroopType {
@@ -629,29 +664,31 @@ export function prepareBuildingCreation(
 
   const requiredTechnicalKnowledgeKey = input.technicalKnowledgeKey ?? buildingType;
   let usesTradeAccess = false;
-  for (const requirement of def.prerequisites) {
-    if (requirement === 'Guild' || requirement === 'Order' || requirement === 'Society') {
-      continue;
-    }
+  if (!input.gmOverride) {
+    for (const requirement of def.prerequisites) {
+      if (requirement === 'Guild' || requirement === 'Order' || requirement === 'Society') {
+        continue;
+      }
 
-    const source = resolveRequirementSource(requirement, context, notes, requiredTechnicalKnowledgeKey);
-    if (source === 'none') {
-      throw new RuleValidationError(
-        `Missing prerequisite for ${buildingType}: ${requirement}`,
-        409,
-        'building_prerequisite_unmet',
-        { type: buildingType, missingPrerequisite: requirement },
-      );
-    }
+      const source = resolveRequirementSource(requirement, context, notes, requiredTechnicalKnowledgeKey);
+      if (source === 'none') {
+        throw new RuleValidationError(
+          `Missing prerequisite for ${buildingType}: ${requirement}`,
+          409,
+          'building_prerequisite_unmet',
+          { type: buildingType, missingPrerequisite: requirement },
+        );
+      }
 
-    if (source === 'traded') {
-      usesTradeAccess = true;
+      if (source === 'traded') {
+        usesTradeAccess = true;
+      }
     }
   }
 
-  const baseCost = getBuildingCost(buildingType, false, effectiveSize);
-  const totalCost = getBuildingCost(buildingType, usesTradeAccess, effectiveSize);
-  const constructionTurns = getBuildingConstructionTurns(buildingType, effectiveSize, context.traditions, input.instant);
+  const baseCost = input.gmOverride ? 0 : getBuildingCost(buildingType, false, effectiveSize);
+  const totalCost = input.gmOverride ? 0 : getBuildingCost(buildingType, usesTradeAccess, effectiveSize);
+  const constructionTurns = input.gmOverride ? 0 : getBuildingConstructionTurns(buildingType, effectiveSize, context.traditions, input.instant);
 
   return {
     row: {
@@ -680,6 +717,98 @@ export function prepareBuildingCreation(
     notes,
     constructionTurns,
     effectiveSize,
+  };
+}
+
+function createUpgradeCostSummary(
+  currentSize: BuildingSize,
+  targetCost: CostSummary,
+) {
+  const currentBaseCost = BUILDING_SIZE_DATA[currentSize].buildCost;
+  const currentTotalCost = getBuildCostForSize(currentSize, targetCost.usesTradeAccess);
+  const base = Math.max(0, targetCost.base - currentBaseCost);
+  const total = Math.max(0, targetCost.total - currentTotalCost);
+
+  return {
+    base,
+    surcharge: total - base,
+    total,
+    usesTradeAccess: targetCost.usesTradeAccess,
+  };
+}
+
+function createUpgradeConstructionTurns(
+  currentType: BuildingType,
+  currentSize: BuildingSize,
+  targetType: BuildingType,
+  targetSize: BuildingSize,
+  traditions: Tradition[],
+) {
+  const currentTurns = getBuildingConstructionTurns(currentType, currentSize, traditions, false);
+  const targetTurns = getBuildingConstructionTurns(targetType, targetSize, traditions, false);
+  return Math.max(1, targetTurns - currentTurns);
+}
+
+function prepareBuildingUpgradeFromContext(
+  input: UpgradeBuildingInput,
+  context: BuildingPreparationContext,
+  currentBuilding: typeof buildings.$inferSelect,
+): PreparedBuildingUpgrade {
+  const currentType = assertKnownBuildingType(currentBuilding.type);
+  const currentSize = assertKnownBuildingSize(currentBuilding.size);
+  const targetType = assertKnownBuildingType(input.targetType);
+  const eligibleTargets = getEligibleBuildingUpgradeTargets(currentType, currentSize);
+
+  if (!eligibleTargets.includes(targetType)) {
+    throw new RuleValidationError(
+      `${currentType} cannot be upgraded to ${targetType}`,
+      409,
+      'building_upgrade_target_invalid',
+      { buildingId: currentBuilding.id, currentType, targetType },
+    );
+  }
+
+  const preparedTarget = prepareBuildingCreation({
+    settlementId: currentBuilding.settlementId,
+    territoryId: currentBuilding.territoryId,
+    type: targetType,
+    material: currentBuilding.material,
+    ownerGosId: currentBuilding.ownerGosId,
+    allottedGosId: currentBuilding.allottedGosId,
+  }, {
+    ...context,
+    existingBuildings: context.existingBuildings.filter((building) => building.id !== currentBuilding.id),
+  });
+
+  const constructionTurns = createUpgradeConstructionTurns(
+    currentType,
+    currentSize,
+    targetType,
+    preparedTarget.effectiveSize,
+    context.traditions,
+  );
+
+  return {
+    buildingId: currentBuilding.id,
+    previousType: currentType,
+    previousSize: currentSize,
+    row: {
+      ...currentBuilding,
+      type: preparedTarget.row.type,
+      category: preparedTarget.row.category,
+      size: preparedTarget.effectiveSize,
+      material: preparedTarget.row.material,
+      takesBuildingSlot: preparedTarget.row.takesBuildingSlot,
+      isOperational: constructionTurns === 0 && currentBuilding.maintenanceState !== 'suspended-unpaid',
+      constructionTurnsRemaining: constructionTurns,
+      ownerGosId: preparedTarget.row.ownerGosId,
+      allottedGosId: preparedTarget.row.allottedGosId,
+      customDefinitionId: preparedTarget.row.customDefinitionId,
+    },
+    cost: createUpgradeCostSummary(currentSize, preparedTarget.cost),
+    notes: preparedTarget.notes,
+    constructionTurns,
+    effectiveSize: preparedTarget.effectiveSize,
   };
 }
 
@@ -745,7 +874,9 @@ export function prepareTroopRecruitment(
     );
   }
 
-  const recruitability = canRecruitTroop(troopType, context.localBuildings, context.tradedBuildings);
+  const recruitability = input.gmOverride
+    ? { canRecruit: true, isTraded: false }
+    : canRecruitTroop(troopType, context.localBuildings, context.tradedBuildings);
   if (!recruitability.canRecruit) {
     throw new RuleValidationError(
       `Missing recruitment prerequisite for ${troopType}`,
@@ -755,8 +886,8 @@ export function prepareTroopRecruitment(
     );
   }
 
-  const totalCost = getRecruitmentUpkeep(troopType, recruitability.isTraded);
-  const baseCost = getRecruitmentUpkeep(troopType, false);
+  const totalCost = input.gmOverride ? 0 : getRecruitmentUpkeep(troopType, recruitability.isTraded);
+  const baseCost = input.gmOverride ? 0 : getRecruitmentUpkeep(troopType, false);
   const def = TROOP_DEFS[troopType];
 
   return {
@@ -1428,6 +1559,159 @@ export function prepareRealmBuildingCreation(
   }, options.idGenerator);
 }
 
+export function prepareRealmBuildingUpgrade(
+  gameId: string,
+  realmId: string,
+  input: UpgradeBuildingInput,
+  options: { database?: DatabaseLike } = {},
+) {
+  const database = resolveDatabase(options.database);
+  const currentBuilding = database.select().from(buildings)
+    .where(eq(buildings.id, input.buildingId))
+    .get();
+
+  if (!currentBuilding) {
+    throw new RuleValidationError('Building not found', 404, 'building_not_found', { buildingId: input.buildingId });
+  }
+
+  if (currentBuilding.constructionTurnsRemaining > 0) {
+    throw new RuleValidationError(
+      'Buildings already under construction cannot be upgraded',
+      409,
+      'building_upgrade_in_progress',
+      { buildingId: currentBuilding.id },
+    );
+  }
+
+  const settlement = loadSettlement(database, currentBuilding.settlementId ?? null);
+  if (currentBuilding.settlementId && !settlement) {
+    throw new RuleValidationError('Settlement not found', 404, 'settlement_not_found', { settlementId: currentBuilding.settlementId });
+  }
+
+  const territoryId = settlement?.territoryId ?? currentBuilding.territoryId ?? null;
+  const territory = loadTerritory(database, gameId, territoryId);
+  if (territoryId && !territory) {
+    throw new RuleValidationError('Territory not found', 404, 'territory_not_found', { territoryId, gameId });
+  }
+
+  const effectiveRealmId = settlement?.realmId ?? territory?.realmId ?? null;
+  if (!effectiveRealmId || effectiveRealmId !== realmId) {
+    throw new RuleValidationError(
+      'Building placement must target a settlement or territory owned by the realm',
+      403,
+      'building_location_not_owned',
+      { realmId, buildingId: input.buildingId },
+    );
+  }
+
+  const ruleAccess = loadRealmRuleAccess(database, gameId, effectiveRealmId);
+  const existingBuildings = settlement
+    ? database.select({
+      id: buildings.id,
+      type: buildings.type,
+      takesBuildingSlot: buildings.takesBuildingSlot,
+      constructionTurnsRemaining: buildings.constructionTurnsRemaining,
+    })
+      .from(buildings)
+      .where(eq(buildings.settlementId, settlement.id))
+      .all()
+    : [];
+
+  return prepareBuildingUpgradeFromContext(input, {
+    gameId,
+    settlement,
+    territory,
+    existingBuildings,
+    ...ruleAccess,
+  }, currentBuilding);
+}
+
+export function upgradeBuilding(
+  gameId: string,
+  input: UpgradeBuildingInput,
+  options: { database?: DatabaseLike; chargeTreasury?: boolean } = {},
+) {
+  const database = resolveDatabase(options.database);
+  return database.transaction((tx) => {
+    const currentBuilding = tx.select().from(buildings)
+      .where(eq(buildings.id, input.buildingId))
+      .get();
+
+    if (!currentBuilding) {
+      throw new RuleValidationError('Building not found', 404, 'building_not_found', { buildingId: input.buildingId });
+    }
+
+    const settlement = loadSettlement(tx, currentBuilding.settlementId ?? null);
+    const territoryId = settlement?.territoryId ?? currentBuilding.territoryId ?? null;
+    const territory = loadTerritory(tx, gameId, territoryId);
+    const realmId = settlement?.realmId ?? territory?.realmId ?? null;
+
+    if (!realmId) {
+      throw new RuleValidationError(
+        'Building placement must belong to a realm before treasury can be charged',
+        409,
+        'building_realm_required',
+      );
+    }
+
+    const prepared = prepareRealmBuildingUpgrade(gameId, realmId, input, { database: tx });
+
+    if (options.chargeTreasury) {
+      const realm = tx.select({
+        id: realms.id,
+        treasury: realms.treasury,
+      })
+        .from(realms)
+        .where(and(
+          eq(realms.id, realmId),
+          eq(realms.gameId, gameId),
+        ))
+        .get();
+
+      if (!realm) {
+        throw new RuleValidationError('Realm not found', 404, 'realm_not_found', { realmId, gameId });
+      }
+
+      if (realm.treasury < prepared.cost.total) {
+        throw new RuleValidationError(
+          'Realm treasury cannot afford this construction',
+          409,
+          'insufficient_treasury',
+          { realmId, treasury: realm.treasury, buildingCost: prepared.cost.total },
+        );
+      }
+
+      tx.update(realms)
+        .set({ treasury: realm.treasury - prepared.cost.total })
+        .where(eq(realms.id, realmId))
+        .run();
+    }
+
+    tx.update(buildings)
+      .set({
+        settlementId: prepared.row.settlementId,
+        territoryId: prepared.row.territoryId,
+        hexId: prepared.row.hexId,
+        locationType: prepared.row.locationType,
+        type: prepared.row.type,
+        category: prepared.row.category,
+        size: prepared.row.size,
+        material: prepared.row.material,
+        takesBuildingSlot: prepared.row.takesBuildingSlot,
+        isOperational: prepared.row.isOperational,
+        maintenanceState: prepared.row.maintenanceState,
+        constructionTurnsRemaining: prepared.row.constructionTurnsRemaining,
+        ownerGosId: prepared.row.ownerGosId,
+        allottedGosId: prepared.row.allottedGosId,
+        customDefinitionId: prepared.row.customDefinitionId,
+      })
+      .where(eq(buildings.id, input.buildingId))
+      .run();
+
+    return prepared;
+  });
+}
+
 export async function createResourceSite(
   gameId: string,
   input: CreateResourceSiteInput,
@@ -1519,49 +1803,51 @@ export function createTroopRecruitment(
       );
     }
 
-    const totalTroopCap = realmSettlements.reduce(
-      (sum, settlement) => sum + getSettlementTroopCap(settlement.size as SettlementSize),
-      0,
-    );
-    const currentTroopCount = tx.select({ id: troops.id })
-      .from(troops)
-      .where(eq(troops.realmId, realmId))
-      .all()
-      .length;
-
-    if (currentTroopCount >= totalTroopCap) {
-      throw new RuleValidationError(
-        'Realm has reached its troop support cap',
-        409,
-        'realm_troop_cap_exceeded',
-        { realmId, currentTroopCount, totalTroopCap },
+    if (!input.gmOverride) {
+      const totalTroopCap = realmSettlements.reduce(
+        (sum, settlement) => sum + getSettlementTroopCap(settlement.size as SettlementSize),
+        0,
       );
-    }
+      const currentTroopCount = tx.select({ id: troops.id })
+        .from(troops)
+        .where(eq(troops.realmId, realmId))
+        .all()
+        .length;
 
-    const seasonalRecruitCap = getRecruitPerSeason(recruitmentSettlement.size as SettlementSize);
-    const currentSeasonRecruitCount = tx.select({ id: troops.id })
-      .from(troops)
-      .where(and(
-        eq(troops.recruitmentSettlementId, recruitmentSettlement.id),
-        eq(troops.recruitmentYear, game.currentYear),
-        eq(troops.recruitmentSeason, game.currentSeason),
-      ))
-      .all()
-      .length;
+      if (currentTroopCount >= totalTroopCap) {
+        throw new RuleValidationError(
+          'Realm has reached its troop support cap',
+          409,
+          'realm_troop_cap_exceeded',
+          { realmId, currentTroopCount, totalTroopCap },
+        );
+      }
 
-    if (currentSeasonRecruitCount >= seasonalRecruitCap) {
-      throw new RuleValidationError(
-        'Settlement has reached its recruitment cap for the season',
-        409,
-        'settlement_recruitment_cap_exceeded',
-        {
-          settlementId: recruitmentSettlement.id,
-          year: game.currentYear,
-          season: game.currentSeason,
-          currentSeasonRecruitCount,
-          seasonalRecruitCap,
-        },
-      );
+      const seasonalRecruitCap = getRecruitPerSeason(recruitmentSettlement.size as SettlementSize);
+      const currentSeasonRecruitCount = tx.select({ id: troops.id })
+        .from(troops)
+        .where(and(
+          eq(troops.recruitmentSettlementId, recruitmentSettlement.id),
+          eq(troops.recruitmentYear, game.currentYear),
+          eq(troops.recruitmentSeason, game.currentSeason),
+        ))
+        .all()
+        .length;
+
+      if (currentSeasonRecruitCount >= seasonalRecruitCap) {
+        throw new RuleValidationError(
+          'Settlement has reached its recruitment cap for the season',
+          409,
+          'settlement_recruitment_cap_exceeded',
+          {
+            settlementId: recruitmentSettlement.id,
+            year: game.currentYear,
+            season: game.currentSeason,
+            currentSeasonRecruitCount,
+            seasonalRecruitCap,
+          },
+        );
+      }
     }
 
     const ruleAccess = loadRealmRuleAccess(tx, gameId, realmId);

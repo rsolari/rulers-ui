@@ -65,6 +65,7 @@ interface Realm {
   treasury: number;
   isNPC: boolean;
   traditions: string;
+  capitalSettlementId?: string | null;
   projectedTurmoil?: number | null;
   turmoilBreakdown?: TurmoilSourceDto[];
   openTurmoilEventId?: string | null;
@@ -119,6 +120,21 @@ const SETTLEMENT_SIZE_OPTIONS = [
   { value: 'Town', label: 'Town' },
   { value: 'City', label: 'City' },
 ];
+
+const BUILDING_TYPE_OPTIONS = [
+  'Academy', 'Armoursmith', 'Bank', 'BrickMakers', 'Bowyer',
+  'CannonFoundry', 'Castle', 'Cathedral', 'Chapel', 'Church',
+  'Coliseum', 'College', 'Dockyard', 'Fort', 'Gatehouse', 'Gunsmith',
+  'Port', 'PowderMill', 'Shipwrights', 'SiegeWorkshop', 'Stables',
+  'Theatre', 'University', 'Walls', 'Watchtower', 'Weaponsmith',
+].map((t) => ({ value: t, label: t }));
+
+const TROOP_TYPE_OPTIONS = [
+  'Spearmen', 'Archers', 'Shieldbearers', 'Berserkers',
+  'Crossbowmen', 'Harquebusiers', 'LightCavalry',
+  'Pikemen', 'Swordsmen', 'Fusiliers', 'Cavalry',
+  'MountedArchers', 'Dragoons',
+].map((t) => ({ value: t, label: t }));
 
 interface PlayerSlot {
   id: string;
@@ -215,6 +231,12 @@ export default function GMDashboard() {
   const [addingSettlement, setAddingSettlement] = useState<{ territoryId: string; name: string; size: string; hexId: string | null } | null>(null);
   const [turmoilForm, setTurmoilForm] = useState<{ realmId: string; description: string; amount: number; durationType: 'permanent' | 'seasonal'; seasonsRemaining: number; notes: string } | null>(null);
   const [savingTurmoil, setSavingTurmoil] = useState(false);
+  const [capitalPlacement, setCapitalPlacement] = useState<{ realmId: string; territoryId: string; name: string; size: string; hexId: string | null } | null>(null);
+  const [savingCapital, setSavingCapital] = useState(false);
+  const [addingBuilding, setAddingBuilding] = useState<{ settlementId: string; type: string } | null>(null);
+  const [savingBuilding, setSavingBuilding] = useState(false);
+  const [addingTroop, setAddingTroop] = useState<{ realmId: string; settlementId: string; type: string } | null>(null);
+  const [savingTroop, setSavingTroop] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -545,10 +567,88 @@ export default function GMDashboard() {
     await loadDashboard();
   }
 
+  async function placeCapital() {
+    if (!capitalPlacement || !capitalPlacement.hexId || !capitalPlacement.name.trim()) return;
+    setSavingCapital(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/realms/place-capital`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          realmId: capitalPlacement.realmId,
+          territoryId: capitalPlacement.territoryId,
+          hexId: capitalPlacement.hexId,
+          capitalName: capitalPlacement.name,
+          capitalSize: capitalPlacement.size,
+        }),
+      });
+      if (!response.ok) {
+        setError(await getErrorMessage(response, 'Failed to place capital'));
+        return;
+      }
+      setCapitalPlacement(null);
+      await loadDashboard();
+    } finally {
+      setSavingCapital(false);
+    }
+  }
+
+  async function addBuildingGM(settlementId: string, type: string) {
+    setSavingBuilding(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/buildings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settlementId, type, instant: true, gmOverride: true }),
+      });
+      if (!response.ok) {
+        setError(await getErrorMessage(response, 'Failed to add building'));
+        return;
+      }
+      setAddingBuilding(null);
+      await loadDashboard();
+    } finally {
+      setSavingBuilding(false);
+    }
+  }
+
+  async function addTroopGM(realmId: string, settlementId: string, type: string) {
+    setSavingTroop(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/troops`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          realmId,
+          type,
+          recruitmentSettlementId: settlementId,
+          garrisonSettlementId: settlementId,
+          instant: true,
+          gmOverride: true,
+        }),
+      });
+      if (!response.ok) {
+        setError(await getErrorMessage(response, 'Failed to recruit troop'));
+        return;
+      }
+      setAddingTroop(null);
+      await loadDashboard();
+    } finally {
+      setSavingTroop(false);
+    }
+  }
+
   const realmMap = Object.fromEntries(realms.map((r) => [r.id, r.name]));
   const addingTerritoryMap = useMemo(
     () => addingSettlement && gameMapData ? buildGameTerritoryMapData(gameMapData, addingSettlement.territoryId) : null,
     [addingSettlement, gameMapData]
+  );
+  const capitalPlacementMap = useMemo(
+    () => capitalPlacement && gameMapData ? buildGameTerritoryMapData(gameMapData, capitalPlacement.territoryId) : null,
+    [capitalPlacement, gameMapData]
   );
 
   if (roleLoading || role !== 'gm' || (loadingDashboard && !game)) {
@@ -893,6 +993,73 @@ export default function GMDashboard() {
                         <Badge key={t.id} variant="default">{t.name}</Badge>
                       ))}
                     </div>
+                  )}
+                  {realm.isNPC && !realm.capitalSettlementId && realmTerritories.length > 0 && (
+                    capitalPlacement?.realmId === realm.id ? (
+                      <div className="mt-2 space-y-3 rounded border border-ink-200 bg-parchment-50/70 p-3">
+                        <p className="font-heading text-sm font-semibold">Place Capital</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            label="Capital Name"
+                            value={capitalPlacement.name}
+                            onChange={(e) => setCapitalPlacement((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                          />
+                          <Select
+                            label="Size"
+                            options={SETTLEMENT_SIZE_OPTIONS}
+                            value={capitalPlacement.size}
+                            onChange={(e) => setCapitalPlacement((prev) => prev ? { ...prev, size: e.target.value } : prev)}
+                          />
+                        </div>
+                        {capitalPlacementMap ? (
+                          <div>
+                            <p className="text-sm text-ink-400 mb-1">
+                              {capitalPlacement.hexId ? 'Hex selected. Click another hex to change.' : 'Click a hex on the map to place the capital.'}
+                            </p>
+                            <TerritoryHexMap
+                              data={capitalPlacementMap}
+                              placements={capitalPlacement.hexId ? [{ id: 'capital', name: capitalPlacement.name || 'Capital', size: capitalPlacement.size, hexId: capitalPlacement.hexId }] : []}
+                              selectedPlacementId={capitalPlacement.hexId ? 'capital' : null}
+                              onHexSelect={(hexId) => setCapitalPlacement((prev) => prev ? { ...prev, hexId } : prev)}
+                              variant="full"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-ink-300">Loading territory map...</p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="accent"
+                            size="sm"
+                            disabled={savingCapital || !capitalPlacement.name.trim() || !capitalPlacement.hexId}
+                            onClick={() => void placeCapital()}
+                          >
+                            {savingCapital ? 'Placing...' : 'Place Capital'}
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setCapitalPlacement(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-1"
+                        onClick={() => setCapitalPlacement({
+                          realmId: realm.id,
+                          territoryId: realmTerritories[0].id,
+                          name: '',
+                          size: 'Town',
+                          hexId: null,
+                        })}
+                      >
+                        Place Capital
+                      </Button>
+                    )
+                  )}
+                  {realm.isNPC && realm.capitalSettlementId && (
+                    <Badge variant="green">Capital placed</Badge>
                   )}
                   {isActive && (
                     <div className="mt-3 space-y-4 border-t border-card-border pt-3">
@@ -1247,6 +1414,60 @@ export default function GMDashboard() {
                                     ))}
                                   </div>
                                 )}
+
+                                {/* GM Override: Add Building */}
+                                {addingBuilding?.settlementId === settlement.id ? (
+                                  <div className="ml-4 mt-1 flex items-end gap-2">
+                                    <Select
+                                      label="Building Type"
+                                      placeholder="Select..."
+                                      options={BUILDING_TYPE_OPTIONS}
+                                      value={addingBuilding.type}
+                                      onChange={(e) => setAddingBuilding((prev) => prev ? { ...prev, type: e.target.value } : prev)}
+                                    />
+                                    <Button
+                                      variant="accent"
+                                      size="sm"
+                                      disabled={savingBuilding || !addingBuilding.type}
+                                      onClick={() => void addBuildingGM(settlement.id, addingBuilding.type)}
+                                    >
+                                      {savingBuilding ? 'Adding...' : 'Add'}
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={() => setAddingBuilding(null)}>Cancel</Button>
+                                  </div>
+                                ) : (
+                                  <div className="ml-4 mt-1 flex gap-2">
+                                    <Button variant="ghost" size="sm" onClick={() => setAddingBuilding({ settlementId: settlement.id, type: '' })}>
+                                      + Add Building
+                                    </Button>
+                                    {territory.realmId && (
+                                      addingTroop?.settlementId === settlement.id ? (
+                                        <div className="flex items-end gap-2">
+                                          <Select
+                                            label="Troop Type"
+                                            placeholder="Select..."
+                                            options={TROOP_TYPE_OPTIONS}
+                                            value={addingTroop.type}
+                                            onChange={(e) => setAddingTroop((prev) => prev ? { ...prev, type: e.target.value } : prev)}
+                                          />
+                                          <Button
+                                            variant="accent"
+                                            size="sm"
+                                            disabled={savingTroop || !addingTroop.type}
+                                            onClick={() => void addTroopGM(addingTroop.realmId, settlement.id, addingTroop.type)}
+                                          >
+                                            {savingTroop ? 'Recruiting...' : 'Recruit'}
+                                          </Button>
+                                          <Button variant="outline" size="sm" onClick={() => setAddingTroop(null)}>Cancel</Button>
+                                        </div>
+                                      ) : (
+                                        <Button variant="ghost" size="sm" onClick={() => setAddingTroop({ realmId: territory.realmId!, settlementId: settlement.id, type: '' })}>
+                                          + Recruit Troop
+                                        </Button>
+                                      )
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -1332,8 +1553,21 @@ interface GovNoble {
   isActingRuler?: boolean;
   title: string | null;
   officeAssignments: string[];
+  gender: string;
+  age: string;
+  backstory: string | null;
+  personality: string | null;
+  relationshipWithRuler: string | null;
+  belief: string | null;
+  valuedObject: string | null;
+  valuedPerson: string | null;
+  greatestDesire: string | null;
+  reasonSkill: number;
+  cunningSkill: number;
+  isAlive: boolean;
   isPrisoner: boolean;
-  isAlive?: boolean;
+  locationTerritoryId: string | null;
+  locationHexId: string | null;
   gmStatusText: string | null;
 }
 
@@ -1357,6 +1591,26 @@ interface GovGOS {
   leaderId: string | null;
 }
 
+interface NobleEditForm {
+  nobleId: string;
+  name: string;
+  gender: string;
+  age: string;
+  backstory: string;
+  personality: string;
+  relationshipWithRuler: string;
+  belief: string;
+  valuedObject: string;
+  valuedPerson: string;
+  greatestDesire: string;
+  reasonSkill: number;
+  cunningSkill: number;
+  isAlive: boolean;
+  isPrisoner: boolean;
+  locationTerritoryId: string;
+  locationHexId: string;
+}
+
 function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: string }) {
   const [nobles, setNobles] = useState<GovNoble[]>([]);
   const [settlements, setSettlements] = useState<GovSettlement[]>([]);
@@ -1364,6 +1618,8 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
   const [gosList, setGosList] = useState<GovGOS[]>([]);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [editingNoble, setEditingNoble] = useState<NobleEditForm | null>(null);
+  const [savingNoble, setSavingNoble] = useState(false);
 
   const load = useCallback(async () => {
     const [noblesRes, settRes, armiesRes, gosRes] = await Promise.all([
@@ -1432,6 +1688,67 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
 
   function getOfficeEligibleNobles(currentNobleId: string | null) {
     return nobles.filter((noble) => noble.id === currentNobleId || noble.officeAssignments.length === 0);
+  }
+
+  function openNobleEdit(noble: GovNoble) {
+    setEditingNoble({
+      nobleId: noble.id,
+      name: noble.name,
+      gender: noble.gender,
+      age: noble.age,
+      backstory: noble.backstory ?? '',
+      personality: noble.personality ?? '',
+      relationshipWithRuler: noble.relationshipWithRuler ?? '',
+      belief: noble.belief ?? '',
+      valuedObject: noble.valuedObject ?? '',
+      valuedPerson: noble.valuedPerson ?? '',
+      greatestDesire: noble.greatestDesire ?? '',
+      reasonSkill: noble.reasonSkill,
+      cunningSkill: noble.cunningSkill,
+      isAlive: noble.isAlive,
+      isPrisoner: noble.isPrisoner,
+      locationTerritoryId: noble.locationTerritoryId ?? '',
+      locationHexId: noble.locationHexId ?? '',
+    });
+  }
+
+  async function saveNobleEdit() {
+    if (!editingNoble) return;
+    setSavingNoble(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/nobles/${editingNoble.nobleId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingNoble.name,
+          gender: editingNoble.gender,
+          age: editingNoble.age,
+          backstory: editingNoble.backstory || null,
+          personality: editingNoble.personality || null,
+          relationshipWithRuler: editingNoble.relationshipWithRuler || null,
+          belief: editingNoble.belief || null,
+          valuedObject: editingNoble.valuedObject || null,
+          valuedPerson: editingNoble.valuedPerson || null,
+          greatestDesire: editingNoble.greatestDesire || null,
+          reasonSkill: editingNoble.reasonSkill,
+          cunningSkill: editingNoble.cunningSkill,
+          isAlive: editingNoble.isAlive,
+          isPrisoner: editingNoble.isPrisoner,
+          locationTerritoryId: editingNoble.locationTerritoryId || null,
+          locationHexId: editingNoble.locationHexId || null,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error ?? 'Failed to update noble');
+        return;
+      }
+      setEditingNoble(null);
+      await load();
+    } finally {
+      setSavingNoble(false);
+    }
   }
 
   return (
@@ -1514,9 +1831,127 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
               {nobles.map((noble) => (
                 <div key={noble.id} className="p-3 medieval-border rounded space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-heading font-bold">{noble.name}</span>
-                    <NobleActivityBadge noble={noble} />
+                    <div className="flex items-center gap-2">
+                      <span className="font-heading font-bold">{noble.name}</span>
+                      {!noble.isAlive && <Badge variant="red">Dead</Badge>}
+                      {noble.isPrisoner && <Badge variant="gold">Prisoner</Badge>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <NobleActivityBadge noble={noble} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => editingNoble?.nobleId === noble.id ? setEditingNoble(null) : openNobleEdit(noble)}
+                      >
+                        {editingNoble?.nobleId === noble.id ? 'Cancel Edit' : 'Edit'}
+                      </Button>
+                    </div>
                   </div>
+
+                  {editingNoble?.nobleId === noble.id && (
+                    <div className="p-3 border border-ink-200 rounded space-y-3">
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input
+                          label="Name"
+                          value={editingNoble.name}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                        />
+                        <Select
+                          label="Gender"
+                          options={[{ value: 'Male', label: 'Male' }, { value: 'Female', label: 'Female' }]}
+                          value={editingNoble.gender}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, gender: e.target.value } : prev)}
+                        />
+                        <Select
+                          label="Age"
+                          options={[
+                            { value: 'Infant', label: 'Infant' },
+                            { value: 'Adolescent', label: 'Adolescent' },
+                            { value: 'Adult', label: 'Adult' },
+                            { value: 'Elderly', label: 'Elderly' },
+                          ]}
+                          value={editingNoble.age}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, age: e.target.value } : prev)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          label="Personality"
+                          value={editingNoble.personality}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, personality: e.target.value } : prev)}
+                        />
+                        <Input
+                          label="Relationship with Ruler"
+                          value={editingNoble.relationshipWithRuler}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, relationshipWithRuler: e.target.value } : prev)}
+                        />
+                        <Input
+                          label="Belief"
+                          value={editingNoble.belief}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, belief: e.target.value } : prev)}
+                        />
+                        <Input
+                          label="Valued Object"
+                          value={editingNoble.valuedObject}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, valuedObject: e.target.value } : prev)}
+                        />
+                        <Input
+                          label="Valued Person"
+                          value={editingNoble.valuedPerson}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, valuedPerson: e.target.value } : prev)}
+                        />
+                        <Input
+                          label="Greatest Desire"
+                          value={editingNoble.greatestDesire}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, greatestDesire: e.target.value } : prev)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          label="Reason Skill (0-5)"
+                          type="number"
+                          value={String(editingNoble.reasonSkill)}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, reasonSkill: Math.max(0, Math.min(5, Number(e.target.value) || 0)) } : prev)}
+                        />
+                        <Input
+                          label="Cunning Skill (0-5)"
+                          type="number"
+                          value={String(editingNoble.cunningSkill)}
+                          onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, cunningSkill: Math.max(0, Math.min(5, Number(e.target.value) || 0)) } : prev)}
+                        />
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={editingNoble.isAlive}
+                            onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, isAlive: e.target.checked } : prev)}
+                          />
+                          Alive
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={editingNoble.isPrisoner}
+                            onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, isPrisoner: e.target.checked } : prev)}
+                          />
+                          Prisoner
+                        </label>
+                      </div>
+                      <Input
+                        label="Backstory"
+                        value={editingNoble.backstory}
+                        onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, backstory: e.target.value } : prev)}
+                      />
+                      <div className="flex gap-2">
+                        <Button variant="accent" size="sm" disabled={savingNoble || !editingNoble.name.trim()} onClick={() => void saveNobleEdit()}>
+                          {savingNoble ? 'Saving...' : 'Save Noble'}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setEditingNoble(null)}>Cancel</Button>
+                      </div>
+                    </div>
+                  )}
+
                   <NobleStatusEditor
                     gameId={gameId}
                     nobleId={noble.id}

@@ -1062,7 +1062,6 @@ export default function GMDashboard() {
                       ))}
                     </div>
                   )}
-<<<<<<< HEAD
                   {realm.isNPC && !realm.capitalSettlementId && realmTerritories.length > 0 && (
                     capitalPlacement?.realmId === realm.id ? (
                       <div className="mt-2 space-y-3 rounded border border-ink-200 bg-parchment-50/70 p-3">

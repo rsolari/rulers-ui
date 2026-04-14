@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { TechnicalKnowledgeBadges } from '@/components/technical-knowledge/technical-knowledge-badges';
 import { TerritoryHexMap } from '@/components/map/TerritoryHexMap';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { NobleStatusEditor } from '@/components/governance/NobleStatusEditor';
@@ -18,7 +19,8 @@ import type { EconomyOverviewRealmDto } from '@/lib/economy-dto';
 import type { GameMapData } from '@/components/map/types';
 import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
-import type { GovernmentType, Tradition } from '@/types/game';
+import { TECHNICAL_KNOWLEDGE_OPTIONS, parseTechnicalKnowledge } from '@/lib/technical-knowledge';
+import type { GovernmentType, TechnicalKnowledgeKey, Tradition } from '@/types/game';
 
 const GOVERNMENT_OPTIONS = [
   { value: 'Monarch', label: 'Monarch' },
@@ -65,10 +67,15 @@ interface Realm {
   treasury: number;
   isNPC: boolean;
   traditions: string;
+  technicalKnowledge: TechnicalKnowledgeKey[];
   projectedTurmoil?: number | null;
   turmoilBreakdown?: TurmoilSourceDto[];
   openTurmoilEventId?: string | null;
   winterUnrestPending?: boolean;
+}
+
+interface RealmResponse extends Omit<Realm, 'technicalKnowledge'> {
+  technicalKnowledge: string;
 }
 
 interface Territory {
@@ -199,7 +206,13 @@ export default function GMDashboard() {
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [starting, setStarting] = useState(false);
   const [markingReady, setMarkingReady] = useState(false);
-  const [realmForm, setRealmForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[], treasury: 0 });
+  const [realmForm, setRealmForm] = useState({
+    name: '',
+    governmentType: 'Monarch' as GovernmentType,
+    traditions: [] as Tradition[],
+    technicalKnowledge: [] as TechnicalKnowledgeKey[],
+    treasury: 0,
+  });
   const [editingRealmId, setEditingRealmId] = useState<string | null>(null);
   const [savingRealm, setSavingRealm] = useState(false);
   const [showRealmForm, setShowRealmForm] = useState(false);
@@ -241,7 +254,11 @@ export default function GMDashboard() {
       }
 
       setGame(await gameResponse.json());
-      setRealms(await realmsResponse.json());
+      const realmList: Realm[] = (await realmsResponse.json() as RealmResponse[]).map((realm) => ({
+        ...realm,
+        technicalKnowledge: parseTechnicalKnowledge(realm.technicalKnowledge),
+      }));
+      setRealms(realmList);
       setTerritories(await territoriesResponse.json());
       setPlayerSlots(await slotsResponse.json());
       if (settlementsResponse.ok) {
@@ -333,11 +350,12 @@ export default function GMDashboard() {
         name: realm.name,
         governmentType: realm.governmentType as GovernmentType,
         traditions: JSON.parse(realm.traditions || '[]'),
+        technicalKnowledge: realm.technicalKnowledge,
         treasury: realm.treasury,
       });
     } else {
       setEditingRealmId(null);
-      setRealmForm({ name: '', governmentType: 'Monarch', traditions: [], treasury: 0 });
+      setRealmForm({ name: '', governmentType: 'Monarch', traditions: [], technicalKnowledge: [], treasury: 0 });
     }
     setShowRealmForm(true);
   }
@@ -350,6 +368,15 @@ export default function GMDashboard() {
       if (current.traditions.length >= 3) return current;
       return { ...current, traditions: [...current.traditions, tradition] };
     });
+  }
+
+  function toggleTechnicalKnowledge(knowledge: TechnicalKnowledgeKey) {
+    setRealmForm((current) => ({
+      ...current,
+      technicalKnowledge: current.technicalKnowledge.includes(knowledge)
+        ? current.technicalKnowledge.filter((entry) => entry !== knowledge)
+        : [...current.technicalKnowledge, knowledge],
+    }));
   }
 
   async function saveRealm() {
@@ -366,12 +393,14 @@ export default function GMDashboard() {
             name: realmForm.name,
             governmentType: realmForm.governmentType,
             traditions: realmForm.traditions,
+            technicalKnowledge: realmForm.technicalKnowledge,
             treasury: realmForm.treasury,
           }
           : {
             name: realmForm.name,
             governmentType: realmForm.governmentType,
             traditions: realmForm.traditions,
+            technicalKnowledge: realmForm.technicalKnowledge,
             treasury: realmForm.treasury,
             isNPC: true,
           }),
@@ -778,6 +807,45 @@ export default function GMDashboard() {
                 value={String(realmForm.treasury)}
                 onChange={(e) => setRealmForm((c) => ({ ...c, treasury: Number(e.target.value) || 0 }))}
               />
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="font-heading text-sm font-medium text-ink-500">
+                    Technical Knowledge ({realmForm.technicalKnowledge.length})
+                  </p>
+                  <span className="text-xs text-ink-300">GM-managed</span>
+                </div>
+                <p className="mb-3 text-sm text-ink-300">
+                  Select the local technical knowledge this realm can use without trade access.
+                </p>
+                <div className="mb-3">
+                  <TechnicalKnowledgeBadges
+                    knowledge={realmForm.technicalKnowledge}
+                    emptyLabel="No technical knowledge assigned."
+                    variant="gold"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {TECHNICAL_KNOWLEDGE_OPTIONS.map((option) => {
+                    const isSelected = realmForm.technicalKnowledge.includes(option.value);
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-heading font-semibold transition-colors ${
+                          isSelected
+                            ? 'border-gold-500 bg-gold-400 text-ink-700'
+                            : 'border-ink-200 bg-parchment-50 text-ink-500 hover:bg-parchment-200'
+                        }`}
+                        title={option.description}
+                        onClick={() => toggleTechnicalKnowledge(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {editingRealmId && (
                 <div>
@@ -894,6 +962,14 @@ export default function GMDashboard() {
                       ))}
                     </div>
                   )}
+                  <div className="space-y-2">
+                    <span className="text-sm text-ink-300">Technical knowledge</span>
+                    <TechnicalKnowledgeBadges
+                      knowledge={realm.technicalKnowledge}
+                      emptyLabel="No technical knowledge assigned."
+                      variant="gold"
+                    />
+                  </div>
                   {isActive && (
                     <div className="mt-3 space-y-4 border-t border-card-border pt-3">
                       <details className="group">

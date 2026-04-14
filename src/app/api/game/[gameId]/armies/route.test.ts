@@ -3,23 +3,37 @@ import { armies } from '@/db/schema';
 
 const dbMocks = vi.hoisted(() => {
   const dbGet = vi.fn();
-  const where = vi.fn(() => ({ get: dbGet }));
+  const dbAll = vi.fn();
+  const where = vi.fn(() => ({ get: dbGet, all: dbAll }));
   const from = vi.fn(() => ({ where }));
   const select = vi.fn(() => ({ from }));
   const insertValues = vi.fn();
   const insert = vi.fn(() => ({ values: insertValues }));
+  const updateWhere = vi.fn();
+  const updateSet = vi.fn(() => ({ where: updateWhere }));
+  const update = vi.fn(() => ({ set: updateSet }));
+  const transaction = vi.fn((callback: (tx: unknown) => unknown) => callback(db));
+
+  const db = {
+    select,
+    insert,
+    update,
+    transaction,
+  };
 
   return {
-    db: {
-      select,
-      insert,
-    },
+    db,
     dbGet,
+    dbAll,
     where,
     from,
     select,
     insertValues,
     insert,
+    updateWhere,
+    updateSet,
+    update,
+    transaction,
   };
 });
 
@@ -65,16 +79,23 @@ describe('/api/game/[gameId]/armies', () => {
     dbMocks.from.mockReset();
     dbMocks.where.mockReset();
     dbMocks.dbGet.mockReset();
+    dbMocks.dbAll.mockReset();
     dbMocks.insertValues.mockReset();
+    dbMocks.updateWhere.mockReset();
+    dbMocks.updateSet.mockReset();
+    dbMocks.update.mockReset();
+    dbMocks.transaction.mockClear();
     uuidMock.mockReset();
     authMocks.requireOwnedRealmAccess.mockReset();
     ruleActionMocks.prepareRealmTroopRecruitment.mockReset();
     recomputeGameInitStateMock.mockReset();
     mapMocks.getLandHexById.mockReset();
     mapMocks.getDefaultArmyHexId.mockReset();
-    dbMocks.where.mockImplementation(() => ({ get: dbMocks.dbGet }));
+    dbMocks.where.mockImplementation(() => ({ get: dbMocks.dbGet, all: dbMocks.dbAll }));
     dbMocks.from.mockImplementation(() => ({ where: dbMocks.where }));
     dbMocks.select.mockImplementation(() => ({ from: dbMocks.from }));
+    dbMocks.updateSet.mockImplementation(() => ({ where: dbMocks.updateWhere }));
+    dbMocks.update.mockImplementation(() => ({ set: dbMocks.updateSet }));
   });
 
   it('returns troop recruitment availability derived from the shared rules service', async () => {
@@ -183,6 +204,15 @@ describe('/api/game/[gameId]/armies', () => {
       session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
     });
     mapMocks.getDefaultArmyHexId.mockResolvedValue('hex-town');
+    dbMocks.dbAll.mockResolvedValue([
+      {
+        id: 'troop-1',
+        realmId: 'realm-player',
+        armyId: null,
+        garrisonSettlementId: null,
+        recruitmentTurnsRemaining: 0,
+      },
+    ]);
     dbMocks.dbGet.mockResolvedValue({ id: 'territory-1', realmId: 'realm-player' });
 
     const response = await POST(new Request('http://localhost/api/game/game-1/armies', {
@@ -191,6 +221,7 @@ describe('/api/game/[gameId]/armies', () => {
       body: JSON.stringify({
         realmId: 'realm-player',
         name: 'First Army',
+        troopIds: ['troop-1'],
         locationTerritoryId: 'territory-1',
       }),
     }), {
@@ -203,6 +234,7 @@ describe('/api/game/[gameId]/armies', () => {
       realmId: 'realm-player',
       name: 'First Army',
       generalId: null,
+      troopIds: ['troop-1'],
       locationTerritoryId: 'territory-1',
       locationHexId: 'hex-town',
       destinationTerritoryId: null,
@@ -222,6 +254,11 @@ describe('/api/game/[gameId]/armies', () => {
       destinationHexId: null,
       movementTurnsRemaining: 0,
     });
+    expect(dbMocks.update).toHaveBeenCalledWith(expect.anything());
+    expect(dbMocks.updateSet).toHaveBeenCalledWith({
+      armyId: 'army-1',
+      garrisonSettlementId: null,
+    });
   });
 
   it('trims army names and falls back to the realm territory when no location is provided', async () => {
@@ -232,6 +269,15 @@ describe('/api/game/[gameId]/armies', () => {
       session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
     });
     mapMocks.getDefaultArmyHexId.mockResolvedValue('hex-town');
+    dbMocks.dbAll.mockResolvedValue([
+      {
+        id: 'troop-1',
+        realmId: 'realm-player',
+        armyId: null,
+        garrisonSettlementId: null,
+        recruitmentTurnsRemaining: 0,
+      },
+    ]);
     dbMocks.dbGet
       .mockResolvedValueOnce({ id: 'territory-1', realmId: 'realm-player' })
       .mockResolvedValueOnce({ id: 'territory-1', realmId: 'realm-player' });
@@ -242,6 +288,7 @@ describe('/api/game/[gameId]/armies', () => {
       body: JSON.stringify({
         realmId: 'realm-player',
         name: '  First Army  ',
+        troopIds: ['troop-1'],
       }),
     }), {
       params: Promise.resolve({ gameId: 'game-1' }),
@@ -253,6 +300,7 @@ describe('/api/game/[gameId]/armies', () => {
       realmId: 'realm-player',
       name: 'First Army',
       generalId: null,
+      troopIds: ['troop-1'],
       locationTerritoryId: 'territory-1',
       locationHexId: 'hex-town',
       destinationTerritoryId: null,
@@ -278,6 +326,7 @@ describe('/api/game/[gameId]/armies', () => {
       body: JSON.stringify({
         realmId: 'realm-player',
         name: '   ',
+        troopIds: ['troop-1'],
         locationTerritoryId: 'territory-1',
       }),
     }), {
@@ -287,6 +336,61 @@ describe('/api/game/[gameId]/armies', () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: 'Army name is required' });
     expect(authMocks.requireOwnedRealmAccess).not.toHaveBeenCalled();
+    expect(dbMocks.insertValues).not.toHaveBeenCalled();
+  });
+
+  it('rejects army creation without selected existing troops', async () => {
+    const response = await POST(new Request('http://localhost/api/game/game-1/armies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-player',
+        name: 'First Army',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Select at least one existing troop to form an army',
+    });
+    expect(authMocks.requireOwnedRealmAccess).not.toHaveBeenCalled();
+    expect(dbMocks.insertValues).not.toHaveBeenCalled();
+  });
+
+  it('rejects recruiting troops when forming a new army', async () => {
+    authMocks.requireOwnedRealmAccess.mockResolvedValue({
+      realm: { id: 'realm-player' },
+      realmId: 'realm-player',
+      session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
+    });
+    dbMocks.dbAll.mockResolvedValue([
+      {
+        id: 'troop-1',
+        realmId: 'realm-player',
+        armyId: null,
+        garrisonSettlementId: 'settlement-1',
+        recruitmentTurnsRemaining: 1,
+      },
+    ]);
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/armies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-player',
+        name: 'First Army',
+        troopIds: ['troop-1'],
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Recruiting troops cannot form a new army yet',
+    });
     expect(dbMocks.insertValues).not.toHaveBeenCalled();
   });
 
@@ -301,6 +405,7 @@ describe('/api/game/[gameId]/armies', () => {
       body: JSON.stringify({
         realmId: 'realm-other',
         name: 'First Army',
+        troopIds: ['troop-1'],
         locationTerritoryId: 'territory-1',
       }),
     }), {

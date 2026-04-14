@@ -17,6 +17,19 @@ function normalizeOptionalString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function normalizeStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(
+    value
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  )];
+}
+
 function getTroopRecruitmentOptions(gameId: string, realmId: string, recruitmentSettlementId: string | null) {
   return TROOP_TYPES.map((type) => {
     if (!recruitmentSettlementId) {
@@ -140,9 +153,14 @@ export async function POST(
     const body = await request.json() as Record<string, unknown>;
     const name = normalizeOptionalString(body.name);
     const requestedRealmId = normalizeOptionalString(body.realmId);
+    const troopIds = normalizeStringArray(body.troopIds);
 
     if (!name) {
       return NextResponse.json({ error: 'Army name is required' }, { status: 400 });
+    }
+
+    if (troopIds.length === 0) {
+      return NextResponse.json({ error: 'Select at least one existing troop to form an army' }, { status: 400 });
     }
 
     const access = await requireOwnedRealmAccess(gameId, requestedRealmId);
@@ -157,6 +175,66 @@ export async function POST(
 
     if (locationHex) {
       locationTerritoryId = locationHex.territoryId ?? null;
+    }
+
+    const selectedTroops = await db.select({
+      id: troops.id,
+      realmId: troops.realmId,
+      armyId: troops.armyId,
+      garrisonSettlementId: troops.garrisonSettlementId,
+      recruitmentTurnsRemaining: troops.recruitmentTurnsRemaining,
+    })
+      .from(troops)
+      .where(inArray(troops.id, troopIds))
+      .all();
+
+    if (selectedTroops.length !== troopIds.length) {
+      return NextResponse.json({ error: 'One or more selected troops could not be found' }, { status: 404 });
+    }
+
+    if (selectedTroops.some((troop) => troop.realmId !== realmId)) {
+      return NextResponse.json({ error: 'Selected troops must belong to your realm' }, { status: 403 });
+    }
+
+    if (selectedTroops.some((troop) => troop.armyId)) {
+      return NextResponse.json({ error: 'Selected troops must be unassigned before forming a new army' }, { status: 409 });
+    }
+
+    if (selectedTroops.some((troop) => troop.recruitmentTurnsRemaining > 0)) {
+      return NextResponse.json({ error: 'Recruiting troops cannot form a new army yet' }, { status: 409 });
+    }
+
+    const sourceSettlementIds = [...new Set(selectedTroops.map((troop) => troop.garrisonSettlementId))];
+    if (sourceSettlementIds.length > 1) {
+      return NextResponse.json({
+        error: 'Selected troops must all come from the same garrison or unassigned pool',
+      }, { status: 400 });
+    }
+
+    const sourceSettlementId = sourceSettlementIds[0] ?? null;
+    if (sourceSettlementId) {
+      const sourceSettlement = await db.select({
+        id: settlements.id,
+        territoryId: settlements.territoryId,
+      })
+        .from(settlements)
+        .where(and(
+          eq(settlements.id, sourceSettlementId),
+          eq(settlements.realmId, realmId),
+        ))
+        .get();
+
+      if (!sourceSettlement) {
+        return NextResponse.json({ error: 'Source settlement not found for selected troops' }, { status: 404 });
+      }
+
+      if (locationTerritoryId && locationTerritoryId !== sourceSettlement.territoryId) {
+        return NextResponse.json({
+          error: 'Army must be created in the selected garrison territory',
+        }, { status: 400 });
+      }
+
+      locationTerritoryId = sourceSettlement.territoryId;
     }
 
     if (!locationTerritoryId) {
@@ -228,16 +306,25 @@ export async function POST(
     }
 
     const id = uuid();
-    await db.insert(armies).values({
-      id,
-      realmId,
-      name,
-      generalId,
-      locationTerritoryId: locationTerritory.id,
-      destinationTerritoryId,
-      locationHexId,
-      destinationHexId: destinationHex?.id ?? null,
-      movementTurnsRemaining: 0,
+    db.transaction((tx) => {
+      tx.insert(armies).values({
+        id,
+        realmId,
+        name,
+        generalId,
+        locationTerritoryId: locationTerritory.id,
+        destinationTerritoryId,
+        locationHexId,
+        destinationHexId: destinationHex?.id ?? null,
+        movementTurnsRemaining: 0,
+      });
+
+      tx.update(troops)
+        .set({
+          armyId: id,
+          garrisonSettlementId: null,
+        })
+        .where(inArray(troops.id, troopIds));
     });
 
     await recomputeGameInitState(gameId);
@@ -248,6 +335,7 @@ export async function POST(
       realmId,
       name,
       generalId,
+      troopIds,
       locationTerritoryId: locationTerritory.id,
       locationHexId,
       destinationTerritoryId,

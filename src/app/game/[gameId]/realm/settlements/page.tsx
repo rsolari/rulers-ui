@@ -11,7 +11,7 @@ import { Select } from '@/components/ui/select';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { useRole } from '@/hooks/use-role';
 import { BUILDING_DEFS, SETTLEMENT_DATA } from '@/lib/game-logic/constants';
-import type { BuildingType, SettlementSize } from '@/types/game';
+import type { SettlementSize } from '@/types/game';
 
 interface GoverningNoble {
   id: string;

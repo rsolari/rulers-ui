@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { requireGM } from '@/lib/auth';
 import { resolveSuccession } from '@/lib/game-logic/governance';
-import { isGovernanceError } from '@/lib/game-logic/nobles';
 
 export async function POST(
   request: Request,

@@ -5,7 +5,6 @@ import { db } from '@/db';
 import { armies } from '@/db/schema';
 import { requireGame, requireOwnedRealmAccess } from '@/lib/auth';
 import { assignArmyGeneral } from '@/lib/game-logic/governance';
-import { isGovernanceError } from '@/lib/game-logic/nobles';
 
 export async function POST(
   request: Request,

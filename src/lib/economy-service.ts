@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { db as defaultDb, type DB, type DatabaseExecutor, type Transaction } from '@/db';
+import { db as defaultDb, type DB, type DatabaseExecutor } from '@/db';
 import {
   armies,
   buildings,

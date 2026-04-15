@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DatabaseExecutor } from '@/db';
 import { nobles, nobleTitles, realms, settlements, armies, fleets, guildsOrdersSocieties } from '@/db/schema';
 import type { EstateLevel, GovernanceState, Season, SettlementSize } from '@/types/game';

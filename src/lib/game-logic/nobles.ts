@@ -1,6 +1,6 @@
 import { and, eq, ne, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { type DatabaseExecutor, type Transaction } from '@/db';
+import { type DatabaseExecutor } from '@/db';
 import {
   armies,
   fleets,

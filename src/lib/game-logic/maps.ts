@@ -6,7 +6,6 @@ import { WORLD_V1_MAP_DEFINITION } from '@/lib/maps/definitions/world-v1';
 import { buildCuratedTerritoryMapData, getTerritoryMapHexKey } from '@/lib/maps/territory-map';
 import type {
   CuratedMapDefinition,
-  CuratedMapHexDefinition,
   CuratedMapTerritoryDefinition,
   HexCoordinate,
 } from '@/lib/maps/types';

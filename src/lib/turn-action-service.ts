@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { db as defaultDb, type DB, type DatabaseExecutor, type Transaction } from '@/db';
+import { db as defaultDb, type DB, type DatabaseExecutor } from '@/db';
 import { actionComments, games, realms, settlements, territories, turnActions, turnReports } from '@/db/schema';
 import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { parseJson } from '@/lib/json';

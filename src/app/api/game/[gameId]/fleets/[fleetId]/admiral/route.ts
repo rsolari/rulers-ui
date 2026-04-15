@@ -5,7 +5,6 @@ import { db } from '@/db';
 import { fleets } from '@/db/schema';
 import { requireGame, requireOwnedRealmAccess } from '@/lib/auth';
 import { assignFleetAdmiral } from '@/lib/game-logic/governance';
-import { isGovernanceError } from '@/lib/game-logic/nobles';
 
 export async function POST(
   request: Request,

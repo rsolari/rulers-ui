@@ -5,7 +5,6 @@ import { settlements } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { requireGame, requireGM, requireOwnedRealmAccess } from '@/lib/auth';
 import { assignSettlementGovernor } from '@/lib/game-logic/governance';
-import { isGovernanceError } from '@/lib/game-logic/nobles';
 
 export async function POST(
   request: Request,

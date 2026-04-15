@@ -100,7 +100,6 @@ export default function RealmDashboard() {
   const [territories, setTerritories] = useState<Territory[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [ruler, setRuler] = useState<Ruler | null>(null);
-  const [resources, setResources] = useState<Array<{ resourceType: string; rarity: string }>>([]);
   const [militaryData, setMilitaryData] = useState<{ troops: Array<{ type: string }>; siegeUnits: Array<{ type: string }> }>({ troops: [], siegeUnits: [] });
   const [shipCount, setShipCount] = useState(0);
   const [nobles, setNobles] = useState<Array<{ id: string }>>([]);
@@ -138,13 +137,12 @@ export default function RealmDashboard() {
     }
 
     async function loadRealm() {
-      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse, resourcesResponse, armiesResponse, fleetsResponse, noblesResponse, gosResponse, projectionResponse, mapResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse, armiesResponse, fleetsResponse, noblesResponse, gosResponse, projectionResponse, mapResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`),
         fetch(`/api/game/${gameId}/realms`),
         fetch(`/api/game/${gameId}/territories`),
         fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/ruler?realmId=${realmId}`),
-        fetch(`/api/game/${gameId}/resources?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/armies?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/fleets?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`),
@@ -168,7 +166,6 @@ export default function RealmDashboard() {
       setTerritories(allTerritories);
       setSettlements(settlementsList);
       setRuler(rulerData);
-      setResources(await resourcesResponse.json());
       setMilitaryData(await armiesResponse.json());
       if (fleetsResponse.ok) {
         const fleetsData = await fleetsResponse.json();

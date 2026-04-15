@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState } from '@/types/game';
 
-export type GameRole = 'gm' | 'player' | null;
+type GameRole = 'gm' | 'player' | null;
 
-export interface RoleState {
+interface RoleState {
   role: GameRole;
   gameId: string | null;
   realmId: string | null;

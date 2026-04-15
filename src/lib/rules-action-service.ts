@@ -35,6 +35,7 @@ import {
   getRecruitPerSeason,
   getSettlementTroopCap,
 } from '@/lib/game-logic/recruitment';
+import { parseJson } from '@/lib/json';
 import type {
   BuildingLocationType,
   BuildingSize,
@@ -220,7 +221,7 @@ export interface PreparedBuildingCreation {
   effectiveSize: BuildingSize;
 }
 
-export interface PreparedBuildingUpgrade {
+interface PreparedBuildingUpgrade {
   buildingId: string;
   previousType: BuildingType;
   previousSize: BuildingSize;
@@ -231,7 +232,7 @@ export interface PreparedBuildingUpgrade {
   effectiveSize: BuildingSize;
 }
 
-export interface PreparedResourceSiteCreation {
+interface PreparedResourceSiteCreation {
   row: typeof resourceSites.$inferInsert;
 }
 
@@ -245,7 +246,7 @@ export interface PreparedShipConstruction {
   cost: CostSummary;
 }
 
-export interface PreparedTradeRouteCreation {
+interface PreparedTradeRouteCreation {
   row: typeof tradeRoutes.$inferInsert;
   exports: {
     productsExported1to2: ResourceType[];
@@ -253,7 +254,7 @@ export interface PreparedTradeRouteCreation {
   };
 }
 
-export interface CreateBuildingInput {
+interface CreateBuildingInput {
   settlementId?: string | null;
   territoryId?: string | null;
   hexId?: string | null;
@@ -267,12 +268,12 @@ export interface CreateBuildingInput {
   gmOverride?: boolean;
 }
 
-export interface UpgradeBuildingInput {
+interface UpgradeBuildingInput {
   buildingId: string;
   targetType: string;
 }
 
-export interface CreateShipInput {
+interface CreateShipInput {
   realmId?: string | null;
   type: string;
   settlementId?: string | null;
@@ -288,7 +289,7 @@ interface CreateResourceSiteInput {
   rarity?: ResourceRarity | null;
 }
 
-export interface CreateTroopInput {
+interface CreateTroopInput {
   realmId?: string | null;
   type: string;
   armyId?: string | null;
@@ -304,16 +305,6 @@ interface CreateTradeRouteInput {
   settlement1Id?: string | null;
   settlement2Id?: string | null;
   pathMode?: TradeRoutePathMode | null;
-}
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 function dedupe<T>(values: T[]) {

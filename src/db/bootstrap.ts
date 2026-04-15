@@ -5,6 +5,13 @@ type TableInfoRow = {
   notnull: number;
 };
 
+type ForeignKeyViolationRow = {
+  table: string;
+  rowid: number;
+  parent: string;
+  fkid: number;
+};
+
 const APP_TABLES = [
   'action_comments',
   'turn_actions',
@@ -59,6 +66,29 @@ function columnExists(database: Database.Database, tableName: string, columnName
   }
 
   return getTableInfo(database, tableName).some((column) => column.name === columnName);
+}
+
+function runWithForeignKeysDisabled(database: Database.Database, run: () => void) {
+  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
+
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF');
+  }
+
+  try {
+    run();
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON');
+    }
+  }
+}
+
+function assertNoForeignKeyViolations(database: Database.Database, message: string) {
+  const foreignKeyViolations = database.pragma('foreign_key_check') as ForeignKeyViolationRow[];
+  if (foreignKeyViolations.length > 0) {
+    throw new Error(message);
+  }
 }
 
 function createBuildingsTable(database: Database.Database, tableName: string) {
@@ -925,23 +955,8 @@ function migrateSettlementsRealmIdToNullable(database: Database.Database) {
     database.exec('ALTER TABLE settlements__new RENAME TO settlements;');
   });
 
-  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
-  if (foreignKeysEnabled) {
-    database.pragma('foreign_keys = OFF');
-  }
-
-  try {
-    migrate();
-  } finally {
-    if (foreignKeysEnabled) {
-      database.pragma('foreign_keys = ON');
-    }
-  }
-
-  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
-  if (foreignKeyViolations.length > 0) {
-    throw new Error('SQLite schema migration left foreign key violations in settlements.');
-  }
+  runWithForeignKeysDisabled(database, migrate);
+  assertNoForeignKeyViolations(database, 'SQLite schema migration left foreign key violations in settlements.');
 }
 
 function migrateBuildingsToSupportStandaloneLocations(database: Database.Database) {
@@ -992,23 +1007,8 @@ function migrateBuildingsToSupportStandaloneLocations(database: Database.Databas
     database.exec('ALTER TABLE buildings__new RENAME TO buildings;');
   });
 
-  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
-  if (foreignKeysEnabled) {
-    database.pragma('foreign_keys = OFF');
-  }
-
-  try {
-    migrate();
-  } finally {
-    if (foreignKeysEnabled) {
-      database.pragma('foreign_keys = ON');
-    }
-  }
-
-  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
-  if (foreignKeyViolations.length > 0) {
-    throw new Error('SQLite schema migration left foreign key violations in buildings.');
-  }
+  runWithForeignKeysDisabled(database, migrate);
+  assertNoForeignKeyViolations(database, 'SQLite schema migration left foreign key violations in buildings.');
 }
 
 function migrateNoblesDropEstateLevel(database: Database.Database) {
@@ -1127,23 +1127,8 @@ function migrateNoblesDropEstateLevel(database: Database.Database) {
     database.exec('ALTER TABLE nobles__new RENAME TO nobles;');
   });
 
-  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
-  if (foreignKeysEnabled) {
-    database.pragma('foreign_keys = OFF');
-  }
-
-  try {
-    migrate();
-  } finally {
-    if (foreignKeysEnabled) {
-      database.pragma('foreign_keys = ON');
-    }
-  }
-
-  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
-  if (foreignKeyViolations.length > 0) {
-    throw new Error('SQLite schema migration left foreign key violations in nobles.');
-  }
+  runWithForeignKeysDisabled(database, migrate);
+  assertNoForeignKeyViolations(database, 'SQLite schema migration left foreign key violations in nobles.');
 }
 
 function migrateTerritoriesDropClimate(database: Database.Database) {
@@ -1191,23 +1176,8 @@ function migrateTerritoriesDropClimate(database: Database.Database) {
     database.exec('ALTER TABLE territories__new RENAME TO territories;');
   });
 
-  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
-  if (foreignKeysEnabled) {
-    database.pragma('foreign_keys = OFF');
-  }
-
-  try {
-    migrate();
-  } finally {
-    if (foreignKeysEnabled) {
-      database.pragma('foreign_keys = ON');
-    }
-  }
-
-  const foreignKeyViolations = database.pragma('foreign_key_check') as unknown[];
-  if (foreignKeyViolations.length > 0) {
-    throw new Error('SQLite schema migration left foreign key violations in territories.');
-  }
+  runWithForeignKeysDisabled(database, migrate);
+  assertNoForeignKeyViolations(database, 'SQLite schema migration left foreign key violations in territories.');
 }
 
 function addColumnIfMissing(database: Database.Database, tableName: string, columnSql: string, columnName: string) {
@@ -1649,13 +1619,7 @@ function createIndexes(database: Database.Database) {
 }
 
 export function initializeDatabaseSchema(database: Database.Database) {
-  const foreignKeysEnabled = database.pragma('foreign_keys', { simple: true }) === 1;
-
-  if (foreignKeysEnabled) {
-    database.pragma('foreign_keys = OFF');
-  }
-
-  try {
+  runWithForeignKeysDisabled(database, () => {
     if (needsFullRebuild(database)) {
       dropAllTables(database);
     }
@@ -1666,9 +1630,7 @@ export function initializeDatabaseSchema(database: Database.Database) {
       database.exec('ALTER TABLE realms ADD COLUMN immortals_troop_id text;');
     }
     createIndexes(database);
-  } finally {
-    database.pragma('foreign_keys = ON');
-  }
+  });
 
   if (settlementsRealmIdIsNotNull(database)) {
     migrateSettlementsRealmIdToNullable(database);

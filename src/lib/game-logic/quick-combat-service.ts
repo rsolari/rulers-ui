@@ -3,6 +3,7 @@ import { db as defaultDb, type DB } from '@/db';
 import { armies, buildings, realms, settlements, siegeUnits, territories, troops } from '@/db/schema';
 import { resolveQuickCombat, type QuickCombatResolution, type QuickCombatSideInput, type QuickCombatUnit } from '@/lib/game-logic/combat';
 import { TROOP_DEFS, type CombatBonusTarget } from '@/lib/game-logic/constants';
+import { parseJson } from '@/lib/json';
 import type { ArmourType, BuildingType, SiegeUnitType, Tradition, TroopType } from '@/types/game';
 
 type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
@@ -33,16 +34,6 @@ export class QuickCombatError extends Error {
 
 export function isQuickCombatError(error: unknown): error is QuickCombatError {
   return error instanceof QuickCombatError;
-}
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 function toQuickCombatTroopUnit(

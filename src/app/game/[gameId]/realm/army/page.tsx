@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Tabs } from '@/components/ui/tabs';
 import { useRole } from '@/hooks/use-role';
+import { readErrorMessage } from '@/lib/http';
 import { SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import type { ShipType, TroopType } from '@/types/game';
 
@@ -149,12 +150,7 @@ async function fetchRealmNobles(gameId: string, realmId: string) {
 }
 
 async function getErrorMessage(response: Response, fallback: string) {
-  const data = await response.json().catch(() => null);
-  if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' && data.error) {
-    return data.error;
-  }
-
-  return fallback;
+  return readErrorMessage(response, fallback);
 }
 
 export default function ArmyPage() {

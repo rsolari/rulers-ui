@@ -29,4 +29,4 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 
 Textarea.displayName = 'Textarea';
 
-export { Textarea, type TextareaProps };
+export { Textarea };

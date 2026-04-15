@@ -5,7 +5,7 @@ import type {
   TaxType,
   TradeImportSelection,
 } from '@/types/game';
-import type { EconomyRealmInput, EconomyTradeRouteInput } from './economy';
+import type { TradeRealmInput, TradeRouteInput } from './trade-types';
 import {
   SEASONS,
   TAX_RATES,
@@ -45,7 +45,7 @@ export interface RealmTradeState {
   unresolvedTieBreaks: TradeTieBreakRequest[];
 }
 
-export interface RouteTradeState {
+interface RouteTradeState {
   routeId: string;
   productsExported1to2: ResourceType[];
   productsExported2to1: ResourceType[];
@@ -53,14 +53,14 @@ export interface RouteTradeState {
   importSelectionState: TradeImportSelection[];
 }
 
-export interface TradeResolution {
+interface TradeResolution {
   realms: Record<string, RealmTradeState>;
   routes: Record<string, RouteTradeState>;
   importSelections: TradeImportSelection[];
   unresolvedTieBreaks: TradeTieBreakRequest[];
 }
 
-export interface ResolveTradeNetworkOptions {
+interface ResolveTradeNetworkOptions {
   currentSeason: Season;
   currentYear: number;
   maxIterations?: number;
@@ -122,8 +122,8 @@ function dedupeProducts(products: Iterable<ResourceType>) {
   return [...new Set(products)];
 }
 
-function dedupeRoutes(realms: EconomyRealmInput[]) {
-  const routesById = new Map<string, EconomyTradeRouteInput>();
+function dedupeRoutes(realms: TradeRealmInput[]) {
+  const routesById = new Map<string, TradeRouteInput>();
 
   for (const realm of realms) {
     for (const route of realm.tradeRoutes) {
@@ -136,7 +136,7 @@ function dedupeRoutes(realms: EconomyRealmInput[]) {
   return [...routesById.values()];
 }
 
-function getPreviousSelections(routes: EconomyTradeRouteInput[]) {
+function getPreviousSelections(routes: TradeRouteInput[]) {
   const selectionsByKey = new Map<string, PreviousTradeImportSelection>();
 
   for (const route of routes) {
@@ -152,7 +152,7 @@ function getPreviousSelections(routes: EconomyTradeRouteInput[]) {
 }
 
 function buildRealmOfferings(
-  realms: EconomyRealmInput[],
+  realms: TradeRealmInput[],
   importedProductsByRealm: Map<string, Set<ResourceType>>,
 ) {
   const offeringsByRealm = new Map<string, RealmProductOffering>();
@@ -196,15 +196,15 @@ function buildRealmOfferings(
 }
 
 function groupCandidatesByImport(
-  realms: EconomyRealmInput[],
-  routes: EconomyTradeRouteInput[],
+  realms: TradeRealmInput[],
+  routes: TradeRouteInput[],
   offeringsByRealm: Map<string, RealmProductOffering>,
 ) {
   const candidatesByKey = new Map<string, ProductSource[]>();
   const realmById = new Map(realms.map((realm) => [realm.id, realm]));
 
   const addCandidates = (
-    route: EconomyTradeRouteInput,
+    route: TradeRouteInput,
     exporterRealmId: string,
     importerRealmId: string,
     exporterSettlementId: string,
@@ -393,7 +393,7 @@ function resolveImportSelections(
 }
 
 function buildImportedProductsByRealm(
-  realms: EconomyRealmInput[],
+  realms: TradeRealmInput[],
   importSelections: Map<string, { routeId: string; selection: TradeImportSelection }>,
 ) {
   const importedProductsByRealm = new Map<string, Set<ResourceType>>();
@@ -434,7 +434,7 @@ export function resolveCompetition(sources: ProductSource[]): ProductSource | nu
 }
 
 export function resolveTradeNetwork(
-  realms: EconomyRealmInput[],
+  realms: TradeRealmInput[],
   options: ResolveTradeNetworkOptions,
 ): TradeResolution {
   const routes = dedupeRoutes(realms);

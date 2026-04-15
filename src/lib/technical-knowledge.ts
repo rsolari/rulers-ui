@@ -1,4 +1,5 @@
 import { BUILDING_DEFS } from '@/lib/game-logic/constants';
+import { parseJson } from '@/lib/json';
 import type { BuildingType, TechnicalKnowledgeKey } from '@/types/game';
 
 export function formatTechnicalKnowledgeLabel(value: string) {
@@ -18,18 +19,14 @@ const TECHNICAL_KNOWLEDGE_OPTION_SET = new Set(
 );
 
 export function parseTechnicalKnowledge(value: string | null | undefined): TechnicalKnowledgeKey[] {
-  try {
-    const parsed = JSON.parse(value ?? '[]');
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return Array.from(new Set(
-      parsed.filter((entry): entry is TechnicalKnowledgeKey => typeof entry === 'string' && entry.trim().length > 0),
-    ));
-  } catch {
+  const parsed = parseJson<unknown>(value, []);
+  if (!Array.isArray(parsed)) {
     return [];
   }
+
+  return Array.from(new Set(
+    parsed.filter((entry): entry is TechnicalKnowledgeKey => typeof entry === 'string' && entry.trim().length > 0),
+  ));
 }
 
 export function sanitizeTechnicalKnowledge(value: unknown): TechnicalKnowledgeKey[] {

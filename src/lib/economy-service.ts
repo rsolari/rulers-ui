@@ -44,6 +44,7 @@ import {
   type EconomyResult,
 } from '@/lib/game-logic/economy';
 import { getPaidEstateLevelsForRealm } from '@/lib/game-logic/governance';
+import { parseJson } from '@/lib/json';
 import { resolveTradeNetwork } from '@/lib/game-logic/trade';
 import { prepareTurnReportFinancialActions } from '@/lib/turn-report-financial-actions';
 import type {
@@ -64,16 +65,6 @@ import type {
 
 type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
 type DatabaseExecutor = DB | Transaction;
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 function getRealmOpenTurmoilEvent(eventRows: Array<typeof turnEvents.$inferSelect>, realmId: string) {
   return eventRows.find((event) =>
@@ -129,13 +120,13 @@ interface EconomyTurnValidationResult {
   warningsByRealm: Record<string, string[]>;
 }
 
-export interface AdvanceGameTurnOptions {
+interface AdvanceGameTurnOptions {
   expectedYear?: number;
   expectedSeason?: Season;
   idempotencyKey?: string | null;
 }
 
-export interface AdvanceGameTurnResult {
+interface AdvanceGameTurnResult {
   resolvedYear: number;
   resolvedSeason: Season;
   year: number;

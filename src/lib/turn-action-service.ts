@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB } from '@/db';
 import { actionComments, games, realms, settlements, territories, turnActions, turnReports } from '@/db/schema';
 import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
+import { parseJson } from '@/lib/json';
 import { createBuilding, createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
 import type {
   ActionCommentCreateDto,
@@ -43,7 +44,7 @@ type TurnReportRow = typeof turnReports.$inferSelect;
 type TurnActionRow = typeof turnActions.$inferSelect;
 type ActionCommentRow = typeof actionComments.$inferSelect;
 
-export interface TurnActor {
+interface TurnActor {
   role: 'player' | 'gm';
   label: string;
 }
@@ -67,16 +68,6 @@ export function isTurnActionError(error: unknown): error is TurnActionError {
 
 function toIsoString(value: Date | null | undefined) {
   return value ? value.toISOString() : null;
-}
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 function sortTurnsDescending(a: { year: number; season: Season }, b: { year: number; season: Season }) {

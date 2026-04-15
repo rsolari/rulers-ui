@@ -17,7 +17,7 @@ import type {
 
 type DatabaseLike = NonNullable<Parameters<typeof prepareRealmBuildingCreation>[3]>['database'];
 
-export interface PreparedTurnReportFinancialActions {
+interface PreparedTurnReportFinancialActions {
   actions: FinancialAction[];
   buildPreparations: Map<number, PreparedBuildingCreation>;
   troopPreparations: Map<number, PreparedTroopRecruitment>;

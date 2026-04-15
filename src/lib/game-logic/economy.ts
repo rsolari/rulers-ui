@@ -5,7 +5,7 @@ import type {
   BuildingType,
   EstateLevel,
   FinancialAction,
-  IndustryQuality,
+  ProtectedProduct,
   ResourceRarity,
   ResourceType,
   Season,
@@ -51,22 +51,25 @@ import {
   calculateSettlementTotalWealth,
 } from './wealth';
 import { resolveIndustryProduct } from './products';
+import type {
+  TradeIndustryInput,
+  TradeRealmInput,
+  TradeResourceSiteInput,
+  TradeRouteInput,
+  TradeSettlementInput,
+} from './trade-types';
 import { advanceTurmoilSources, calculateDerivedTurmoil } from './turmoil-resolver';
 import type { EconomySeasonalModifierInput } from './economic-modifiers';
 
 export type EconomyMode = 'projection' | 'resolution';
 export type EconomyEntryKind = 'revenue' | 'cost' | 'adjustment';
 
-export interface EconomyIndustryInput {
+export interface EconomyIndustryInput extends TradeIndustryInput {
   id: string;
-  quality: IndustryQuality;
-  ingredients: ResourceType[];
-  outputProduct?: ResourceType;
 }
 
-export interface EconomyResourceSiteInput {
+export interface EconomyResourceSiteInput extends TradeResourceSiteInput {
   id: string;
-  resourceType: ResourceType;
   rarity: ResourceRarity;
   industry?: EconomyIndustryInput | null;
 }
@@ -121,7 +124,7 @@ export interface EconomyNobleInput {
   isPrisoner: boolean;
 }
 
-export interface EconomySettlementInput {
+export interface EconomySettlementInput extends TradeSettlementInput {
   id: string;
   name: string;
   size: keyof typeof SETTLEMENT_DATA;
@@ -137,20 +140,10 @@ export interface EconomyTerritoryInput {
   foodCapBonus?: number;
 }
 
-export interface EconomyTradeRouteInput {
-  id: string;
-  isActive: boolean;
-  realm1Id: string;
-  realm2Id: string;
-  settlement1Id: string;
-  settlement2Id: string;
+export interface EconomyTradeRouteInput extends TradeRouteInput {
   productsExported1to2?: ResourceType[];
   productsExported2to1?: ResourceType[];
-  protectedProducts?: Array<{
-    resourceType: ResourceType;
-    expirySeason: Season;
-    expiryYear: number;
-  }>;
+  protectedProducts?: ProtectedProduct[];
   importSelectionState?: TradeImportSelection[];
 }
 
@@ -172,11 +165,9 @@ export interface EconomyReportInput {
   financialActions: FinancialAction[];
 }
 
-export interface EconomyRealmInput {
-  id: string;
+export interface EconomyRealmInput extends TradeRealmInput {
   name: string;
   treasury: number;
-  taxType: TaxType;
   levyExpiresYear?: number | null;
   levyExpiresSeason?: Season | null;
   foodBalance?: number;

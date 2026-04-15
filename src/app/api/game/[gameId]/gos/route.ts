@@ -5,17 +5,8 @@ import { eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { isAuthError, requireGM, requireRealmOwner } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
+import { parseJson } from '@/lib/json';
 import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 function normalizeRealmIds(body: Record<string, unknown>) {
   const requestedRealmIds = Array.isArray(body.realmIds)

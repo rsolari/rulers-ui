@@ -4,16 +4,8 @@ import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { games, realms } from '@/db/schema';
 import { isAuthError, requireGM } from '@/lib/auth';
+import { parseJson } from '@/lib/json';
 import type { Season, TurmoilSource } from '@/types/game';
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 /**
  * POST: Add a GM manual turmoil source to a realm

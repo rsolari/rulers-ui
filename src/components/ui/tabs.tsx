@@ -40,4 +40,4 @@ function Tabs({ tabs, defaultTab, className = '' }: TabsProps) {
   );
 }
 
-export { Tabs, type Tab, type TabsProps };
+export { Tabs };

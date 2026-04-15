@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { readErrorMessage } from '@/lib/http';
 
 interface NobleStatusEditorProps {
   gameId: string;
@@ -36,8 +37,7 @@ export function NobleStatusEditor({
     });
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      setError(data.error ?? 'Failed to save status');
+      setError(await readErrorMessage(response, 'Failed to save status'));
     } else {
       onSaved?.(gmStatusText);
     }

@@ -19,6 +19,7 @@ import type { EconomyOverviewRealmDto } from '@/lib/economy-dto';
 import type { GameMapData } from '@/components/map/types';
 import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
+import { readErrorMessage } from '@/lib/http';
 import { TECHNICAL_KNOWLEDGE_OPTIONS, parseTechnicalKnowledge } from '@/lib/technical-knowledge';
 import type { GovernmentType, TechnicalKnowledgeKey, Tradition } from '@/types/game';
 
@@ -184,29 +185,7 @@ function getSetupStateBadgeVariant(setupState: string): 'default' | 'gold' | 'gr
 }
 
 async function getErrorMessage(response: Response, fallback: string) {
-  try {
-    const data = await response.json();
-
-    if (Array.isArray(data?.blockers) && data.blockers.length > 0) {
-      const blockerSummary = data.blockers
-        .map((blocker: { displayName?: string | null; id: string; missingRequirements?: string[] }) => {
-          const label = blocker.displayName?.trim() || blocker.id;
-          const missing = Array.isArray(blocker.missingRequirements) ? blocker.missingRequirements.join(', ') : '';
-          return missing ? `${label}: ${missing}` : label;
-        })
-        .join(' · ');
-
-      if (typeof data?.error === 'string' && blockerSummary) {
-        return `${data.error} — ${blockerSummary}`;
-      }
-    }
-
-    if (typeof data?.error === 'string' && data.error.trim().length > 0) {
-      return data.error;
-    }
-  } catch {}
-
-  return fallback;
+  return readErrorMessage(response, fallback);
 }
 
 export default function GMDashboard() {

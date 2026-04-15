@@ -15,7 +15,7 @@ export const sessionCookieOptions = {
   maxAge: COOKIE_MAX_AGE,
 };
 
-export interface PublicSession {
+interface PublicSession {
   role: 'gm' | 'player' | null;
   gameId: string | null;
   realmId: string | null;

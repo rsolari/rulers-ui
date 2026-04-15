@@ -3,19 +3,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { realms, turnEvents } from '@/db/schema';
 import { isAuthError, requireGM } from '@/lib/auth';
+import { parseJson } from '@/lib/json';
 import type { Season, TurnEventStatus, TurmoilSource } from '@/types/game';
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 function normalizeManualTurmoilSources(
   raw: unknown,

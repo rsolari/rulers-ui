@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
 import { generateGameCode, isAuthError, requireGM, requireInitState } from '@/lib/auth';
-import { initializeRealmCapital } from '@/lib/game-logic/realm-bootstrap';
+import { calculateRealmStartingTreasury, initializeRealmCapital } from '@/lib/game-logic/realm-bootstrap';
 import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
 import {
   DEFAULT_CURATED_MAP_KEY,
@@ -13,7 +13,7 @@ import {
   importCuratedGameMap,
 } from '@/lib/game-logic/maps';
 import { buildCuratedTerritoryMapData, getPreferredTerritoryHexIds } from '@/lib/maps/territory-map';
-import type { GovernmentType, ResourceRarity, ResourceType, SettlementSize, Tradition } from '@/types/game';
+import type { GovernmentType, ResourceRarity, ResourceType, Season, SettlementSize, Tradition } from '@/types/game';
 
 type OwnershipKind = 'player' | 'npc' | 'neutral';
 
@@ -71,10 +71,18 @@ export async function POST(
     const curatedMapDefinition = getCuratedMapDefinition(mapKey);
     const territoryInputs = Array.isArray(body.territories) ? body.territories as SetupTerritoryInput[] : [];
     const curatedTerritories = getActiveCuratedMapTerritories(mapKey, territoryInputs.length);
+    const game = await db.select({
+      currentYear: games.currentYear,
+      currentSeason: games.currentSeason,
+    }).from(games).where(eq(games.id, gameId)).get();
     const territoryIds: string[] = [];
     const npcRealmIds: string[] = [];
     const createdSlotCodes: string[] = [];
     const usedCodes = new Set<string>();
+
+    if (!game) {
+      return NextResponse.json({ error: 'Game not found' }, { status: 404 });
+    }
 
     for (const territory of territoryInputs) {
       if (!territory?.name) {
@@ -179,6 +187,9 @@ export async function POST(
         const territoryId = territoryIds[territoryIndex];
         const realmId = ownershipByIndex.get(territoryIndex)?.realmId ?? null;
         const curatedTerritory = curatedTerritories[territoryIndex];
+        const treasurySettlements = [] as Parameters<typeof calculateRealmStartingTreasury>[0]['settlements'];
+        const treasuryBuildings = [] as Parameters<typeof calculateRealmStartingTreasury>[0]['buildings'];
+        const treasuryResourceSites = [] as Parameters<typeof calculateRealmStartingTreasury>[0]['resourceSites'];
         const territoryHexIds = curatedTerritory
           ? new Set(importedMap.territoryHexIds.get(curatedTerritory.key) ?? [])
           : new Set<string>();
@@ -230,10 +241,17 @@ export async function POST(
             name: resource.settlement.name,
             size: settlementSize,
           }).run();
+          treasurySettlements.push({
+            id: settlementId,
+            territoryId,
+            name: resource.settlement.name,
+            size: settlementSize,
+          });
 
           for (const fortification of getStartingSettlementFortifications(settlementSize)) {
+            const buildingId = uuid();
             tx.insert(buildings).values({
-              id: uuid(),
+              id: buildingId,
               settlementId,
               territoryId,
               hexId: settlementHexId,
@@ -244,6 +262,19 @@ export async function POST(
               material: fortification.material,
               takesBuildingSlot: fortification.takesBuildingSlot,
             }).run();
+            treasuryBuildings.push({
+              id: buildingId,
+              settlementId,
+              type: fortification.type,
+              size: fortification.size,
+              constructionTurnsRemaining: 0,
+              takesBuildingSlot: fortification.takesBuildingSlot,
+              isOperational: true,
+              maintenanceState: 'active',
+              ownerGosId: null,
+              allottedGosId: null,
+              material: fortification.material,
+            });
           }
 
           tx.insert(resourceSites).values({
@@ -253,6 +284,12 @@ export async function POST(
             resourceType: resource.resourceType,
             rarity: resource.rarity || 'Common',
           }).run();
+          treasuryResourceSites.push({
+            id: resourceSiteId,
+            settlementId,
+            resourceType: resource.resourceType,
+            rarity: resource.rarity || 'Common',
+          });
         }
 
         if (ownershipByIndex.get(territoryIndex)?.kind === 'npc' && realmId && curatedTerritory) {
@@ -272,13 +309,44 @@ export async function POST(
             );
           }
 
+          const capitalSettlementId = uuid();
+          const capitalName = `${territory.owner?.realmName?.trim() || territory.name} Capital`;
+          const traditions = territory.owner?.traditions || [];
+          const realmName = territory.owner?.realmName?.trim() || `${territory.name} NPC Realm`;
+          const startingTreasury = calculateRealmStartingTreasury({
+            realmId,
+            realmName,
+            territory: {
+              id: territoryId,
+              name: territory.name,
+              foodCapBase: 30,
+              foodCapBonus: 0,
+            },
+            settlements: treasurySettlements,
+            buildings: treasuryBuildings,
+            resourceSites: treasuryResourceSites,
+            industries: [],
+            capitalSettlementId,
+            capitalName,
+            currentYear: game.currentYear,
+            currentSeason: game.currentSeason as Season,
+            traditions,
+            taxType: 'Tribute',
+          });
+
           initializeRealmCapital(tx, {
             realmId,
             territoryId,
             capitalHexId,
-            capitalName: `${territory.owner?.realmName?.trim() || territory.name} Capital`,
-            traditions: territory.owner?.traditions || [],
+            capitalName,
+            capitalSettlementId,
+            traditions,
           });
+
+          tx.update(realms)
+            .set({ treasury: startingTreasury })
+            .where(eq(realms.id, realmId))
+            .run();
         }
       }
 

@@ -1,15 +1,11 @@
 import type { ResourceType, SettlementSize, TroopType, TroopClass, ArmourType } from '@/types/game';
 import { RESOURCE_RARITY } from './constants';
 
-// ============================================================
-// Territory Types
-// ============================================================
+// --- Territory Types ---
 
 export type TerritoryType = 'Realm' | 'Neutral';
 
-// ============================================================
-// Roll Tables (from rules/08-territories-and-resources.md)
-// ============================================================
+// --- Roll Tables (from rules/08-territories-and-resources.md) ---
 
 // Common Resources (1d10)
 // 1-3 Timber, 4-6 Clay, 7-8 Iron(Ore), 9 Stone, 10 Luxury*
@@ -54,9 +50,7 @@ function rollExpandedLuxuryResources(): ResourceType[] {
   return [...rollExpandedLuxuryResources(), ...rollExpandedLuxuryResources()];
 }
 
-// ============================================================
-// Settlement Generation (1d10)
-// ============================================================
+// --- Settlement Generation (1d10) ---
 
 // 1-2 Nomad Camps (Village), 3-4 Tribal Village (Village),
 // 5-6 Bandit Camp (Village), 7 Monastic Enclave (Village),
@@ -95,9 +89,7 @@ function rollSettlement(): GeneratedSettlement {
   };
 }
 
-// ============================================================
-// Resource Site Generation
-// ============================================================
+// --- Resource Site Generation ---
 
 export interface GeneratedResource {
   resourceType: ResourceType;
@@ -160,9 +152,6 @@ export function generateTerritoryResources(type: TerritoryType): GeneratedResour
   return resources;
 }
 
-/**
- * Generate the full map: resources and settlements for all territories.
- */
 export function generateMap(
   territories: Array<{ name: string; description: string; type: TerritoryType }>
 ): Array<{ territoryIndex: number; resources: GeneratedResource[] }> {
@@ -172,9 +161,7 @@ export function generateMap(
   }));
 }
 
-// ============================================================
-// Realm Starting Package
-// ============================================================
+// --- Realm Starting Package ---
 
 export const REALM_STARTING_COMMON_TABLE_ROLLS = 3;
 export const REALM_STARTING_LUXURY_TABLE_ROLLS = 1;

@@ -1,9 +1,9 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import type { DatabaseExecutor } from '@/db';
 import { nobles, nobleTitles, realms, settlements, armies, fleets, guildsOrdersSocieties } from '@/db/schema';
 import type { EstateLevel, GovernanceState, Season, SettlementSize } from '@/types/game';
 import {
   GovernanceError,
-  type DatabaseExecutor,
   assertNobleCanHoldOffice,
   assertNobleCanHoldExclusiveOffice,
   assertRealmNotFallen,
@@ -897,26 +897,4 @@ export function getPaidEstateLevelsForRealm(
       .filter(([nobleId]) => nobleId !== input.realmRulerNobleId)
       .map(([nobleId, levels]) => [nobleId, getHighestEstateLevel(levels)]),
   );
-}
-
-export function revokeStructuralTitlesForNoble(
-  database: DatabaseExecutor,
-  nobleId: string,
-  year: number,
-  season: Season,
-) {
-  const structuralTypes = ['settlement_governor', 'army_general', 'fleet_admiral', 'gos_leader', 'heir_designation'] as const;
-
-  database.update(nobleTitles)
-    .set({
-      isActive: false,
-      revokedYear: year,
-      revokedSeason: season,
-    })
-    .where(and(
-      eq(nobleTitles.nobleId, nobleId),
-      eq(nobleTitles.isActive, true),
-      inArray(nobleTitles.type, [...structuralTypes]),
-    ))
-    .run();
 }

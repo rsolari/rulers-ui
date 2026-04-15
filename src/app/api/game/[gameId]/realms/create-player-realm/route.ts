@@ -1,3 +1,4 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
@@ -13,7 +14,7 @@ import {
   territories,
 } from '@/db/schema';
 import { recomputeGameInitState } from '@/lib/game-init-state';
-import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
+import { requireInitState, requirePlayerSlot } from '@/lib/auth';
 import { isSettlementHexAvailable } from '@/lib/game-logic/maps';
 import {
   calculateRealmStartingTreasury,
@@ -164,10 +165,8 @@ export async function POST(
       townId,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

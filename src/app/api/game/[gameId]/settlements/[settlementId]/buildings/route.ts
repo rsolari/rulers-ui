@@ -1,8 +1,9 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { settlements } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireOwnedRealmAccess } from '@/lib/auth';
 import {
   createBuilding,
   isRuleValidationError,
@@ -85,10 +86,8 @@ export async function GET(
     const options = getBuildingConstructionOptions(gameId, realmId, settlementId);
     return NextResponse.json(options);
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -127,18 +126,8 @@ export async function POST(
       notes: created.notes,
     }, { status: 201 });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isRuleValidationError(error)) {
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-        details: error.details ?? null,
-      }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

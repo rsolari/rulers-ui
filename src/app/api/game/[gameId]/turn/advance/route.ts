@@ -1,6 +1,7 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { advanceGameTurn, isEconomyResolutionError } from '@/lib/economy-service';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { advanceGameTurn } from '@/lib/economy-service';
+import { requireGM } from '@/lib/auth';
 import type { Season } from '@/types/game';
 
 export async function POST(
@@ -27,18 +28,8 @@ export async function POST(
 
     return NextResponse.json(result);
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isEconomyResolutionError(error)) {
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-        details: error.details ?? null,
-      }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

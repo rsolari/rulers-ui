@@ -1,6 +1,6 @@
 import { and, eq, ne, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { type DB } from '@/db';
+import { type DatabaseExecutor } from '@/db';
 import {
   armies,
   fleets,
@@ -13,8 +13,6 @@ import {
 } from '@/db/schema';
 import type { GovernanceEventType, NobleTitleType, Season } from '@/types/game';
 
-type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
-export type DatabaseExecutor = DB | Transaction;
 
 export class GovernanceError extends Error {
   status: number;

@@ -1,6 +1,7 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
-import { isTurnActionError, submitTurn } from '@/lib/turn-action-service';
+import { requireOwnedRealmAccess } from '@/lib/auth';
+import { submitTurn } from '@/lib/turn-action-service';
 
 export async function POST(
   request: Request,
@@ -18,10 +19,8 @@ export async function POST(
       label,
     }));
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

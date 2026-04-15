@@ -1,10 +1,11 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { realms, troops } from '@/db/schema';
 import { eq, inArray } from 'drizzle-orm';
-import { isAuthError, requireGM, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireGM, requireOwnedRealmAccess } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
-import { createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
+import { createTroopRecruitment } from '@/lib/rules-action-service';
 
 export async function GET(
   request: Request,
@@ -29,10 +30,8 @@ export async function GET(
 
     return NextResponse.json({ error: 'realmId or garrisonSettlementId required' }, { status: 400 });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -62,18 +61,8 @@ export async function POST(
       cost: created.cost,
     }, { status: 201 });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isRuleValidationError(error)) {
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-        details: error.details ?? null,
-      }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -141,10 +130,8 @@ export async function PATCH(
           : undefined,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

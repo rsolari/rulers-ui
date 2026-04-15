@@ -3,7 +3,8 @@ import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { buildings, games, playerSlots, realms, resourceSites, settlements, territories } from '@/db/schema';
-import { generateGameCode, isAuthError, requireGM, requireInitState } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/api-errors';
+import { generateGameCode, requireGM, requireInitState } from '@/lib/auth';
 import { calculateRealmStartingTreasury, initializeRealmCapital } from '@/lib/game-logic/realm-bootstrap';
 import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
 import {
@@ -370,9 +371,8 @@ export async function POST(
       success: true,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
 
     if (
       typeof error === 'object'

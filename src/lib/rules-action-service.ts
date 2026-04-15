@@ -1,7 +1,7 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { createRequire } from 'node:module';
 import { v4 as uuid } from 'uuid';
-import type { DB } from '@/db';
+import type { DB, DatabaseExecutor } from '@/db';
 import {
   armies,
   buildings,
@@ -35,6 +35,7 @@ import {
   getRecruitPerSeason,
   getSettlementTroopCap,
 } from '@/lib/game-logic/recruitment';
+import { parseJson } from '@/lib/json';
 import type {
   BuildingLocationType,
   BuildingSize,
@@ -52,8 +53,6 @@ import type {
   TroopType,
 } from '@/types/game';
 
-type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
-type DatabaseLike = DB | Transaction;
 
 type IdGenerator = () => string;
 
@@ -220,7 +219,7 @@ export interface PreparedBuildingCreation {
   effectiveSize: BuildingSize;
 }
 
-export interface PreparedBuildingUpgrade {
+interface PreparedBuildingUpgrade {
   buildingId: string;
   previousType: BuildingType;
   previousSize: BuildingSize;
@@ -231,7 +230,7 @@ export interface PreparedBuildingUpgrade {
   effectiveSize: BuildingSize;
 }
 
-export interface PreparedResourceSiteCreation {
+interface PreparedResourceSiteCreation {
   row: typeof resourceSites.$inferInsert;
 }
 
@@ -245,7 +244,7 @@ export interface PreparedShipConstruction {
   cost: CostSummary;
 }
 
-export interface PreparedTradeRouteCreation {
+interface PreparedTradeRouteCreation {
   row: typeof tradeRoutes.$inferInsert;
   exports: {
     productsExported1to2: ResourceType[];
@@ -253,7 +252,7 @@ export interface PreparedTradeRouteCreation {
   };
 }
 
-export interface CreateBuildingInput {
+interface CreateBuildingInput {
   settlementId?: string | null;
   territoryId?: string | null;
   hexId?: string | null;
@@ -267,12 +266,12 @@ export interface CreateBuildingInput {
   gmOverride?: boolean;
 }
 
-export interface UpgradeBuildingInput {
+interface UpgradeBuildingInput {
   buildingId: string;
   targetType: string;
 }
 
-export interface CreateShipInput {
+interface CreateShipInput {
   realmId?: string | null;
   type: string;
   settlementId?: string | null;
@@ -288,7 +287,7 @@ interface CreateResourceSiteInput {
   rarity?: ResourceRarity | null;
 }
 
-export interface CreateTroopInput {
+interface CreateTroopInput {
   realmId?: string | null;
   type: string;
   armyId?: string | null;
@@ -306,21 +305,11 @@ interface CreateTradeRouteInput {
   pathMode?: TradeRoutePathMode | null;
 }
 
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 function dedupe<T>(values: T[]) {
   return [...new Set(values)];
 }
 
-function resolveDatabase(database?: DatabaseLike): DatabaseLike {
+function resolveDatabase(database?: DatabaseExecutor): DatabaseExecutor {
   if (database) return database;
 
   if (!cachedDefaultDb) {
@@ -1118,7 +1107,7 @@ export function prepareTradeRouteCreation(
 }
 
 function selectBuildingRows(
-  database: DatabaseLike,
+  database: DatabaseExecutor,
   settlementIds: string[],
   territoryIds: string[],
 ) {
@@ -1141,7 +1130,7 @@ function selectBuildingRows(
     .all();
 }
 
-function loadTerritory(database: DatabaseLike, gameId: string, territoryId?: string | null): PlacementTerritory | null {
+function loadTerritory(database: DatabaseExecutor, gameId: string, territoryId?: string | null): PlacementTerritory | null {
   if (!territoryId) return null;
 
   const territory = database.select().from(territories)
@@ -1167,7 +1156,7 @@ function loadTerritory(database: DatabaseLike, gameId: string, territoryId?: str
   };
 }
 
-function loadSettlement(database: DatabaseLike, settlementId?: string | null): PlacementSettlement | null {
+function loadSettlement(database: DatabaseExecutor, settlementId?: string | null): PlacementSettlement | null {
   if (!settlementId) return null;
 
   const settlement = database.select().from(settlements)
@@ -1188,7 +1177,7 @@ function loadSettlement(database: DatabaseLike, settlementId?: string | null): P
   };
 }
 
-function loadOperationalSettlementBuildingTypes(database: DatabaseLike, settlementId?: string | null) {
+function loadOperationalSettlementBuildingTypes(database: DatabaseExecutor, settlementId?: string | null) {
   if (!settlementId) return [] as BuildingType[];
 
   return database.select({ type: buildings.type })
@@ -1242,7 +1231,7 @@ function hasRealmFoodAccess(
   return false;
 }
 
-function loadLandHex(database: DatabaseLike, hexId?: string | null) {
+function loadLandHex(database: DatabaseExecutor, hexId?: string | null) {
   if (!hexId) return null;
 
   return database.select({
@@ -1257,7 +1246,7 @@ function loadLandHex(database: DatabaseLike, hexId?: string | null) {
     .get();
 }
 
-function loadFirstLandHexForTerritory(database: DatabaseLike, territoryId?: string | null) {
+function loadFirstLandHexForTerritory(database: DatabaseExecutor, territoryId?: string | null) {
   if (!territoryId) return null;
 
   return database.select({ id: mapHexes.id })
@@ -1269,7 +1258,7 @@ function loadFirstLandHexForTerritory(database: DatabaseLike, territoryId?: stri
     .get();
 }
 
-function loadRealmRuleAccess(database: DatabaseLike, gameId: string, realmId: string | null) {
+function loadRealmRuleAccess(database: DatabaseExecutor, gameId: string, realmId: string | null) {
   if (!realmId) {
     return {
       localResources: [] as ResourceType[],
@@ -1363,7 +1352,7 @@ function loadRealmRuleAccess(database: DatabaseLike, gameId: string, realmId: st
   };
 }
 
-function loadTradeProductsForRealm(database: DatabaseLike, realmId: string) {
+function loadTradeProductsForRealm(database: DatabaseExecutor, realmId: string) {
   const realmTerritories = database.select().from(territories).where(eq(territories.realmId, realmId)).all();
   const territoryIds = realmTerritories.map((territory) => territory.id);
   if (territoryIds.length === 0) {
@@ -1381,7 +1370,7 @@ function loadTradeProductsForRealm(database: DatabaseLike, realmId: string) {
 export function createBuilding(
   gameId: string,
   input: CreateBuildingInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator; chargeTreasury?: boolean } = {},
+  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator; chargeTreasury?: boolean } = {},
 ) {
   const database = resolveDatabase(options.database);
   return database.transaction((tx) => {
@@ -1506,7 +1495,7 @@ export function prepareRealmBuildingCreation(
   gameId: string,
   realmId: string,
   input: CreateBuildingInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},
 ) {
   const database = resolveDatabase(options.database);
   const settlement = loadSettlement(database, input.settlementId ?? null);
@@ -1563,7 +1552,7 @@ export function prepareRealmBuildingUpgrade(
   gameId: string,
   realmId: string,
   input: UpgradeBuildingInput,
-  options: { database?: DatabaseLike } = {},
+  options: { database?: DatabaseExecutor } = {},
 ) {
   const database = resolveDatabase(options.database);
   const currentBuilding = database.select().from(buildings)
@@ -1629,7 +1618,7 @@ export function prepareRealmBuildingUpgrade(
 export function upgradeBuilding(
   gameId: string,
   input: UpgradeBuildingInput,
-  options: { database?: DatabaseLike; chargeTreasury?: boolean } = {},
+  options: { database?: DatabaseExecutor; chargeTreasury?: boolean } = {},
 ) {
   const database = resolveDatabase(options.database);
   return database.transaction((tx) => {
@@ -1715,7 +1704,7 @@ export function upgradeBuilding(
 export async function createResourceSite(
   gameId: string,
   input: CreateResourceSiteInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},
 ) {
   const database = resolveDatabase(options.database);
   const territory = loadTerritory(database, gameId, input.territoryId ?? null);
@@ -1738,7 +1727,7 @@ export async function createResourceSite(
 export function createTroopRecruitment(
   gameId: string,
   input: CreateTroopInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},
 ) {
   const database = resolveDatabase(options.database);
   const realmId = input.realmId ?? null;
@@ -1935,7 +1924,7 @@ export function prepareRealmTroopRecruitment(
   gameId: string,
   realmId: string,
   input: CreateTroopInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},
 ) {
   const database = resolveDatabase(options.database);
   const recruitmentSettlementId = input.recruitmentSettlementId ?? null;
@@ -2020,7 +2009,7 @@ export function prepareRealmTroopRecruitment(
 export async function createShipConstruction(
   gameId: string,
   input: CreateShipInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},
 ) {
   const database = resolveDatabase(options.database);
   const realmId = input.realmId ?? null;
@@ -2096,7 +2085,7 @@ export function prepareRealmShipConstruction(
   gameId: string,
   realmId: string,
   input: CreateShipInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},
 ) {
   const database = resolveDatabase(options.database);
   const settlementId = input.settlementId ?? null;
@@ -2168,7 +2157,7 @@ export function prepareRealmShipConstruction(
 export async function createTradeRoute(
   gameId: string,
   input: CreateTradeRouteInput,
-  options: { database?: DatabaseLike; idGenerator?: IdGenerator } = {},
+  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},
 ) {
   const database = resolveDatabase(options.database);
   const realm1Id = input.realm1Id ?? null;

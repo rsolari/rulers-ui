@@ -21,19 +21,6 @@ const LOCATION_TYPES: BuildingLocationType[] = ['settlement', 'territory'];
 const TAX_TYPES: TaxChangeFinancialAction['taxType'][] = ['Tribute', 'Levy'];
 const MATERIALS: FortificationMaterial[] = ['Timber', 'Stone'];
 
-export const BUILDING_ACTION_OPTIONS = BUILDING_TYPES.map((value) => ({ value, label: value }));
-export const TROOP_ACTION_OPTIONS = TROOP_TYPES.map((value) => ({ value, label: value }));
-export const SHIP_ACTION_OPTIONS = SHIP_TYPES.map((value) => ({ value, label: value }));
-export const TAX_ACTION_OPTIONS = TAX_TYPES.map((value) => ({ value, label: value }));
-export const WALL_SIZE_OPTIONS = ['Small', 'Medium', 'Large'].map((value) => ({ value, label: value }));
-export const FORTIFICATION_MATERIAL_OPTIONS = MATERIALS.map((value) => ({ value, label: value }));
-
-export const OUTSIDE_SETTLEMENT_BUILDING_TYPES = new Set<BuildingType>(['Castle', 'Fort', 'Walls', 'Watchtower']);
-export const VARIABLE_MATERIAL_BUILDING_TYPES = new Set<BuildingType>(['Gatehouse', 'Walls', 'Watchtower']);
-export const STANDALONE_WALL_SIZES = new Set<BuildingSize>(['Small', 'Medium', 'Large']);
-
-const ORDER_BUILDINGS = new Set<BuildingType>(['Chapel', 'Church', 'Cathedral']);
-const SOCIETY_BUILDINGS = new Set<BuildingType>(['Academy', 'College', 'University']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -77,66 +64,6 @@ function toOptionalNumber(value: unknown) {
 
 function toOptionalBoolean(value: unknown) {
   return typeof value === 'boolean' ? value : undefined;
-}
-
-export function getRequiredAllotmentType(buildingType: BuildingType) {
-  if (buildingType === 'Bank') return 'Guild';
-  if (ORDER_BUILDINGS.has(buildingType)) return 'Order';
-  if (SOCIETY_BUILDINGS.has(buildingType)) return 'Society';
-  return null;
-}
-
-export function createEmptyFinancialAction(type: FinancialAction['type'] = 'spending'): FinancialAction {
-  switch (type) {
-    case 'build':
-      return {
-        type,
-        buildingType: 'Theatre',
-        settlementId: null,
-        territoryId: null,
-        material: null,
-        wallSize: null,
-        ownerGosId: null,
-        allottedGosId: null,
-        description: '',
-        cost: 0,
-      };
-    case 'recruit':
-      return {
-        type,
-        troopType: 'Spearmen',
-        settlementId: null,
-        description: '',
-        cost: 0,
-      };
-    case 'constructShip':
-      return {
-        type,
-        shipType: 'Galley',
-        settlementId: null,
-        fleetId: null,
-        description: '',
-        cost: 0,
-      };
-    case 'taxChange':
-      return {
-        type,
-        taxType: 'Tribute',
-        description: '',
-        cost: 0,
-      };
-    case 'spending':
-    default:
-      return {
-        type: 'spending',
-        description: '',
-        cost: 0,
-      };
-  }
-}
-
-export function replaceFinancialActionType(type: FinancialAction['type']): FinancialAction {
-  return createEmptyFinancialAction(type);
 }
 
 function normalizeBuildFinancialAction(record: Record<string, unknown>): BuildFinancialAction | null {

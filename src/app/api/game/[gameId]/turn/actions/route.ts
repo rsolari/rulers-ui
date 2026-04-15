@@ -1,6 +1,7 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
-import { createAction, isTurnActionError, listCurrentActions } from '@/lib/turn-action-service';
+import { requireOwnedRealmAccess } from '@/lib/auth';
+import { createAction, listCurrentActions } from '@/lib/turn-action-service';
 import type { TurnActionCreateDto } from '@/types/game';
 
 export async function GET(
@@ -14,10 +15,8 @@ export async function GET(
     const { realmId } = await requireOwnedRealmAccess(gameId, requestedRealmId);
     return NextResponse.json(listCurrentActions(gameId, realmId));
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -32,10 +31,8 @@ export async function POST(
     const { realmId } = await requireOwnedRealmAccess(gameId, body.realmId);
     return NextResponse.json({ action: createAction(gameId, realmId, body) });
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

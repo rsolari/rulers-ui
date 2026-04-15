@@ -1,5 +1,6 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireRealmOwner, resolveSessionFromCookies } from '@/lib/auth';
+import { requireRealmOwner, resolveSessionFromCookies } from '@/lib/auth';
 import { getEconomyProjection } from '@/lib/economy-service';
 
 export async function GET(
@@ -36,10 +37,8 @@ export async function GET(
 
     return NextResponse.json(result.projection);
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

@@ -1,3 +1,4 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
@@ -12,7 +13,7 @@ import {
   generateNoblePersonality,
   generateNobleSkill,
 } from '@/lib/tables';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireOwnedRealmAccess } from '@/lib/auth';
 
 export async function GET(
   request: Request,
@@ -204,10 +205,8 @@ export async function POST(
 
     return NextResponse.json({ noble });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

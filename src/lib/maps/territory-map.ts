@@ -1,6 +1,6 @@
-import type { GameMapData } from '@/components/map/types';
 import type {
   CuratedMapDefinition,
+  GameMapData,
   MapFeatureType,
   MapHexKind,
   MapTerrainType,

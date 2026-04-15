@@ -22,14 +22,6 @@ export const INIT_STATE_TO_LEGACY_PHASE: Record<GameInitState, GamePhase> = {
   completed: 'Completed',
 };
 
-const PLAYER_SETUP_ORDER: Record<PlayerSetupState, number> = {
-  unclaimed: 0,
-  claimed: 1,
-  realm_created: 2,
-  ruler_created: 3,
-  ready: 4,
-};
-
 const PLAYER_SETUP_REQUIREMENT_LABELS = {
   realmCreated: 'realm created',
   rulerCreated: 'ruler created',
@@ -107,20 +99,6 @@ export function canPlayersJoin(initState: GameInitState) {
   return initState === 'player_invites_open'
     || initState === 'parallel_final_setup'
     || initState === 'ready_to_start';
-}
-
-export function canPlayerCreateRealm(initState: GameInitState) {
-  return initState === 'parallel_final_setup' || initState === 'ready_to_start';
-}
-
-export function isPlayerSetupStateAtLeast(current: PlayerSetupState, minimum: PlayerSetupState) {
-  return PLAYER_SETUP_ORDER[current] >= PLAYER_SETUP_ORDER[minimum];
-}
-
-export function assertPlayerSetupTransition(current: PlayerSetupState, next: PlayerSetupState) {
-  if (PLAYER_SETUP_ORDER[next] < PLAYER_SETUP_ORDER[current]) {
-    throw new Error(`Cannot move player setup state backward from ${current} to ${next}`);
-  }
 }
 
 export function deriveGameInitState(args: {
@@ -361,27 +339,3 @@ export async function setGMSetupState(gameId: string, nextState: GMSetupState) {
   return recomputeGameInitState(gameId);
 }
 
-export async function setPlayerSetupState(gameId: string, slotId: string, nextState: PlayerSetupState) {
-  const slot = await db.select().from(playerSlots)
-    .where(and(
-      eq(playerSlots.id, slotId),
-      eq(playerSlots.gameId, gameId),
-    ))
-    .get();
-
-  if (!slot) {
-    return null;
-  }
-
-  assertPlayerSetupTransition(slot.setupState, nextState);
-
-  await db.update(playerSlots)
-    .set({ setupState: nextState })
-    .where(eq(playerSlots.id, slotId));
-
-  await recomputeGameInitState(gameId);
-
-  return db.select().from(playerSlots)
-    .where(eq(playerSlots.id, slotId))
-    .get();
-}

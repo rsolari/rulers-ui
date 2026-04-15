@@ -136,37 +136,10 @@ export function calculateDicePool(troops: DicePoolTroop[]): {
   return { basicDice, eliteDice, totalDice: basicDice + eliteDice };
 }
 
-export function getConditionPenalty(condition: TroopCondition) {
-  switch (condition) {
-    case 'Wounded1':
-    case 'Wounded2':
-      return 1;
-    case 'Routed1':
-    case 'Routed2':
-      return 2;
-    case 'Defeated':
-    case 'Crushed':
-      return Number.POSITIVE_INFINITY;
-    default:
-      return 0;
-  }
-}
-
-export function advanceWoundCondition(condition: TroopCondition) {
+function advanceWoundCondition(condition: TroopCondition) {
   if (condition === 'Healthy') return 'Wounded1';
   if (condition === 'Wounded1') return 'Wounded2';
   return 'Routed1' as TroopCondition;
-}
-
-export function getMoraleModifier(unit: QuickCombatUnit, traditions: Tradition[] = []) {
-  let modifier = 0;
-
-  if (unit.class === 'Basic' && traditions.includes('HordeTactics')) modifier += 2;
-  if (unit.class === 'Elite' && traditions.includes('Chivalric')) modifier += 2;
-  if (unit.type === 'Cavalry' && traditions.includes('BornInTheSaddle')) modifier += 1;
-  if (unit.isImmortal) modifier += 2;
-
-  return modifier;
 }
 
 function getCasualtySeverity(margin: number): QuickCombatCasualtySeverity | null {

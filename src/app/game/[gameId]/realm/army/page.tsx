@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Tabs } from '@/components/ui/tabs';
 import { useRole } from '@/hooks/use-role';
+import { readErrorMessage } from '@/lib/http';
 import { SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import type { ShipType, TroopType } from '@/types/game';
 
@@ -107,7 +108,7 @@ type ShipConstructionOptionsBySettlement = Record<string, ShipConstructionOption
 async function fetchArmyData(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/armies?realmId=${realmId}`);
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, 'Failed to load armies'));
+    throw new Error(await readErrorMessage(response, 'Failed to load armies'));
   }
   const data = await response.json();
 
@@ -135,7 +136,7 @@ async function fetchFleetData(gameId: string, realmId: string) {
 async function fetchRealmSettlements(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`);
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, 'Failed to load settlements'));
+    throw new Error(await readErrorMessage(response, 'Failed to load settlements'));
   }
   return response.json() as Promise<SettlementSummary[]>;
 }
@@ -143,19 +144,11 @@ async function fetchRealmSettlements(gameId: string, realmId: string) {
 async function fetchRealmNobles(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`);
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, 'Failed to load nobles'));
+    throw new Error(await readErrorMessage(response, 'Failed to load nobles'));
   }
   return response.json() as Promise<RealmNoble[]>;
 }
 
-async function getErrorMessage(response: Response, fallback: string) {
-  const data = await response.json().catch(() => null);
-  if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' && data.error) {
-    return data.error;
-  }
-
-  return fallback;
-}
 
 export default function ArmyPage() {
   const params = useParams();
@@ -343,7 +336,7 @@ export default function ArmyPage() {
       });
 
       if (!response.ok) {
-        throw new Error(await getErrorMessage(response, 'Failed to create army'));
+        throw new Error(await readErrorMessage(response, 'Failed to create army'));
       }
 
       await refreshMilitaryState(gameId, realmId);

@@ -1,6 +1,7 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
-import { createComment, isTurnActionError, listComments } from '@/lib/turn-action-service';
+import { requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
+import { createComment, listComments } from '@/lib/turn-action-service';
 import type { ActionCommentCreateDto } from '@/types/game';
 
 function getActorLabel(role: 'player' | 'gm', displayName?: string | null) {
@@ -27,10 +28,8 @@ export async function GET(
     const { realmId } = await requireOwnedRealmAccess(gameId, session.realmId);
     return NextResponse.json({ comments: listComments(gameId, actionId, realmId) });
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -65,10 +64,8 @@ export async function POST(
       }, body.body, realmId),
     });
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

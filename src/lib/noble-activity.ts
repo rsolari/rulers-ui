@@ -1,13 +1,3 @@
-/**
- * Shared data-mapper for deriving a noble's "current activity" from
- * their offices, life-status flags, and GM freeform status text.
- *
- * Both the player nobles page and the GM governance panel consume this
- * so that the display stays consistent.
- */
-
-// ── Input types (match the shapes returned by the nobles GET endpoint) ──
-
 export interface NobleActivityInput {
   id: string;
   name: string;

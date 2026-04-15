@@ -3,17 +3,10 @@ import { NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { games, realms } from '@/db/schema';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { requireGM } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/api-errors';
+import { parseJson } from '@/lib/json';
 import type { Season, TurmoilSource } from '@/types/game';
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 /**
  * POST: Add a GM manual turmoil source to a realm
@@ -70,9 +63,8 @@ export async function POST(
 
     return NextResponse.json({ source, turmoilSources: updatedSources });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -116,9 +108,8 @@ export async function DELETE(
 
     return NextResponse.json({ removed: sourceId, turmoilSources: updatedSources });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

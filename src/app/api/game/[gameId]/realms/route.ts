@@ -1,9 +1,10 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { games, realms } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
+import { getGmCode, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
 import { getEconomyOverview } from '@/lib/economy-service';
 import { sanitizeTechnicalKnowledge } from '@/lib/technical-knowledge';
 
@@ -65,10 +66,8 @@ export async function POST(
 
     return NextResponse.json({ id, ...body, technicalKnowledge });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -143,10 +142,8 @@ export async function PATCH(
 
     return NextResponse.json({ updated: true });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

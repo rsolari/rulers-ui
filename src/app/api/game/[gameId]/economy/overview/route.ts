@@ -1,5 +1,6 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { requireGM } from '@/lib/auth';
 import { getEconomyOverview } from '@/lib/economy-service';
 
 export async function GET(
@@ -18,10 +19,8 @@ export async function GET(
 
     return NextResponse.json({ realms: result.realms });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

@@ -1,6 +1,7 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
-import { deleteAction, isTurnActionError, updateAction } from '@/lib/turn-action-service';
+import { requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
+import { deleteAction, updateAction } from '@/lib/turn-action-service';
 import type { TurnActionUpdateDto } from '@/types/game';
 
 function getActorLabel(role: 'player' | 'gm', displayName?: string | null) {
@@ -38,10 +39,8 @@ export async function PATCH(
       }, body),
     });
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -64,10 +63,8 @@ export async function DELETE(
     deleteAction(gameId, actionId, realmId);
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

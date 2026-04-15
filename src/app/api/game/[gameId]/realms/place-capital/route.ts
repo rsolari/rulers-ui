@@ -3,9 +3,11 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { buildings, games, industries, realms, resourceSites, settlements, territories } from '@/db/schema';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/api-errors';
+import { requireGM } from '@/lib/auth';
 import { isSettlementHexAvailable } from '@/lib/game-logic/maps';
 import { calculateRealmStartingTreasury, initializeRealmCapital } from '@/lib/game-logic/realm-bootstrap';
+import { parseJson } from '@/lib/json';
 import type { Season, Tradition } from '@/types/game';
 
 export async function POST(
@@ -86,10 +88,7 @@ export async function POST(
       );
     }
 
-    let traditions: Tradition[] = [];
-    try {
-      traditions = JSON.parse(realm.traditions || '[]');
-    } catch {}
+    const traditions = parseJson<Tradition[]>(realm.traditions, []);
 
     const territorySettlements = await db.select().from(settlements)
       .where(eq(settlements.territoryId, territoryId))
@@ -152,10 +151,8 @@ export async function POST(
       capitalName: trimmedCapitalName,
     }, { status: 201 });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

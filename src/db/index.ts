@@ -35,3 +35,5 @@ export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
   },
 });
 export type DB = ReturnType<typeof drizzle<typeof schema>>;
+export type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
+export type DatabaseExecutor = DB | Transaction;

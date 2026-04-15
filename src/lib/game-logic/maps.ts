@@ -6,7 +6,6 @@ import { WORLD_V1_MAP_DEFINITION } from '@/lib/maps/definitions/world-v1';
 import { buildCuratedTerritoryMapData, getTerritoryMapHexKey } from '@/lib/maps/territory-map';
 import type {
   CuratedMapDefinition,
-  CuratedMapHexDefinition,
   CuratedMapTerritoryDefinition,
   HexCoordinate,
 } from '@/lib/maps/types';
@@ -145,25 +144,6 @@ export function getActiveCuratedMapTerritories(mapKey: string, territoryCount: n
   }
 
   return territories.slice(0, territoryCount);
-}
-
-export function getReachableAdjacentHexes(
-  definition: CuratedMapDefinition,
-  origin: HexCoordinate,
-) {
-  const hexesByKey = new Map(definition.hexes.map((hex) => [getHexCoordKey(hex.q, hex.r), hex]));
-
-  return getHexNeighbors(origin)
-    .map((coordinate) => hexesByKey.get(getHexCoordKey(coordinate.q, coordinate.r)))
-    .filter((hex): hex is CuratedMapHexDefinition => Boolean(hex));
-}
-
-export function deriveTerritoryKeyFromHex(
-  definition: CuratedMapDefinition,
-  coordinate: HexCoordinate,
-) {
-  const hex = definition.hexes.find((entry) => entry.q === coordinate.q && entry.r === coordinate.r);
-  return hex?.kind === 'land' ? hex.territoryKey : null;
 }
 
 export function importCuratedGameMap(

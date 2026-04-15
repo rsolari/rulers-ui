@@ -11,6 +11,7 @@ import {
   troops,
 } from '@/db/schema';
 import { BUILDING_DEFS, getTraditionGrantedBuildings } from '@/lib/game-logic/constants';
+import { parseJson } from '@/lib/json';
 import { generateRealmStartingPackage } from '@/lib/game-logic/map-generation';
 import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
 import { projectEconomyForRealm, type EconomyRealmInput } from './economy';
@@ -78,16 +79,6 @@ interface CalculateRealmStartingTreasuryOptions {
   industries: StartingTreasuryIndustryRow[];
   traditions?: Tradition[];
   taxType?: TaxType;
-}
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 export function calculateRealmStartingTreasury({

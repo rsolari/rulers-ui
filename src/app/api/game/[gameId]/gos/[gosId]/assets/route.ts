@@ -1,3 +1,4 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import {
@@ -13,7 +14,7 @@ import {
   troops,
 } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireOwnedRealmAccess } from '@/lib/auth';
 
 export async function GET(
   _request: Request,
@@ -149,10 +150,8 @@ export async function GET(
       fleets: gosFleets,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

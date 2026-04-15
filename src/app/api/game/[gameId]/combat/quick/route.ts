@@ -1,6 +1,7 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireGM } from '@/lib/auth';
-import { isQuickCombatError, resolveArmyQuickCombat } from '@/lib/game-logic/quick-combat-service';
+import { requireGM } from '@/lib/auth';
+import { resolveArmyQuickCombat } from '@/lib/game-logic/quick-combat-service';
 
 export async function POST(
   request: Request,
@@ -27,17 +28,8 @@ export async function POST(
 
     return NextResponse.json(result);
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isQuickCombatError(error)) {
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-      }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

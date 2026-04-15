@@ -1,8 +1,8 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { isAuthError, requireGame, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireGame, requireOwnedRealmAccess } from '@/lib/auth';
 import { designateHeir } from '@/lib/game-logic/governance';
-import { isGovernanceError } from '@/lib/game-logic/nobles';
 
 export async function POST(
   request: Request,
@@ -28,14 +28,8 @@ export async function POST(
       heirNobleId: result?.id ?? null,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

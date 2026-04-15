@@ -1,9 +1,10 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { resourceSites, territories } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
-import { isAuthError, requireGM } from '@/lib/auth';
-import { createResourceSite, isRuleValidationError } from '@/lib/rules-action-service';
+import { requireGM } from '@/lib/auth';
+import { createResourceSite } from '@/lib/rules-action-service';
 
 export async function GET(
   request: Request,
@@ -38,18 +39,8 @@ export async function POST(
 
     return NextResponse.json(created.row, { status: 201 });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isRuleValidationError(error)) {
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-        details: error.details ?? null,
-      }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

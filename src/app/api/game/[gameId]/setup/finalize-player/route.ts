@@ -1,5 +1,6 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requirePlayerSlot } from '@/lib/auth';
+import { requirePlayerSlot } from '@/lib/auth';
 import { getGameSetupReadiness, recomputeGameInitState } from '@/lib/game-init-state';
 
 export async function POST(
@@ -39,10 +40,8 @@ export async function POST(
       checklist: playerStatus.checklist,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

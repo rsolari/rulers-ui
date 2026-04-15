@@ -5,9 +5,7 @@ import type {
   ShipQuality, ShipType, WaterZoneType,
 } from '@/types/game';
 
-// ============================================================
-// Building Size Costs
-// ============================================================
+// --- Building Size Costs ---
 
 export const BUILDING_SIZE_DATA: Record<BuildingSize, {
   buildTime: number;
@@ -21,9 +19,7 @@ export const BUILDING_SIZE_DATA: Record<BuildingSize, {
   Colossal: { buildTime: 6, buildCost: 6000, maintenance: 4000 },
 };
 
-// ============================================================
-// Building Definitions
-// ============================================================
+// --- Building Definitions ---
 
 export interface BuildingDef {
   type: BuildingType;
@@ -83,9 +79,7 @@ export function getEligibleBuildingUpgradeTargets(
   ));
 }
 
-// ============================================================
-// Troop Definitions
-// ============================================================
+// --- Troop Definitions ---
 
 export interface TroopDef {
   type: TroopType;
@@ -134,9 +128,7 @@ export const TROOP_DEFS: Record<TroopType, TroopDef> = {
   Dragoons:      { type: 'Dragoons',      class: 'Elite', armourTypes: ['Light', 'Mounted'],    requires: ['Gunsmith', 'Stables'],           upkeep: 750,  bonus: '+2 vs Armoured',              combatBonuses: [{ target: 'Armoured', value: 2 }] },
 };
 
-// ============================================================
-// Siege Unit Definitions
-// ============================================================
+// --- Siege Unit Definitions ---
 
 export interface SiegeUnitDef {
   type: SiegeUnitType;
@@ -155,9 +147,7 @@ export const SIEGE_UNIT_DEFS: Record<SiegeUnitType, SiegeUnitDef> = {
   Cannon:       { type: 'Cannon',       requires: 'CannonFoundry',  upkeep: 1500, constructionTurns: 3, bonus: '+2 vs Walls',     combatBonuses: [{ target: 'Walls', value: 2 }] },
 };
 
-// ============================================================
-// Naval Unit Definitions
-// ============================================================
+// --- Naval Unit Definitions ---
 
 export interface ShipDef {
   type: ShipType;
@@ -290,9 +280,7 @@ export const SHIP_DEFS: Record<ShipType, ShipDef> = {
   },
 };
 
-// ============================================================
-// Settlement Data
-// ============================================================
+// --- Settlement Data ---
 
 export const SETTLEMENT_DATA: Record<SettlementSize, {
   buildingSlots: number;
@@ -317,9 +305,7 @@ export const TERRITORY_FOOD_CAP = 30;
 // Wealth per food produced
 export const FOOD_WEALTH = 2000;
 
-// ============================================================
-// Resource Wealth
-// ============================================================
+// --- Resource Wealth ---
 
 export const RESOURCE_BASE_WEALTH: Record<ResourceRarity, number> = {
   Common: 10000,
@@ -375,9 +361,7 @@ export const RESOURCE_RARITY: Record<ResourceType, ResourceRarity> = {
   Opium: 'Luxury', Salt: 'Luxury', Sugar: 'Luxury',
 };
 
-// ============================================================
-// Tax Rates and Turmoil
-// ============================================================
+// --- Tax Rates and Turmoil ---
 
 export const TAX_RATES: Record<TaxType, number> = {
   Tribute: 0.15,
@@ -389,9 +373,7 @@ export const TAX_TURMOIL: Record<TaxType, number> = {
   Levy: 10,
 };
 
-// ============================================================
-// Estate Costs
-// ============================================================
+// --- Estate Costs ---
 
 export const ESTATE_COSTS: Record<EstateLevel, number> = {
   Meagre:      125,
@@ -401,9 +383,7 @@ export const ESTATE_COSTS: Record<EstateLevel, number> = {
   Luxurious:   2000,
 };
 
-// ============================================================
-// Trade Constants
-// ============================================================
+// --- Trade Constants ---
 
 export const TRADE_BONUS_PER_PRODUCT = 0.05;     // 5% per product exported
 export const MERCANTILE_TRADE_BONUS = 0.10;       // additional 10%
@@ -423,9 +403,7 @@ export const QUALITY_TIERS = {
   'HighQuality+3': 8,
 } as const;
 
-// ============================================================
-// GOS Income
-// ============================================================
+// --- GOS Income ---
 
 export const GUILD_INCOME: Record<string, number> = {
   Common: 1200,
@@ -441,9 +419,7 @@ export const SOCIETY_INCOME: Record<BuildingSize, number> = {
   Tiny: 100, Small: 200, Medium: 400, Large: 800, Colossal: 1600,
 };
 
-// ============================================================
-// Fortification Defence Ratings
-// ============================================================
+// --- Fortification Defence Ratings ---
 
 export const FORTIFICATION_DEFENCE: Record<string, number> = {
   'Wooden Walls': 2, 'Wooden Gatehouse': 4, 'Wooden Watchtower': 3,
@@ -451,25 +427,7 @@ export const FORTIFICATION_DEFENCE: Record<string, number> = {
   'Fort': 6, 'Castle': 8,
 };
 
-// ============================================================
-// Turmoil Table (failures -> result)
-// ============================================================
-
-export const TURMOIL_TABLE: Record<number, string> = {
-  1: 'Written demands for change',
-  2: 'A Noble supports these demands',
-  3: 'Protests (1d3 locations)',
-  4: 'Strikes (1d3 locations)',
-  5: 'Riots (1d3 locations)',
-  6: 'Armed Revolt (1d3 locations)',
-  7: 'Armed revolt, supported by Nobles',
-  8: 'A Rebellion led by nobles',
-  9: 'Rioting, Looting, Arson, Armed Revolt and Rebellion (1d6 locations)',
-};
-
-// ============================================================
-// Noble Personality Generation Tables
-// ============================================================
+// --- Noble Personality Generation Tables ---
 
 export const PERSONALITY_TABLE = [
   'Quiet and Thoughtful', 'Nervous and Pensive', 'Headstrong and Reckless',
@@ -512,9 +470,7 @@ export const GREATEST_DESIRE_TABLE = [
   'Glory', 'Vengeance', 'Travel', 'Fame', 'Harmony',
 ];
 
-// ============================================================
-// Tradition Effects
-// ============================================================
+// --- Tradition Effects ---
 
 export interface TraditionDef {
   name: Tradition;
@@ -551,9 +507,7 @@ export function getTraditionGrantedBuildings(traditions: readonly Tradition[]) {
   }))];
 }
 
-// ============================================================
-// Seasons order
-// ============================================================
+// --- Seasons order ---
 
 export const SEASONS: Season[] = ['Spring', 'Summer', 'Autumn', 'Winter'];
 

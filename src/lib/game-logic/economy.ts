@@ -296,7 +296,30 @@ export interface EconomyResult {
   pendingBuildings: EconomyPendingBuilding[];
   pendingTroops: EconomyPendingTroop[];
   pendingShips: EconomyPendingShip[];
-  summary: Record<string, unknown>;
+  summary: EconomySnapshotSummary;
+}
+
+interface EconomySnapshotSummary {
+  grossSettlementWealth: number;
+  gosRevenue: number;
+  foodProduced: number;
+  foodNeeded: number;
+  foodSurplus: number;
+  modifierRevenue: number;
+  modifierCosts: number;
+  theoreticalBuildingUpkeep: number;
+  paidBuildingUpkeep: number;
+  buildingReduction: number;
+  openingTurmoil: number;
+  closingTurmoil: number;
+  consecutiveFoodShortageSeasons: number;
+  consecutiveFoodRecoverySeasons: number;
+  pendingBuildings: number;
+  pendingTroops: number;
+  pendingShips: number;
+  seasonalModifierCount: number;
+  warningCount: number;
+  validationWarnings?: string[];
 }
 
 interface TaxResolution {

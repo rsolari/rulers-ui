@@ -1,8 +1,9 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { playerSlots, territories } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { requireGM } from '@/lib/auth';
 import { getGameSetupReadiness } from '@/lib/game-init-state';
 
 export async function GET(
@@ -30,10 +31,8 @@ export async function GET(
       missingRequirements: setupStatusBySlotId.get(slot.id)?.missingRequirements ?? [],
     })));
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

@@ -49,8 +49,7 @@ function orderRiverHexes(hexes: RiverHexInput[]): RiverHexInput[][] {
     visited.add(key);
 
     let current = start;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    for (;;) {
       const next = getNeighbors(current).find((n) => !visited.has(coordKey(n.q, n.r)));
       if (!next) {
         break;
@@ -76,8 +75,7 @@ function orderRiverHexes(hexes: RiverHexInput[]): RiverHexInput[][] {
     visited.add(key);
 
     let current = hex;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    for (;;) {
       const next = getNeighbors(current).find((n) => !visited.has(coordKey(n.q, n.r)));
       if (!next) {
         break;

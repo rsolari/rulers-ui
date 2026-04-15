@@ -13,15 +13,15 @@ const PERSONALITY_FIELDS = [
 const VALID_FIELDS = new Set([...PERSONALITY_FIELDS, 'gender', 'age']);
 
 export async function POST(request: Request) {
-  let body: { fields?: unknown };
+  let body: { fields?: string[] };
   try {
-    body = await request.json() as { fields?: unknown };
+    body = await request.json() as { fields?: string[] };
   } catch {
     return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 });
   }
 
   const requestedFields: string[] = Array.isArray(body.fields) && body.fields.length > 0
-    ? body.fields.filter((field: unknown): field is string => typeof field === 'string')
+    ? body.fields.filter((field): field is string => typeof field === 'string')
     : [...PERSONALITY_FIELDS, 'gender', 'age'];
 
   if (requestedFields.some((field) => !VALID_FIELDS.has(field))) {

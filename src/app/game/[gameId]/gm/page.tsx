@@ -184,9 +184,6 @@ function getSetupStateBadgeVariant(setupState: string): 'default' | 'gold' | 'gr
   return 'default';
 }
 
-async function getErrorMessage(response: Response, fallback: string) {
-  return readErrorMessage(response, fallback);
-}
 
 export default function GMDashboard() {
   const params = useParams();
@@ -246,12 +243,12 @@ export default function GMDashboard() {
       ]);
 
       if (!gameResponse.ok) {
-        throw new Error(await getErrorMessage(gameResponse, 'Failed to load the GM dashboard'));
+        throw new Error(await readErrorMessage(gameResponse, 'Failed to load the GM dashboard'));
       }
 
       if (!realmsResponse.ok || !territoriesResponse.ok || !slotsResponse.ok) {
         const failingResponse = [realmsResponse, territoriesResponse, slotsResponse].find((response) => !response.ok);
-        throw new Error(await getErrorMessage(failingResponse!, 'Failed to load GM-only setup data'));
+        throw new Error(await readErrorMessage(failingResponse!, 'Failed to load GM-only setup data'));
       }
 
       setGame(await gameResponse.json());
@@ -316,7 +313,7 @@ export default function GMDashboard() {
       const response = await fetch(`/api/game/${gameId}/start`, { method: 'POST' });
 
       if (!response.ok) {
-        setError(await getErrorMessage(response, 'Failed to start the game'));
+        setError(await readErrorMessage(response, 'Failed to start the game'));
         return;
       }
 
@@ -334,7 +331,7 @@ export default function GMDashboard() {
       const response = await fetch(`/api/game/${gameId}/setup/gm-ready`, { method: 'POST' });
 
       if (!response.ok) {
-        setError(await getErrorMessage(response, 'Failed to mark GM setup as ready'));
+        setError(await readErrorMessage(response, 'Failed to mark GM setup as ready'));
         return;
       }
 
@@ -408,7 +405,7 @@ export default function GMDashboard() {
       });
 
       if (!response.ok) {
-        setError(await getErrorMessage(response, 'Failed to save the realm'));
+        setError(await readErrorMessage(response, 'Failed to save the realm'));
         return;
       }
 
@@ -437,7 +434,7 @@ export default function GMDashboard() {
         }),
       });
       if (!response.ok) {
-        setError(await getErrorMessage(response, 'Failed to add turmoil source'));
+        setError(await readErrorMessage(response, 'Failed to add turmoil source'));
         return;
       }
       setTurmoilForm(null);
@@ -455,7 +452,7 @@ export default function GMDashboard() {
       body: JSON.stringify({ realmId, sourceId }),
     });
     if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to remove turmoil source'));
+      setError(await readErrorMessage(response, 'Failed to remove turmoil source'));
       return;
     }
     await loadDashboard();
@@ -471,7 +468,7 @@ export default function GMDashboard() {
     });
 
     if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to update territory ownership'));
+      setError(await readErrorMessage(response, 'Failed to update territory ownership'));
       return;
     }
 
@@ -492,13 +489,13 @@ export default function GMDashboard() {
       body: JSON.stringify({ territoryId, ...updates }),
     });
     if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to update territory'));
+      setError(await readErrorMessage(response, 'Failed to update territory'));
       return;
     }
     await loadDashboard();
   }
 
-  async function saveSettlement(settlementId: string, updates: Record<string, unknown>) {
+  async function saveSettlement(settlementId: string, updates: { name?: string; size?: string }) {
     setError('');
     const response = await fetch(`/api/game/${gameId}/settlements`, {
       method: 'PATCH',
@@ -506,7 +503,7 @@ export default function GMDashboard() {
       body: JSON.stringify({ settlementId, ...updates }),
     });
     if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to update settlement'));
+      setError(await readErrorMessage(response, 'Failed to update settlement'));
       return;
     }
     await loadDashboard();
@@ -521,7 +518,7 @@ export default function GMDashboard() {
       body: JSON.stringify({ settlementId }),
     });
     if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to delete settlement'));
+      setError(await readErrorMessage(response, 'Failed to delete settlement'));
       return;
     }
     await loadDashboard();
@@ -536,7 +533,7 @@ export default function GMDashboard() {
       body: JSON.stringify({ targetRealmId: transferTargetRealmId, transferTerritory }),
     });
     if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to transfer settlement'));
+      setError(await readErrorMessage(response, 'Failed to transfer settlement'));
       return;
     }
     setTransferringSettlementId(null);
@@ -554,7 +551,7 @@ export default function GMDashboard() {
       body: JSON.stringify({ territoryId, name, size, realmId: territory?.realmId ?? null, hexId }),
     });
     if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to create settlement'));
+      setError(await readErrorMessage(response, 'Failed to create settlement'));
       return;
     }
     setAddingSettlement(null);
@@ -569,7 +566,7 @@ export default function GMDashboard() {
       body: JSON.stringify({ buildingId }),
     });
     if (!response.ok) {
-      setError(await getErrorMessage(response, 'Failed to delete building'));
+      setError(await readErrorMessage(response, 'Failed to delete building'));
       return;
     }
     await loadDashboard();
@@ -592,7 +589,7 @@ export default function GMDashboard() {
         }),
       });
       if (!response.ok) {
-        setError(await getErrorMessage(response, 'Failed to place capital'));
+        setError(await readErrorMessage(response, 'Failed to place capital'));
         return;
       }
       setCapitalPlacement(null);
@@ -612,7 +609,7 @@ export default function GMDashboard() {
         body: JSON.stringify({ settlementId, type, instant: true, gmOverride: true }),
       });
       if (!response.ok) {
-        setError(await getErrorMessage(response, 'Failed to add building'));
+        setError(await readErrorMessage(response, 'Failed to add building'));
         return;
       }
       setAddingBuilding(null);
@@ -639,7 +636,7 @@ export default function GMDashboard() {
         }),
       });
       if (!response.ok) {
-        setError(await getErrorMessage(response, 'Failed to recruit troop'));
+        setError(await readErrorMessage(response, 'Failed to recruit troop'));
         return;
       }
       setAddingTroop(null);

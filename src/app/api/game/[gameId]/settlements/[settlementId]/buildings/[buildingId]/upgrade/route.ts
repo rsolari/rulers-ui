@@ -1,8 +1,9 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { buildings, settlements } from '@/db/schema';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireOwnedRealmAccess } from '@/lib/auth';
 import {
   BUILDING_DEFS,
   BUILDING_SIZE_DATA,
@@ -111,10 +112,8 @@ export async function GET(
       ),
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -166,18 +165,8 @@ export async function POST(
       notes: upgraded.notes,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isRuleValidationError(error)) {
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-        details: error.details ?? null,
-      }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

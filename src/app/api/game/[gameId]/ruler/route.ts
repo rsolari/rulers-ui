@@ -3,10 +3,10 @@ import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { nobleFamilies, nobles, realms } from '@/db/schema';
-import { isAuthError, requireInitState, requireRealmOwner, resolveSessionFromCookies } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/api-errors';
+import { requireInitState, requireRealmOwner, resolveSessionFromCookies } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { appointRuler } from '@/lib/game-logic/governance';
-import { isGovernanceError } from '@/lib/game-logic/nobles';
 
 async function getRulerByRealmId(realmId: string) {
   return db.select({
@@ -196,13 +196,8 @@ export async function POST(
     await recomputeGameInitState(gameId);
     return NextResponse.json(created, { status: created.status });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
 
     const message = error instanceof Error ? error.message : 'Failed to create ruler';
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,5 +1,6 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireGM, requireInitState } from '@/lib/auth';
+import { requireGM, requireInitState } from '@/lib/auth';
 import { getGameSetupReadiness, setGMSetupState, toLegacyGamePhase } from '@/lib/game-init-state';
 
 export async function POST(
@@ -31,10 +32,8 @@ export async function POST(
         })) ?? [],
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

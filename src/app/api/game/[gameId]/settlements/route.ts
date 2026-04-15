@@ -1,12 +1,13 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { buildings, games, nobles, settlements, territories, troops, siegeUnits } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { getGmCode, isAuthError, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
+import { getGmCode, requireGM, requireInitState, requireRealmOwner } from '@/lib/auth';
 import { getAvailableSettlementHexId, getLandHexById } from '@/lib/game-logic/maps';
 import { recomputeGameInitState } from '@/lib/game-init-state';
-import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
+import { assertNobleCanHoldExclusiveOffice } from '@/lib/game-logic/nobles';
 
 type GoverningNobleSummary = {
   id: string;
@@ -203,14 +204,8 @@ export async function POST(
 
     return NextResponse.json({ id, ...body });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -315,14 +310,8 @@ export async function PATCH(
 
     return NextResponse.json({ updated: true });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -347,14 +336,8 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

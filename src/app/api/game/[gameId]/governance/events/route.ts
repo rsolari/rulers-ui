@@ -1,7 +1,8 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { isAuthError, requireGM } from '@/lib/auth';
-import { createGovernanceEvent, isGovernanceError, requireRealm } from '@/lib/game-logic/nobles';
+import { requireGM } from '@/lib/auth';
+import { createGovernanceEvent, requireRealm } from '@/lib/game-logic/nobles';
 
 export async function POST(
   request: Request,
@@ -32,14 +33,8 @@ export async function POST(
 
     return NextResponse.json({ event });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

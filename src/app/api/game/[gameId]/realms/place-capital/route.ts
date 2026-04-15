@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { realms, territories } from '@/db/schema';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/api-errors';
+import { requireGM } from '@/lib/auth';
 import { isSettlementHexAvailable } from '@/lib/game-logic/maps';
 import { initializeRealmCapital } from '@/lib/game-logic/realm-bootstrap';
+import { parseJson } from '@/lib/json';
 import type { Tradition } from '@/types/game';
 
 export async function POST(
@@ -71,10 +73,7 @@ export async function POST(
       );
     }
 
-    let traditions: Tradition[] = [];
-    try {
-      traditions = JSON.parse(realm.traditions || '[]');
-    } catch {}
+    const traditions = parseJson<Tradition[]>(realm.traditions, []);
 
     const result = db.transaction((tx) => {
       return initializeRealmCapital(tx, {
@@ -92,10 +91,8 @@ export async function POST(
       capitalName: capitalName.trim(),
     }, { status: 201 });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

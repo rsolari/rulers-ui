@@ -7,6 +7,19 @@ import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState } from '@
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
+const NULL_SESSION: PublicSession = {
+  role: null,
+  gameId: null,
+  realmId: null,
+  gamePhase: null,
+  initState: null,
+  gmSetupState: null,
+  playerSetupState: null,
+  displayName: null,
+  territoryId: null,
+  claimCode: null,
+};
+
 export const sessionCookieOptions = {
   path: '/',
   httpOnly: true,
@@ -67,16 +80,6 @@ export async function getGmCode(): Promise<string | null> {
   return getCookieValue('rulers-gm-code');
 }
 
-export async function getGameRole(): Promise<'gm' | 'player' | null> {
-  const session = await resolveSessionFromCookies();
-  return session.role;
-}
-
-export async function getGameId(): Promise<string | null> {
-  const session = await resolveSessionFromCookies();
-  return session.gameId;
-}
-
 export async function getRealmId(): Promise<string | null> {
   const session = await resolveSessionFromCookies();
   return session.realmId;
@@ -86,66 +89,29 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
   const gameId = await getGameIdCookie();
 
   if (!gameId) {
-    return {
-      role: null,
-      gameId: null,
-      realmId: null,
-      gamePhase: null,
-      initState: null,
-      gmSetupState: null,
-      playerSetupState: null,
-      displayName: null,
-      territoryId: null,
-      claimCode: null,
-    };
+    return NULL_SESSION;
   }
 
   const game = await db.select().from(games).where(eq(games.id, gameId)).get();
   if (!game) {
-    return {
-      role: null,
-      gameId: null,
-      realmId: null,
-      gamePhase: null,
-      initState: null,
-      gmSetupState: null,
-      playerSetupState: null,
-      displayName: null,
-      territoryId: null,
-      claimCode: null,
-    };
+    return NULL_SESSION;
   }
 
   const gmCode = await getGmCode();
   if (gmCode && gmCode === game.gmCode) {
     return {
+      ...NULL_SESSION,
       role: 'gm',
       gameId: game.id,
-      realmId: null,
       gamePhase: toLegacyGamePhase(game.initState),
       initState: game.initState,
       gmSetupState: game.gmSetupState,
-      playerSetupState: null,
-      displayName: null,
-      territoryId: null,
-      claimCode: null,
     };
   }
 
   const claimCode = await getClaimCode();
   if (!claimCode) {
-    return {
-      role: null,
-      gameId: null,
-      realmId: null,
-      gamePhase: null,
-      initState: null,
-      gmSetupState: null,
-      playerSetupState: null,
-      displayName: null,
-      territoryId: null,
-      claimCode: null,
-    };
+    return NULL_SESSION;
   }
 
   const slot = await db.select().from(playerSlots)
@@ -156,21 +122,11 @@ export async function resolveSessionFromCookies(): Promise<PublicSession> {
     .get();
 
   if (!slot) {
-    return {
-      role: null,
-      gameId: null,
-      realmId: null,
-      gamePhase: null,
-      initState: null,
-      gmSetupState: null,
-      playerSetupState: null,
-      displayName: null,
-      territoryId: null,
-      claimCode: null,
-    };
+    return NULL_SESSION;
   }
 
   return {
+    ...NULL_SESSION,
     role: 'player',
     gameId: game.id,
     realmId: slot.realmId ?? null,
@@ -225,18 +181,6 @@ export async function requirePlayerSlot(gameId: string) {
   }
 
   return slot;
-}
-
-export async function requireGamePhase(gameId: string, ...allowedPhases: GamePhase[]) {
-  const game = await requireGame(gameId);
-
-  const currentPhase = toLegacyGamePhase(game.initState);
-
-  if (!allowedPhases.includes(currentPhase)) {
-    throw new AuthError(`Game must be in ${allowedPhases.join(' or ')}`, 403);
-  }
-
-  return game;
 }
 
 export async function requireInitState(gameId: string, ...allowedStates: GameInitState[]) {

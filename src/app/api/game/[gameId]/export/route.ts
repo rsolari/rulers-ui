@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import { resolveDatabasePath } from '@/db/path';
-import { requireGM, isAuthError } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/api-errors';
+import { requireGM } from '@/lib/auth';
 
 export async function GET(
   _request: Request,
@@ -29,9 +30,8 @@ export async function GET(
       },
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: (error as Error).message }, { status: 403 });
-    }
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

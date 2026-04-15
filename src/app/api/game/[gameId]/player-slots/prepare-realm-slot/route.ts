@@ -1,9 +1,10 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { buildings, playerSlots, resourceSites, settlements, territories } from '@/db/schema';
-import { generateGameCode, isAuthError, requireGM, requireInitState } from '@/lib/auth';
+import { generateGameCode, requireGM, requireInitState } from '@/lib/auth';
 import { isSettlementHexAvailable } from '@/lib/game-logic/maps';
 import { getStartingSettlementFortifications } from '@/lib/game-logic/starting-fortifications';
 import type { ResourceRarity, ResourceType, SettlementSize } from '@/types/game';
@@ -156,10 +157,8 @@ export async function POST(
       settlementCount: settlementInputs.length,
     }, { status: 201 });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

@@ -1,6 +1,7 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
-import { isAuthError, requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
-import { getTurnHistory, isTurnActionError } from '@/lib/turn-action-service';
+import { requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
+import { getTurnHistory } from '@/lib/turn-action-service';
 
 export async function GET(
   request: Request,
@@ -23,10 +24,8 @@ export async function GET(
     const { realmId } = await requireOwnedRealmAccess(gameId, requestedRealmId);
     return NextResponse.json(getTurnHistory(gameId, realmId));
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

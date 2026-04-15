@@ -1,8 +1,9 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { guildsOrdersSocieties } from '@/db/schema';
-import { isAuthError, requireGame, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireGame, requireOwnedRealmAccess } from '@/lib/auth';
 import { assignGosLeader } from '@/lib/game-logic/governance';
 import { isGovernanceError } from '@/lib/game-logic/nobles';
 
@@ -33,14 +34,8 @@ export async function POST(
 
     return NextResponse.json({ gosId, leaderId });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

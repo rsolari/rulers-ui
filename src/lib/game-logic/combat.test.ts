@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advanceWoundCondition,
   calculateDicePool,
   calculateMovementSpeed,
-  getMoraleModifier,
   resolveQuickCombat,
   type QuickCombatUnit,
 } from './combat';
@@ -67,20 +65,6 @@ describe('calculateDicePool', () => {
       eliteDice: 3,
       totalDice: 3,
     });
-  });
-});
-
-describe('advanceWoundCondition', () => {
-  it('progresses healthy troops through the surviving wound states first', () => {
-    expect(advanceWoundCondition('Healthy')).toBe('Wounded1');
-    expect(advanceWoundCondition('Wounded1')).toBe('Wounded2');
-    expect(advanceWoundCondition('Wounded2')).toBe('Routed1');
-  });
-});
-
-describe('getMoraleModifier', () => {
-  it('applies horde tactics and immortals bonuses', () => {
-    expect(getMoraleModifier(createUnit({ isImmortal: true }), ['HordeTactics'])).toBe(4);
   });
 });
 

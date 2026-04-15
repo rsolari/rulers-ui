@@ -1,8 +1,9 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { realms, turnEvents } from '@/db/schema';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { requireGM } from '@/lib/auth';
 import { parseJson } from '@/lib/json';
 import type { Season, TurnEventStatus, TurmoilSource } from '@/types/game';
 
@@ -140,10 +141,8 @@ export async function PATCH(
       payload,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

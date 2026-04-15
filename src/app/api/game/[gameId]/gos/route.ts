@@ -1,12 +1,13 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { gosRealms, guildsOrdersSocieties, nobles, realms } from '@/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { isAuthError, requireGM, requireRealmOwner } from '@/lib/auth';
+import { requireGM, requireRealmOwner } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { parseJson } from '@/lib/json';
-import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
+import { assertNobleCanHoldExclusiveOffice } from '@/lib/game-logic/nobles';
 
 function normalizeRealmIds(body: Record<string, unknown>) {
   const requestedRealmIds = Array.isArray(body.realmIds)
@@ -172,14 +173,8 @@ export async function POST(
       centreNames: Array.isArray(body.centreNames) ? body.centreNames : [],
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -224,7 +219,7 @@ export async function PATCH(
       }
 
       if (Array.isArray(body.realmIds)) {
-        const filtered = (body.realmIds as unknown[])
+        const filtered = (body.realmIds as string[])
           .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
           .map((v) => v.trim());
         const newRealmIds = [...new Set(filtered)];
@@ -240,10 +235,8 @@ export async function PATCH(
 
     return NextResponse.json({ updated: true });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

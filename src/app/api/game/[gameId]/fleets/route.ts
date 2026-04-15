@@ -1,13 +1,14 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { fleets, nobles, settlements, ships, territories } from '@/db/schema';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireOwnedRealmAccess } from '@/lib/auth';
 import { getDefaultFleetHexId, getWaterHexById } from '@/lib/game-logic/maps';
 import { SHIP_DEFS } from '@/lib/game-logic/constants';
 import { recomputeGameInitState } from '@/lib/game-init-state';
-import { assertNobleCanHoldExclusiveOffice, isGovernanceError } from '@/lib/game-logic/nobles';
+import { assertNobleCanHoldExclusiveOffice } from '@/lib/game-logic/nobles';
 import { isRuleValidationError, prepareRealmShipConstruction } from '@/lib/rules-action-service';
 import type { ShipType, WaterZoneType } from '@/types/game';
 
@@ -117,10 +118,8 @@ export async function GET(
       ),
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -256,14 +255,8 @@ export async function POST(
       waterZoneType: inferredZone,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

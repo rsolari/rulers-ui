@@ -1,9 +1,10 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { nobleFamilies, nobles, realms } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { isAuthError, requireOwnedRealmAccess } from '@/lib/auth';
+import { requireOwnedRealmAccess } from '@/lib/auth';
 
 export async function GET(
   _request: Request
@@ -55,10 +56,8 @@ export async function POST(
       isRulingFamily: Boolean(body.isRulingFamily),
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

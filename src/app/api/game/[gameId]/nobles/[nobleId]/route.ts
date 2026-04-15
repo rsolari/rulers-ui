@@ -1,9 +1,9 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { nobleFamilies, nobles, realms } from '@/db/schema';
 import {
-  isAuthError,
   requireGM,
   requireOwnedRealmAccess,
   resolveSessionFromCookies,
@@ -249,10 +249,8 @@ export async function PATCH(
       updated: true,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

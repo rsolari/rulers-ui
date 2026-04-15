@@ -19,7 +19,7 @@ const TECHNICAL_KNOWLEDGE_OPTION_SET = new Set(
 );
 
 export function parseTechnicalKnowledge(value: string | null | undefined): TechnicalKnowledgeKey[] {
-  const parsed = parseJson<unknown>(value, []);
+  const parsed = parseJson<string[]>(value, []);
   if (!Array.isArray(parsed)) {
     return [];
   }

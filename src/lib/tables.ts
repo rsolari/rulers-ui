@@ -34,18 +34,6 @@ export function generateNobleAge(): AgeCategory {
   return 'Elderly';
 }
 
-export function generateNobleFamilyCount(): number {
-  return rollDice(4, 1)[0];
-}
-
-export function generateFamilyMemberCount(): number {
-  return rollDice(6, 1)[0];
-}
-
-export function generateChildCount(): number {
-  return rollDice(4, 1)[0];
-}
-
 export function generateNobleSkill(): number {
   return countSuccesses(rollDice(6, 5));
 }

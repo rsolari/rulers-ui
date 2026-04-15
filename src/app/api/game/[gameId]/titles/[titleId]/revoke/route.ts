@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { nobleTitles } from '@/db/schema';
-import { isAuthError, requireGM } from '@/lib/auth';
-import { createGovernanceEvent, isGovernanceError } from '@/lib/game-logic/nobles';
+import { requireGM } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/api-errors';
+import { createGovernanceEvent } from '@/lib/game-logic/nobles';
 
 export async function POST(
   request: Request,
@@ -51,13 +52,8 @@ export async function POST(
 
     return NextResponse.json({ titleId: title.id, isActive: false });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isGovernanceError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
 
     const message = error instanceof Error ? error.message : 'Failed to revoke title';
     const status = message === 'Title not found' ? 404 : 500;

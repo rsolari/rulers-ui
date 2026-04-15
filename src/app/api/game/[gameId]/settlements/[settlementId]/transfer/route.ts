@@ -3,7 +3,8 @@ import { db } from '@/db';
 import { games, realms, settlements, territories, troops, siegeUnits } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { requireGM } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/api-errors';
 import type { TurmoilSource, Season } from '@/types/game';
 
 export async function POST(
@@ -124,9 +125,8 @@ export async function POST(
       territoryTransferred: transferTerritory,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

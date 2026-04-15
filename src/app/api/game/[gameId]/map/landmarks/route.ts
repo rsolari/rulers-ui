@@ -1,9 +1,10 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { gameMaps, mapHexes, mapLandmarks } from '@/db/schema';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { requireGM } from '@/lib/auth';
 
 export async function GET(
   request: Request,
@@ -72,10 +73,8 @@ export async function POST(
       description: body.description ?? null,
     }, { status: 201 });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

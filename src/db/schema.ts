@@ -37,9 +37,7 @@ import type {
 } from '@/types/game';
 import type { MapFeatureType, MapHexKind, MapTerrainType, WaterHexKind } from '@/lib/maps/types';
 
-// ============================================================
-// GAMES
-// ============================================================
+// --- GAMES ---
 
 export const games = sqliteTable('games', {
   id: text('id').primaryKey(),
@@ -73,9 +71,7 @@ export const gamesRelations = relations(games, ({ many }) => ({
   turnResolutions: many(turnResolutions),
 }));
 
-// ============================================================
-// REALMS
-// ============================================================
+// --- REALMS ---
 
 export const realms = sqliteTable('realms', {
   id: text('id').primaryKey(),
@@ -137,9 +133,7 @@ export const realmsRelations = relations(realms, ({ one, many }) => ({
   economicEntries: many(economicEntries),
 }));
 
-// ============================================================
-// TERRITORIES
-// ============================================================
+// --- TERRITORIES ---
 
 export const territories = sqliteTable('territories', {
   id: text('id').primaryKey(),
@@ -162,9 +156,7 @@ export const territoriesRelations = relations(territories, ({ one, many }) => ({
   resourceSites: many(resourceSites),
 }));
 
-// ============================================================
-// MAPS
-// ============================================================
+// --- MAPS ---
 
 export const gameMaps = sqliteTable('game_maps', {
   id: text('id').primaryKey(),
@@ -234,9 +226,7 @@ export const mapLandmarksRelations = relations(mapLandmarks, ({ one }) => ({
   hex: one(mapHexes, { fields: [mapLandmarks.hexId], references: [mapHexes.id] }),
 }));
 
-// ============================================================
-// PLAYER SLOTS
-// ============================================================
+// --- PLAYER SLOTS ---
 
 export const playerSlots = sqliteTable('player_slots', {
   id: text('id').primaryKey(),
@@ -255,9 +245,7 @@ export const playerSlotsRelations = relations(playerSlots, ({ one }) => ({
   realm: one(realms, { fields: [playerSlots.realmId], references: [realms.id] }),
 }));
 
-// ============================================================
-// SETTLEMENTS
-// ============================================================
+// --- SETTLEMENTS ---
 
 export const settlements = sqliteTable('settlements', {
   id: text('id').primaryKey(),
@@ -289,9 +277,7 @@ export const settlementsRelations = relations(settlements, ({ one, many }) => ({
   governanceEvents: many(governanceEvents),
 }));
 
-// ============================================================
-// BUILDINGS
-// ============================================================
+// --- BUILDINGS ---
 
 export const buildings = sqliteTable('buildings', {
   id: text('id').primaryKey(),
@@ -328,9 +314,7 @@ export const buildingsRelations = relations(buildings, ({ one }) => ({
   }),
 }));
 
-// ============================================================
-// RESOURCE SITES
-// ============================================================
+// --- RESOURCE SITES ---
 
 export const resourceSites = sqliteTable('resource_sites', {
   id: text('id').primaryKey(),
@@ -353,9 +337,7 @@ export const resourceSitesRelations = relations(resourceSites, ({ one, many }) =
   industries: many(industries),
 }));
 
-// ============================================================
-// INDUSTRIES
-// ============================================================
+// --- INDUSTRIES ---
 
 export const industries = sqliteTable('industries', {
   id: text('id').primaryKey(),
@@ -377,9 +359,7 @@ export const industriesRelations = relations(industries, ({ one }) => ({
   }),
 }));
 
-// ============================================================
-// NOBLE FAMILIES
-// ============================================================
+// --- NOBLE FAMILIES ---
 
 export const nobleFamilies = sqliteTable('noble_families', {
   id: text('id').primaryKey(),
@@ -392,9 +372,7 @@ export const nobleFamiliesRelations = relations(nobleFamilies, ({ one, many }) =
   members: many(nobles),
 }));
 
-// ============================================================
-// NOBLES
-// ============================================================
+// --- NOBLES ---
 
 export const nobles = sqliteTable('nobles', {
   id: text('id').primaryKey(),
@@ -466,9 +444,7 @@ export const noblesRelations = relations(nobles, ({ one, many }) => ({
   relatedGovernanceEvents: many(governanceEvents, { relationName: 'governance_event_related_noble' }),
 }));
 
-// ============================================================
-// ARMIES
-// ============================================================
+// --- ARMIES ---
 
 export const armies = sqliteTable('armies', {
   id: text('id').primaryKey(),
@@ -508,9 +484,7 @@ export const armiesRelations = relations(armies, ({ one, many }) => ({
   governanceEvents: many(governanceEvents),
 }));
 
-// ============================================================
-// FLEETS
-// ============================================================
+// --- FLEETS ---
 
 export const fleets = sqliteTable('fleets', {
   id: text('id').primaryKey(),
@@ -552,9 +526,7 @@ export const fleetsRelations = relations(fleets, ({ one, many }) => ({
   governanceEvents: many(governanceEvents),
 }));
 
-// ============================================================
-// TROOPS
-// ============================================================
+// --- TROOPS ---
 
 export const troops = sqliteTable('troops', {
   id: text('id').primaryKey(),
@@ -583,9 +555,7 @@ export const troopsRelations = relations(troops, ({ one }) => ({
   garrisonSettlement: one(settlements, { fields: [troops.garrisonSettlementId], references: [settlements.id] }),
 }));
 
-// ============================================================
-// SHIPS
-// ============================================================
+// --- SHIPS ---
 
 export const ships = sqliteTable('ships', {
   id: text('id').primaryKey(),
@@ -618,9 +588,7 @@ export const shipsRelations = relations(ships, ({ one }) => ({
   }),
 }));
 
-// ============================================================
-// SIEGE UNITS
-// ============================================================
+// --- SIEGE UNITS ---
 
 export const siegeUnits = sqliteTable('siege_units', {
   id: text('id').primaryKey(),
@@ -637,9 +605,7 @@ export const siegeUnitsRelations = relations(siegeUnits, ({ one }) => ({
   garrisonSettlement: one(settlements, { fields: [siegeUnits.garrisonSettlementId], references: [settlements.id] }),
 }));
 
-// ============================================================
-// TRADE ROUTES
-// ============================================================
+// --- TRADE ROUTES ---
 
 export const tradeRoutes = sqliteTable('trade_routes', {
   id: text('id').primaryKey(),
@@ -660,9 +626,7 @@ export const tradeRoutesRelations = relations(tradeRoutes, ({ one }) => ({
   game: one(games, { fields: [tradeRoutes.gameId], references: [games.id] }),
 }));
 
-// ============================================================
-// GUILDS, ORDERS & SOCIETIES
-// ============================================================
+// --- GUILDS, ORDERS & SOCIETIES ---
 
 export const guildsOrdersSocieties = sqliteTable('guilds_orders_societies', {
   id: text('id').primaryKey(),
@@ -717,9 +681,7 @@ export const gosRealmsRelations = relations(gosRealms, ({ one }) => ({
   realm: one(realms, { fields: [gosRealms.realmId], references: [realms.id] }),
 }));
 
-// ============================================================
-// NOBLE TITLES
-// ============================================================
+// --- NOBLE TITLES ---
 
 export const nobleTitles = sqliteTable('noble_titles', {
   id: text('id').primaryKey(),
@@ -750,9 +712,7 @@ export const nobleTitlesRelations = relations(nobleTitles, ({ one }) => ({
   gos: one(guildsOrdersSocieties, { fields: [nobleTitles.gosId], references: [guildsOrdersSocieties.id] }),
 }));
 
-// ============================================================
-// GOVERNANCE EVENTS
-// ============================================================
+// --- GOVERNANCE EVENTS ---
 
 export const governanceEvents = sqliteTable('governance_events', {
   id: text('id').primaryKey(),
@@ -792,9 +752,7 @@ export const governanceEventsRelations = relations(governanceEvents, ({ one }) =
   gos: one(guildsOrdersSocieties, { fields: [governanceEvents.gosId], references: [guildsOrdersSocieties.id] }),
 }));
 
-// ============================================================
-// TURN REPORTS
-// ============================================================
+// --- TURN REPORTS ---
 
 export const turnReports = sqliteTable('turn_reports', {
   id: text('id').primaryKey(),
@@ -889,9 +847,7 @@ export const actionCommentsRelations = relations(actionComments, ({ one }) => ({
   action: one(turnActions, { fields: [actionComments.actionId], references: [turnActions.id] }),
 }));
 
-// ============================================================
-// TURN EVENTS
-// ============================================================
+// --- TURN EVENTS ---
 
 export const turnEvents = sqliteTable('turn_events', {
   id: text('id').primaryKey(),
@@ -985,9 +941,7 @@ export const gosUnrestStatesRelations = relations(gosUnrestStates, ({ one }) => 
   gos: one(guildsOrdersSocieties, { fields: [gosUnrestStates.gosId], references: [guildsOrdersSocieties.id] }),
 }));
 
-// ============================================================
-// ECONOMY
-// ============================================================
+// --- ECONOMY ---
 
 export const economicSnapshots = sqliteTable('economic_snapshots', {
   id: text('id').primaryKey(),

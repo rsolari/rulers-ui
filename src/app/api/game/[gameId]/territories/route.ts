@@ -1,9 +1,10 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { territories, settlements, troops, siegeUnits } from '@/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { requireGM } from '@/lib/auth';
 
 export async function GET(
   _request: Request,
@@ -34,10 +35,8 @@ export async function POST(
 
     return NextResponse.json({ id, ...body });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }
@@ -92,10 +91,8 @@ export async function PATCH(
 
     return NextResponse.json({ updated: true });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

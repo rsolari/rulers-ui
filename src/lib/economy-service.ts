@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { db as defaultDb, type DB } from '@/db';
+import { db as defaultDb, type DB, type DatabaseExecutor, type Transaction } from '@/db';
 import {
   armies,
   buildings,
@@ -63,8 +63,6 @@ import type {
   WinterUnrestLocationOption,
 } from '@/types/game';
 
-type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
-type DatabaseExecutor = DB | Transaction;
 
 function getRealmOpenTurmoilEvent(eventRows: Array<typeof turnEvents.$inferSelect>, realmId: string) {
   return eventRows.find((event) =>

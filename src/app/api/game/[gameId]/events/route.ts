@@ -1,9 +1,10 @@
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { turnEvents } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { isAuthError, requireGM } from '@/lib/auth';
+import { requireGM } from '@/lib/auth';
 import { normalizeEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 import type { Season, TurnEventKind, TurnEventStatus } from '@/types/game';
 
@@ -90,10 +91,8 @@ export async function POST(
       resolvedBy: null,
     });
   } catch (error) {
-    if (isAuthError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

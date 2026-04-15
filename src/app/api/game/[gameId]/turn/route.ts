@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { isAuthError, resolveSessionFromCookies } from '@/lib/auth';
-import { getCurrentTurn, isTurnActionError } from '@/lib/turn-action-service';
-import { isRuleValidationError } from '@/lib/rules-action-service';
+import { apiErrorResponse } from '@/lib/api-errors';
+import { resolveSessionFromCookies } from '@/lib/auth';
+import { getCurrentTurn } from '@/lib/turn-action-service';
 
 export async function GET(
   request: Request,
@@ -27,18 +27,8 @@ export async function GET(
 
     return NextResponse.json({ error: 'Game access required' }, { status: 403 });
   } catch (error) {
-    if (isAuthError(error) || isTurnActionError(error)) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-
-    if (isRuleValidationError(error)) {
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-        details: error.details ?? null,
-      }, { status: error.status });
-    }
-
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
     throw error;
   }
 }

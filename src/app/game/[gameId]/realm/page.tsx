@@ -102,6 +102,7 @@ export default function RealmDashboard() {
   const [ruler, setRuler] = useState<Ruler | null>(null);
   const [resources, setResources] = useState<Array<{ resourceType: string; rarity: string }>>([]);
   const [militaryData, setMilitaryData] = useState<{ troops: Array<{ type: string }>; siegeUnits: Array<{ type: string }> }>({ troops: [], siegeUnits: [] });
+  const [shipCount, setShipCount] = useState(0);
   const [nobles, setNobles] = useState<Array<{ id: string }>>([]);
   const [gos, setGos] = useState<Array<{ id: string; name: string; type: string; focus: string | null }>>([]);
   const [mapData, setMapData] = useState<GameMapData | null>(null);
@@ -137,7 +138,7 @@ export default function RealmDashboard() {
     }
 
     async function loadRealm() {
-      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse, resourcesResponse, armiesResponse, noblesResponse, gosResponse, projectionResponse, mapResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, territoriesResponse, settlementsResponse, rulerResponse, resourcesResponse, armiesResponse, fleetsResponse, noblesResponse, gosResponse, projectionResponse, mapResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`),
         fetch(`/api/game/${gameId}/realms`),
         fetch(`/api/game/${gameId}/territories`),
@@ -145,6 +146,7 @@ export default function RealmDashboard() {
         fetch(`/api/game/${gameId}/ruler?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/resources?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/armies?realmId=${realmId}`),
+        fetch(`/api/game/${gameId}/fleets?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/gos?realmId=${realmId}`),
         fetch(`/api/game/${gameId}/economy/projection?realmId=${realmId}`, { cache: 'no-store' }),
@@ -168,6 +170,10 @@ export default function RealmDashboard() {
       setRuler(rulerData);
       setResources(await resourcesResponse.json());
       setMilitaryData(await armiesResponse.json());
+      if (fleetsResponse.ok) {
+        const fleetsData = await fleetsResponse.json();
+        setShipCount(fleetsData.ships?.length ?? 0);
+      }
       setNobles(await noblesResponse.json());
       setGos(gosResponse.ok ? await gosResponse.json() : []);
       setEconomyProjection(projectionResponse.ok ? await projectionResponse.json() : null);
@@ -297,6 +303,9 @@ export default function RealmDashboard() {
           <Badge variant="gold">{game.gamePhase}</Badge>
           <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
           <Badge>{game.turnPhase}</Badge>
+          <Link href={`/game/${gameId}/map`}>
+            <Button variant="outline" size="sm">Map</Button>
+          </Link>
         </div>
       </div>
 
@@ -452,14 +461,35 @@ export default function RealmDashboard() {
             <CardTitle>Realm Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Money group */}
             <div className="flex items-center justify-between">
               <span>Treasury</span>
               <strong>{realm.treasury.toLocaleString()}gc</strong>
             </div>
             <div className="flex items-center justify-between">
+              <span>Net Income / Season</span>
+              <strong className={(economyProjection?.netChange ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}>
+                {economyProjection
+                  ? `${economyProjection.netChange >= 0 ? '+' : ''}${economyProjection.netChange.toLocaleString()}gc`
+                  : '...'}
+              </strong>
+            </div>
+            <div className="flex items-center justify-between">
               <span>Tax Policy</span>
               <strong>{economyProjection?.realm.taxTypeApplied ?? realm.taxType}</strong>
             </div>
+
+            <hr className="border-gold-500/20" />
+
+            {/* Food & Turmoil group */}
+            {economyProjection && (
+              <div className="flex items-center justify-between">
+                <span>Food Balance</span>
+                <strong className={economyProjection.foodSurplus >= 0 ? 'text-green-700' : 'text-red-700'}>
+                  {economyProjection.foodSurplus >= 0 ? '+' : ''}{economyProjection.foodSurplus}
+                </strong>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span>Turmoil</span>
               <Badge
@@ -482,6 +512,15 @@ export default function RealmDashboard() {
                 </Badge>
               </div>
             ) : null}
+            {economyProjection && economyProjection.warnings.length > 0 && (
+              <div className="flex items-center justify-between">
+                <span>Warnings</span>
+                <Badge variant="gold">{economyProjection.warnings.length}</Badge>
+              </div>
+            )}
+
+            <hr className="border-gold-500/20" />
+
             <div className="flex items-center justify-between">
               <span>Settlements</span>
               <strong>{settlements.length}</strong>
@@ -497,34 +536,6 @@ export default function RealmDashboard() {
                 variant="gold"
               />
             </div>
-            <div className="flex items-center justify-between">
-              <span>Net Income / Season</span>
-              <strong className={(economyProjection?.netChange ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}>
-                {economyProjection
-                  ? `${economyProjection.netChange >= 0 ? '+' : ''}${economyProjection.netChange.toLocaleString()}gc`
-                  : '...'}
-              </strong>
-            </div>
-            {economyProjection && (
-              <div className="flex items-center justify-between">
-                <span>Projected Treasury</span>
-                <strong>{economyProjection.projectedTreasury.toLocaleString()}gc</strong>
-              </div>
-            )}
-            {economyProjection && (
-              <div className="flex items-center justify-between">
-                <span>Food Balance</span>
-                <strong className={economyProjection.foodSurplus >= 0 ? 'text-green-700' : 'text-red-700'}>
-                  {economyProjection.foodSurplus >= 0 ? '+' : ''}{economyProjection.foodSurplus}
-                </strong>
-              </div>
-            )}
-            {economyProjection && economyProjection.warnings.length > 0 && (
-              <div className="flex items-center justify-between">
-                <span>Warnings</span>
-                <Badge variant="gold">{economyProjection.warnings.length}</Badge>
-              </div>
-            )}
             <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
               <span>Nobles</span>
               <strong>{nobles.length}</strong>
@@ -533,10 +544,10 @@ export default function RealmDashboard() {
               <span>Troops</span>
               <strong>{(militaryData.troops || []).length}</strong>
             </Link>
-            <Link href={`/game/${gameId}/realm/trade${realmLinkSuffix}`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
-              <span>Resources</span>
-              <strong>{resources.length}</strong>
-            </Link>
+            <div className="flex items-center justify-between">
+              <span>Ships</span>
+              <strong>{shipCount}</strong>
+            </div>
             <div>
               <Link
                 href={`/game/${gameId}/realm/gos${realmLinkSuffix}`}
@@ -653,11 +664,6 @@ export default function RealmDashboard() {
         <Link href={`/game/${gameId}/realm/trade${realmLinkSuffix}`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">
             <CardContent><p className="font-heading font-bold pt-4">Trade & Resources</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/map`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Map</p></CardContent>
           </Card>
         </Link>
       </div>

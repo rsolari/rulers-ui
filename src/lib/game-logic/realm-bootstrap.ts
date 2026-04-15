@@ -63,9 +63,10 @@ interface InitializeRealmCapitalOptions {
   traditions?: Tradition[];
 }
 
-interface CalculatePlayerRealmStartingTreasuryOptions {
+interface CalculateRealmStartingTreasuryOptions {
   capitalName: string;
   capitalSettlementId: string;
+  capitalSize?: SettlementSize;
   currentSeason: Season;
   currentYear: number;
   realmId: string;
@@ -89,9 +90,10 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
-export function calculatePlayerRealmStartingTreasury({
+export function calculateRealmStartingTreasury({
   capitalName,
   capitalSettlementId,
+  capitalSize = 'Town',
   currentSeason,
   currentYear,
   realmId,
@@ -103,7 +105,7 @@ export function calculatePlayerRealmStartingTreasury({
   industries: territoryIndustries,
   traditions = [],
   taxType = 'Tribute',
-}: CalculatePlayerRealmStartingTreasuryOptions) {
+}: CalculateRealmStartingTreasuryOptions) {
   const buildingsBySettlement = new Map<string, StartingTreasuryBuildingRow[]>();
   for (const building of territoryBuildings) {
     if (!building.settlementId) continue;
@@ -126,7 +128,7 @@ export function calculatePlayerRealmStartingTreasury({
     territoryIndustries.map((industry) => [industry.resourceSiteId, industry] as const),
   );
 
-  const startingCapitalBuildings = getStartingSettlementFortifications('Town').map((building, index) => ({
+  const startingCapitalBuildings = getStartingSettlementFortifications(capitalSize).map((building, index) => ({
     id: `${capitalSettlementId}-starting-fortification-${index}`,
     settlementId: capitalSettlementId,
     type: building.type,
@@ -195,7 +197,7 @@ export function calculatePlayerRealmStartingTreasury({
       {
         id: capitalSettlementId,
         name: capitalName,
-        size: 'Town',
+        size: capitalSize,
         territoryId: territory.id,
         buildings: startingCapitalBuildings.map((building) => ({
           id: building.id,

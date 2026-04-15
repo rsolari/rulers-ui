@@ -8,9 +8,15 @@ const mocks = vi.hoisted(() => {
     values: Record<string, unknown>;
   }> = [];
 
-  const selectGet = vi.fn();
-  const selectWhere = vi.fn(() => ({ get: selectGet }));
-  const selectFrom = vi.fn(() => ({ where: selectWhere }));
+  const queryGetByTable = new Map<unknown, unknown>();
+  const selectFrom = vi.fn((table: unknown) => ({
+    where: vi.fn(() => ({
+      get: () => queryGetByTable.get(table) ?? null,
+      all: () => [],
+    })),
+    get: () => queryGetByTable.get(table) ?? null,
+    all: () => [],
+  }));
   const select = vi.fn(() => ({ from: selectFrom }));
 
   const tx = {
@@ -37,7 +43,7 @@ const mocks = vi.hoisted(() => {
   return {
     db: { select, transaction },
     operations,
-    selectGet,
+    queryGetByTable,
     transaction,
   };
 });
@@ -96,11 +102,17 @@ describe('POST /api/game/[gameId]/setup', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.operations.length = 0;
+    mocks.queryGetByTable.clear();
     uuidMock.mockReset();
     authMocks.generateGameCode.mockReset();
     mapMocks.getCuratedMapDefinition.mockClear();
     mapMocks.getActiveCuratedMapTerritories.mockClear();
     mapMocks.importCuratedGameMap.mockClear();
+    mocks.queryGetByTable.set(games, {
+      id: 'game-1',
+      currentYear: 1,
+      currentSeason: 'Spring',
+    });
   });
 
   it('returns 404 when the game does not exist', async () => {
@@ -123,7 +135,6 @@ describe('POST /api/game/[gameId]/setup', () => {
     authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
     authMocks.requireInitState.mockResolvedValue({ id: 'game-1', initState: 'gm_world_setup' });
     authMocks.generateGameCode.mockReturnValue('CLAIM1');
-    mocks.selectGet.mockReturnValue(undefined);
 
     uuidMock
       .mockReturnValueOnce('slot-1')
@@ -469,6 +480,13 @@ describe('POST /api/game/[gameId]/setup', () => {
         table: realms,
         values: {
           capitalSettlementId: 'uuid-5',
+        },
+      },
+      {
+        kind: 'update',
+        table: realms,
+        values: {
+          treasury: expect.any(Number),
         },
       },
       {

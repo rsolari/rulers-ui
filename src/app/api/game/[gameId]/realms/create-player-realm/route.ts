@@ -16,7 +16,7 @@ import { recomputeGameInitState } from '@/lib/game-init-state';
 import { isAuthError, requireInitState, requirePlayerSlot } from '@/lib/auth';
 import { isSettlementHexAvailable } from '@/lib/game-logic/maps';
 import {
-  calculatePlayerRealmStartingTreasury,
+  calculateRealmStartingTreasury,
   initializeRealmCapital,
 } from '@/lib/game-logic/realm-bootstrap';
 import type { Season } from '@/types/game';
@@ -92,7 +92,7 @@ export async function POST(
         .all()
       : [];
 
-    const startingTreasury = calculatePlayerRealmStartingTreasury({
+    const startingTreasury = calculateRealmStartingTreasury({
       realmId,
       realmName: body.name,
       territory,

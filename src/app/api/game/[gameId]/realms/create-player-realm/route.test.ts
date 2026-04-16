@@ -128,7 +128,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
     gameInitStateMocks.recomputeGameInitState.mockResolvedValue(undefined);
   });
 
-  it('creates the capital town with wooden walls and a gatehouse', async () => {
+  it('creates the capital city with stone walls and a gatehouse', async () => {
     let uuidCounter = 0;
     uuidMock.mockImplementation(() => `uuid-${++uuidCounter}`);
 
@@ -161,7 +161,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
           actingRulerNobleId: null,
           traditions: JSON.stringify([]),
           isNPC: false,
-          treasury: 13350,
+          treasury: 13950,
           taxType: 'Tribute',
           turmoilSources: '[]',
           color: '#8b2020',
@@ -176,7 +176,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
           hexId: 'hex-1',
           realmId: 'uuid-1',
           name: 'Highgate',
-          size: 'Town',
+          size: 'City',
           isCapital: true,
           governingNobleId: null,
         },
@@ -193,7 +193,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
           type: 'Walls',
           category: 'Fortification',
           size: 'Small',
-          material: 'Timber',
+          material: 'Stone',
           takesBuildingSlot: false,
         },
       },
@@ -209,7 +209,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
           type: 'Gatehouse',
           category: 'Fortification',
           size: 'Small',
-          material: 'Timber',
+          material: 'Stone',
           takesBuildingSlot: false,
         },
       },
@@ -330,7 +330,7 @@ describe('POST /api/game/[gameId]/realms/create-player-realm', () => {
     });
   });
 
-  it('places tradition-granted capital buildings even when they exceed the normal town size limit', async () => {
+  it('places tradition-granted capital buildings in the capital city', async () => {
     let uuidCounter = 0;
     uuidMock.mockImplementation(() => `uuid-${++uuidCounter}`);
 

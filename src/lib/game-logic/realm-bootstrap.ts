@@ -84,7 +84,7 @@ interface CalculateRealmStartingTreasuryOptions {
 export function calculateRealmStartingTreasury({
   capitalName,
   capitalSettlementId,
-  capitalSize = 'Town',
+  capitalSize = 'City',
   currentSeason,
   currentYear,
   realmId,
@@ -223,7 +223,7 @@ export function initializeRealmCapital(
     capitalHexId,
     capitalName,
     capitalSettlementId = uuid(),
-    capitalSize = 'Town',
+    capitalSize = 'City',
     realmId,
     territoryId,
     traditions = [],

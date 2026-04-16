@@ -8,7 +8,7 @@ import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
 import { TurnHistoryList } from '@/components/turn-actions/turn-history-list';
 import { SEASONS } from '@/lib/game-logic/constants';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
-import type { CurrentTurnResponseDto, TaxType, TurnActionCreateDto, TurnActionRecord, TurnActionUpdateDto, TurnHistoryEntry } from '@/types/game';
+import type { CurrentTurnResponseDto, GOSType, TaxType, TurnActionCreateDto, TurnActionRecord, TurnActionUpdateDto, TurnHistoryEntry } from '@/types/game';
 
 interface PlayerTurnReportPanelProps {
   gameId: string;
@@ -19,6 +19,10 @@ interface PlayerTurnReportPanelProps {
 interface SelectOption {
   value: string;
   label: string;
+}
+
+interface GOSOption extends SelectOption {
+  type: GOSType;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -67,6 +71,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
   const [settlementOptions, setSettlementOptions] = useState<SelectOption[]>([]);
   const [realmOptions, setRealmOptions] = useState<SelectOption[]>([]);
   const [nobleOptions, setNobleOptions] = useState<SelectOption[]>([]);
+  const [gosOptions, setGosOptions] = useState<GOSOption[]>([]);
   const [economyProjection, setEconomyProjection] = useState<EconomyProjectionDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
@@ -86,6 +91,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         settlementsResponse,
         realmsResponse,
         noblesResponse,
+        gosResponse,
         projectionResponse,
       ] = await Promise.all([
         fetch(`/api/game/${gameId}/turn?${realmQuery}`, { cache: 'no-store' }),
@@ -93,15 +99,17 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         fetch(`/api/game/${gameId}/settlements?${realmQuery}`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/nobles?${realmQuery}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/gos?${realmQuery}`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/economy/projection?${realmQuery}`, { cache: 'no-store' }),
       ]);
 
-      const [turnData, historyData, settlements, allRealms, realmNobles, projection] = await Promise.all([
+      const [turnData, historyData, settlements, allRealms, realmNobles, gosList, projection] = await Promise.all([
         parseResponse<CurrentTurnResponseDto>(turnResponse),
         parseResponse<{ history: TurnHistoryEntry[] }>(historyResponse),
         parseResponse<Array<{ id: string; name: string }>>(settlementsResponse),
         parseResponse<Array<{ id: string; name: string }>>(realmsResponse),
         parseResponse<Array<{ id: string; name: string; reasonSkill: number; cunningSkill: number }>>(noblesResponse),
+        parseResponse<Array<{ id: string; name: string; type: GOSType }>>(gosResponse),
         parseOptionalResponse<EconomyProjectionDto>(projectionResponse),
       ]);
 
@@ -111,6 +119,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         setSettlementOptions(settlements.map((s) => ({ value: s.id, label: s.name })));
         setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
         setNobleOptions(realmNobles.map((n) => ({ value: n.id, label: `${n.name} (R${n.reasonSkill} / C${n.cunningSkill})` })));
+        setGosOptions(gosList.map((gos) => ({ value: gos.id, label: `${gos.name} (${gos.type})`, type: gos.type })));
         setEconomyProjection(projection);
       });
     } catch (refreshError) {
@@ -286,6 +295,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
                   settlementOptions={settlementOptions}
                   realmOptions={realmOptions}
                   nobleOptions={nobleOptions}
+                  gosOptions={gosOptions}
                   editable={isEditable && action.status === 'draft'}
                   commentable
                   taxProjectionContext={taxProjectionContext}

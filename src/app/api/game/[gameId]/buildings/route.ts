@@ -1,10 +1,56 @@
 import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { buildings, settlements, territories } from '@/db/schema';
-import { eq, inArray, or } from 'drizzle-orm';
-import { requireGM } from '@/lib/auth';
+import { buildings, gosRealms, settlements, territories } from '@/db/schema';
+import { and, eq, inArray, or } from 'drizzle-orm';
+import { requireGM, requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
 import { createBuilding } from '@/lib/rules-action-service';
+
+const PLAYER_EDITABLE_FIELDS = new Set(['buildingId', 'ownerGosId', 'allottedGosId']);
+
+async function getBuildingRealmId(buildingId: string) {
+  const building = await db.select().from(buildings).where(eq(buildings.id, buildingId)).get();
+  if (!building) return { building: null, realmId: null };
+
+  if (building.settlementId) {
+    const settlement = await db.select({ realmId: settlements.realmId })
+      .from(settlements)
+      .where(eq(settlements.id, building.settlementId))
+      .get();
+    return { building, realmId: settlement?.realmId ?? null };
+  }
+
+  if (building.territoryId) {
+    const territory = await db.select({ realmId: territories.realmId })
+      .from(territories)
+      .where(eq(territories.id, building.territoryId))
+      .get();
+    return { building, realmId: territory?.realmId ?? null };
+  }
+
+  return { building, realmId: null };
+}
+
+async function assertGosBelongsToRealm(gosId: unknown, realmId: string, field: string) {
+  if (gosId === undefined || gosId === null || gosId === '') return;
+  if (typeof gosId !== 'string') {
+    return NextResponse.json({ error: `${field} must be a string or null` }, { status: 400 });
+  }
+
+  const membership = await db.select({ gosId: gosRealms.gosId })
+    .from(gosRealms)
+    .where(and(
+      eq(gosRealms.gosId, gosId),
+      eq(gosRealms.realmId, realmId),
+    ))
+    .get();
+
+  if (!membership) {
+    return NextResponse.json({ error: `${field} must belong to this realm` }, { status: 403 });
+  }
+
+  return null;
+}
 
 export async function GET(
   request: Request,
@@ -84,11 +130,39 @@ export async function PATCH(
 ) {
   try {
     const { gameId } = await params;
-    await requireGM(gameId);
     const body = await request.json();
 
     if (!body.buildingId) {
       return NextResponse.json({ error: 'buildingId required' }, { status: 400 });
+    }
+
+    const session = await resolveSessionFromCookies();
+    const isGm = session.gameId === gameId && session.role === 'gm';
+
+    if (!isGm) {
+      const unsupportedField = Object.keys(body).find((key) => !PLAYER_EDITABLE_FIELDS.has(key));
+      if (unsupportedField) {
+        return NextResponse.json({ error: 'Player building edits may only assign G.O.S. ownership or allotment' }, { status: 403 });
+      }
+
+      const { building, realmId } = await getBuildingRealmId(body.buildingId);
+      if (!building) {
+        return NextResponse.json({ error: 'Building not found' }, { status: 404 });
+      }
+
+      if (!realmId) {
+        return NextResponse.json({ error: 'Building is not attached to a realm' }, { status: 409 });
+      }
+
+      await requireOwnedRealmAccess(gameId, realmId);
+
+      const ownerError = await assertGosBelongsToRealm(body.ownerGosId, realmId, 'ownerGosId');
+      if (ownerError) return ownerError;
+
+      const allottedError = await assertGosBelongsToRealm(body.allottedGosId, realmId, 'allottedGosId');
+      if (allottedError) return allottedError;
+    } else {
+      await requireGM(gameId);
     }
 
     const updates: Record<string, unknown> = {};

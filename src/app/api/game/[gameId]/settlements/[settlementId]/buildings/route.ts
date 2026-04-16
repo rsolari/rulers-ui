@@ -1,8 +1,8 @@
 import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { settlements } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { buildings, settlements } from '@/db/schema';
+import { and, eq } from 'drizzle-orm';
 import { requireOwnedRealmAccess } from '@/lib/auth';
 import {
   createBuilding,
@@ -125,6 +125,63 @@ export async function POST(
       cost: created.cost,
       notes: created.notes,
     }, { status: 201 });
+  } catch (error) {
+    const errorResponse = apiErrorResponse(error);
+    if (errorResponse) return errorResponse;
+    throw error;
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ gameId: string; settlementId: string }> },
+) {
+  try {
+    const { gameId, settlementId } = await params;
+    const body = await request.json().catch(() => ({}));
+    const buildingId = typeof body.buildingId === 'string' ? body.buildingId : null;
+
+    if (!buildingId) {
+      return NextResponse.json({ error: 'buildingId required' }, { status: 400 });
+    }
+
+    const settlement = await db.select().from(settlements)
+      .where(eq(settlements.id, settlementId))
+      .get();
+
+    if (!settlement) {
+      return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+    }
+
+    await requireOwnedRealmAccess(gameId, settlement.realmId);
+
+    const building = await db.select({
+      id: buildings.id,
+      constructionTurnsRemaining: buildings.constructionTurnsRemaining,
+    })
+      .from(buildings)
+      .where(and(
+        eq(buildings.id, buildingId),
+        eq(buildings.settlementId, settlementId),
+      ))
+      .get();
+
+    if (!building) {
+      return NextResponse.json({ error: 'Building not found' }, { status: 404 });
+    }
+
+    if (building.constructionTurnsRemaining <= 0) {
+      return NextResponse.json({ error: 'Only active construction orders can be cancelled' }, { status: 409 });
+    }
+
+    await db.delete(buildings)
+      .where(and(
+        eq(buildings.id, buildingId),
+        eq(buildings.settlementId, settlementId),
+      ))
+      .run();
+
+    return NextResponse.json({ deleted: true });
   } catch (error) {
     const errorResponse = apiErrorResponse(error);
     if (errorResponse) return errorResponse;

@@ -161,10 +161,11 @@ describe('PlayerTurnReportPanel', () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(jsonResponse(currentTurn))
       .mockResolvedValueOnce(jsonResponse(history))
-      .mockResolvedValueOnce(jsonResponse([{ id: 'settlement-1', name: 'Aster Keep' }]))
-      .mockResolvedValueOnce(jsonResponse([{ id: 'realm-1', name: 'Aster' }]))
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(jsonResponse(projection)));
+	      .mockResolvedValueOnce(jsonResponse([{ id: 'settlement-1', name: 'Aster Keep' }]))
+	      .mockResolvedValueOnce(jsonResponse([{ id: 'realm-1', name: 'Aster' }]))
+	      .mockResolvedValueOnce(jsonResponse([]))
+	      .mockResolvedValueOnce(jsonResponse([]))
+	      .mockResolvedValueOnce(jsonResponse(projection)));
   });
 
   afterEach(() => {

@@ -560,6 +560,11 @@ function validateAllottedGos(
   }
 }
 
+function getDefaultAllottedGosId(requiredType: GOSType | null, gos: GosReference[]) {
+  if (!requiredType) return null;
+  return gos.find((entry) => entry.type === requiredType)?.id ?? null;
+}
+
 export function prepareBuildingCreation(
   input: CreateBuildingInput,
   context: BuildingPreparationContext,
@@ -667,7 +672,9 @@ export function prepareBuildingCreation(
   }
 
   const requiredAllotment = resolveAllottedRequirement(buildingType);
-  const effectiveAllottedGosId = input.allottedGosId ?? (requiredAllotment === 'Guild' ? input.ownerGosId ?? null : null);
+  const defaultAllottedGosId = getDefaultAllottedGosId(requiredAllotment, context.gos);
+  const effectiveAllottedGosId = input.allottedGosId
+    ?? (requiredAllotment === 'Guild' ? input.ownerGosId ?? defaultAllottedGosId : defaultAllottedGosId);
   if (requiredAllotment) {
     validateAllottedGos(requiredAllotment, effectiveAllottedGosId, context.gos);
   }

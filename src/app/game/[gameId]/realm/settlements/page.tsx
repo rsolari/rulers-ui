@@ -10,8 +10,8 @@ import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/u
 import { Select } from '@/components/ui/select';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { useRole } from '@/hooks/use-role';
-import { BUILDING_DEFS, SETTLEMENT_DATA } from '@/lib/game-logic/constants';
-import type { SettlementSize } from '@/types/game';
+import { BUILDING_DEFS, getEligibleBuildingUpgradeTargets, SETTLEMENT_DATA } from '@/lib/game-logic/constants';
+import type { BuildingSize, BuildingType, SettlementSize } from '@/types/game';
 
 interface GoverningNoble {
   id: string;
@@ -90,6 +90,17 @@ interface BuildingUpgradeOption {
 }
 
 const FORTIFICATION_MATERIAL_TYPES = new Set(['Gatehouse', 'Walls', 'Watchtower']);
+const BUILDING_SIZES = new Set<BuildingSize>(['Tiny', 'Small', 'Medium', 'Large', 'Colossal']);
+const GOS_PREREQUISITES = new Set(['Guild', 'Order', 'Society']);
+
+function getRequiredAllotmentType(prerequisites: string[] | undefined) {
+  return prerequisites?.find((prerequisite) => GOS_PREREQUISITES.has(prerequisite)) ?? null;
+}
+
+function hasUpgradeTargets(type: string, size: string) {
+  if (!(type in BUILDING_DEFS) || !BUILDING_SIZES.has(size as BuildingSize)) return false;
+  return getEligibleBuildingUpgradeTargets(type as BuildingType, size as BuildingSize).length > 0;
+}
 
 export default function SettlementsPage() {
   const params = useParams();
@@ -130,7 +141,9 @@ export default function SettlementsPage() {
   const [buildingOptions, setBuildingOptions] = useState<BuildingOption[]>([]);
   const [selectedBuildingType, setSelectedBuildingType] = useState<string>('');
   const [selectedMaterial, setSelectedMaterial] = useState<string>('Timber');
+  const [selectedAllottedGosId, setSelectedAllottedGosId] = useState<string>('');
   const [buildingLoading, setBuildingLoading] = useState(false);
+  const [cancellingBuildingId, setCancellingBuildingId] = useState<string | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [upgradeSettlementId, setUpgradeSettlementId] = useState<string | null>(null);
   const [upgradeBuildingId, setUpgradeBuildingId] = useState<string | null>(null);
@@ -213,10 +226,24 @@ export default function SettlementsPage() {
       const options: BuildingOption[] = await res.json();
       setBuildingOptions(options);
       const firstBuildable = options.find((o) => o.canBuild);
-      setSelectedBuildingType(firstBuildable?.type ?? options[0]?.type ?? '');
+      const initialType = firstBuildable?.type ?? options[0]?.type ?? '';
+      setSelectedBuildingType(initialType);
+      setSelectedAllottedGosId(getDefaultAllottedGosId(initialType, options));
     } finally {
       setBuildingLoading(false);
     }
+  }
+
+  function getDefaultAllottedGosId(buildingType: string, options = buildingOptions) {
+    const option = options.find((candidate) => candidate.type === buildingType);
+    const requiredType = getRequiredAllotmentType(option?.prerequisites);
+    if (!requiredType) return '';
+    return gosOptions.find((gos) => gos.type === requiredType)?.id ?? '';
+  }
+
+  function selectBuildingType(buildingType: string) {
+    setSelectedBuildingType(buildingType);
+    setSelectedAllottedGosId(getDefaultAllottedGosId(buildingType));
   }
 
   async function constructBuilding() {
@@ -228,6 +255,9 @@ export default function SettlementsPage() {
       const body: Record<string, string> = { type: selectedBuildingType };
       if (FORTIFICATION_MATERIAL_TYPES.has(selectedBuildingType)) {
         body.material = selectedMaterial;
+      }
+      if (selectedAllottedGosId) {
+        body.allottedGosId = selectedAllottedGosId;
       }
 
       const res = await fetch(`/api/game/${gameId}/settlements/${buildSettlementId}/buildings`, {
@@ -247,6 +277,23 @@ export default function SettlementsPage() {
       await refreshSettlements();
     } finally {
       setBuildingLoading(false);
+    }
+  }
+
+  async function cancelConstruction(settlementId: string, buildingId: string) {
+    setCancellingBuildingId(buildingId);
+
+    try {
+      const res = await fetch(`/api/game/${gameId}/settlements/${settlementId}/buildings`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buildingId }),
+      });
+
+      if (!res.ok) return;
+      await refreshSettlements();
+    } finally {
+      setCancellingBuildingId(null);
     }
   }
 
@@ -306,6 +353,10 @@ export default function SettlementsPage() {
 
   const selectedOption = buildingOptions.find((o) => o.type === selectedBuildingType);
   const hasBuildableOptions = buildingOptions.some((o) => o.canBuild);
+  const requiredAllotmentType = getRequiredAllotmentType(selectedOption?.prerequisites);
+  const allotmentOptions = requiredAllotmentType
+    ? gosOptions.filter((gos) => gos.type === requiredAllotmentType)
+    : [];
   const selectedUpgradeOption = upgradeOptions.find((option) => option.targetType === selectedUpgradeType);
   const hasUpgradeableOptions = upgradeOptions.some((option) => option.canUpgrade);
 
@@ -469,26 +520,37 @@ export default function SettlementsPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          {isSetup && gosOptions.length > 0 && (
-                            <select
-                              className="text-xs bg-input-bg border border-input-border rounded px-1.5 py-1 cursor-pointer"
-                              value={building.ownerGosId ?? ''}
+	                          {isSetup && gosOptions.length > 0 && (
+	                            <select
+	                              className="text-xs bg-input-bg border border-input-border rounded px-1.5 py-1 cursor-pointer"
+	                              value={building.ownerGosId ?? ''}
                               onChange={(e) => void assignBuildingOwner(building.id, e.target.value || null)}
                             >
                               <option value="">No GOS owner</option>
                               {gosOptions.map((g) => (
                                 <option key={g.id} value={g.id}>{g.name} ({g.type})</option>
-                              ))}
-                            </select>
-                          )}
-                          {building.constructionTurnsRemaining <= 0 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
+	                              ))}
+	                            </select>
+	                          )}
+	                          {building.constructionTurnsRemaining > 0 ? (
+	                            <Button
+	                              variant="destructive"
+	                              size="sm"
+                              onClick={() => void cancelConstruction(settlement.id, building.id)}
+                              disabled={cancellingBuildingId === building.id}
+	                            >
+	                              {cancellingBuildingId === building.id ? 'Cancelling...' : 'Cancel'}
+	                            </Button>
+	                          ) : hasUpgradeTargets(building.type, building.size) ? (
+	                            <Button
+	                              variant="outline"
+	                              size="sm"
                               onClick={() => openUpgradeDialog(settlement.id, building.id, building.type)}
                             >
                               Upgrade
                             </Button>
+                          ) : (
+                            null
                           )}
                         </div>
                       </div>
@@ -516,8 +578,16 @@ export default function SettlementsPage() {
                   label="Building Type"
                   options={buildingSelectOptions}
                   value={selectedBuildingType}
-                  onChange={(e) => setSelectedBuildingType(e.target.value)}
+                  onChange={(e) => selectBuildingType(e.target.value)}
                 />
+                {requiredAllotmentType && allotmentOptions.length > 0 && (
+                  <Select
+                    label={`Allotted ${requiredAllotmentType}`}
+                    options={allotmentOptions.map((gos) => ({ value: gos.id, label: gos.name }))}
+                    value={selectedAllottedGosId}
+                    onChange={(e) => setSelectedAllottedGosId(e.target.value)}
+                  />
+                )}
                 {FORTIFICATION_MATERIAL_TYPES.has(selectedBuildingType) && (
                   <Select
                     label="Material"
@@ -578,7 +648,7 @@ export default function SettlementsPage() {
             <Button
               variant="accent"
               onClick={constructBuilding}
-              disabled={!selectedOption?.canBuild || buildingLoading}
+              disabled={!selectedOption?.canBuild || Boolean(requiredAllotmentType && !selectedAllottedGosId) || buildingLoading}
             >
               Build
             </Button>

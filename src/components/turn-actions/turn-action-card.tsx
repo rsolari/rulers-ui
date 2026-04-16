@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
   ACTION_WORDS,
+  type GOSType,
   type Season,
   type TaxType,
   type TurnActionRecord,
@@ -42,6 +43,7 @@ const EXECUTION_STATUS_OPTIONS = [
   { value: 'submitted', label: 'Submitted' },
   { value: 'executed', label: 'Executed' },
 ];
+const GOS_PREREQUISITES = new Set<GOSType>(['Guild', 'Order', 'Society']);
 
 const DICE_POOL_SIZE = 5;
 const DICE_SUCCESS_THRESHOLD = 5;
@@ -57,6 +59,7 @@ interface TurnActionCardProps {
   commentable?: boolean;
   saving?: boolean;
   commentSaving?: boolean;
+  gosOptions?: Array<{ value: string; label: string; type: GOSType }>;
   onSave?: (patch: TurnActionUpdateDto) => Promise<void>;
   onDelete?: () => Promise<void>;
   onComment?: (body: string) => Promise<void>;
@@ -101,6 +104,13 @@ function createDraftState(action: TurnActionRecord): TurnActionUpdateDto {
 function lookupLabel(options: Array<{ value: string; label: string }>, value: string | null | undefined): string | null {
   if (!value) return null;
   return options.find((o) => o.value === value)?.label ?? value;
+}
+
+function getRequiredAllotmentType(buildingType: string | null | undefined): GOSType | null {
+  if (!buildingType || !(buildingType in BUILDING_DEFS)) return null;
+  return BUILDING_DEFS[buildingType as keyof typeof BUILDING_DEFS].prerequisites.find(
+    (prerequisite): prerequisite is GOSType => GOS_PREREQUISITES.has(prerequisite as GOSType),
+  ) ?? null;
 }
 
 function addSeasons(season: Season, year: number, seasonsToAdd: number) {
@@ -293,11 +303,24 @@ export function TurnActionCard({
   commentable = false,
   saving = false,
   commentSaving = false,
+  gosOptions = [],
   onSave,
   onDelete,
   onComment,
 }: TurnActionCardProps) {
   const [draft, setDraft] = useState<TurnActionUpdateDto>(() => createDraftState(action));
+
+  useEffect(() => {
+    if (!editable || draft.financialType !== 'build' || draft.allottedGosId) return;
+    const requiredType = getRequiredAllotmentType(draft.buildingType);
+    const defaultAllottedGosId = requiredType
+      ? gosOptions.find((gos) => gos.type === requiredType)?.value ?? null
+      : null;
+    if (!defaultAllottedGosId) return;
+    setDraft((current) => current.allottedGosId
+      ? current
+      : { ...current, allottedGosId: defaultAllottedGosId });
+  }, [draft.allottedGosId, draft.buildingType, draft.financialType, editable, gosOptions]);
 
   function toggleActionWord(word: typeof ACTION_WORDS[number]) {
     const actionWords = new Set(draft.actionWords ?? []);
@@ -320,7 +343,7 @@ export function TurnActionCard({
       material: value === 'build' ? current.material : null,
       wallSize: value === 'build' ? current.wallSize : null,
       ownerGosId: value === 'build' ? current.ownerGosId : null,
-      allottedGosId: value === 'build' ? current.allottedGosId : null,
+      allottedGosId: value === 'build' ? current.allottedGosId ?? getDefaultAllottedGosId(current.buildingType) : null,
       locationType: value === 'build' ? current.locationType : null,
       buildingSize: value === 'build' ? current.buildingSize : null,
       takesBuildingSlot: value === 'build' ? current.takesBuildingSlot : null,
@@ -329,7 +352,27 @@ export function TurnActionCard({
     }));
   }
 
+  function getDefaultAllottedGosId(buildingType: string | null | undefined) {
+    const requiredType = getRequiredAllotmentType(buildingType);
+    if (!requiredType) return null;
+    return gosOptions.find((gos) => gos.type === requiredType)?.value ?? null;
+  }
+
+  function updateBuildingType(buildingType: string) {
+    setDraft((current) => ({
+      ...current,
+      buildingType: buildingType as TurnActionUpdateDto['buildingType'],
+      allottedGosId: getDefaultAllottedGosId(buildingType),
+    }));
+  }
+
   const showReadOnlySummary = !editable;
+  const requiredAllotmentType = draft.financialType === 'build'
+    ? getRequiredAllotmentType(draft.buildingType)
+    : null;
+  const allotmentOptions = requiredAllotmentType
+    ? gosOptions.filter((gos) => gos.type === requiredAllotmentType)
+    : [];
 
   return (
     <Card className="border border-ink-100">
@@ -427,10 +470,7 @@ export function TurnActionCard({
                   label="Building Type"
                   options={BUILDING_OPTIONS}
                   value={draft.buildingType ?? ''}
-                  onChange={(event) => setDraft((current) => ({
-                    ...current,
-                    buildingType: event.target.value as TurnActionUpdateDto['buildingType'],
-                  }))}
+                  onChange={(event) => updateBuildingType(event.target.value)}
                   disabled={!editable}
                 />
                 <Select
@@ -440,6 +480,15 @@ export function TurnActionCard({
                   onChange={(event) => setDraft((current) => ({ ...current, settlementId: event.target.value }))}
                   disabled={!editable}
                 />
+                {requiredAllotmentType && allotmentOptions.length > 0 ? (
+                  <Select
+                    label={`Allotted ${requiredAllotmentType}`}
+                    options={allotmentOptions}
+                    value={draft.allottedGosId ?? ''}
+                    onChange={(event) => setDraft((current) => ({ ...current, allottedGosId: event.target.value || null }))}
+                    disabled={!editable}
+                  />
+                ) : null}
               </div>
             ) : null}
             {draft.financialType === 'recruit' ? (

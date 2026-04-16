@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
 import { TurnHistoryList } from '@/components/turn-actions/turn-history-list';
-import type { CurrentTurnResponseDto, TurnActionCreateDto, TurnActionRecord, TurnActionUpdateDto, TurnHistoryEntry } from '@/types/game';
+import { SEASONS } from '@/lib/game-logic/constants';
+import type { EconomyProjectionDto } from '@/lib/economy-dto';
+import type { CurrentTurnResponseDto, TaxType, TurnActionCreateDto, TurnActionRecord, TurnActionUpdateDto, TurnHistoryEntry } from '@/types/game';
 
 interface PlayerTurnReportPanelProps {
   gameId: string;
@@ -27,12 +29,45 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return data as T;
 }
 
+async function parseOptionalResponse<T>(response: Response): Promise<T | null> {
+  if (!response.ok) return null;
+  return response.json() as Promise<T>;
+}
+
+function lookupLabel(options: SelectOption[], value: string | null | undefined): string | null {
+  if (!value) return null;
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function formatFinancialActionSummary(action: TurnActionRecord, settlementOptions: SelectOption[]) {
+  const settlement = lookupLabel(settlementOptions, action.settlementId);
+
+  if (action.financialType === 'build') {
+    return `Build ${action.buildingType ?? 'building'}${settlement ? ` in ${settlement}` : ''}`;
+  }
+
+  if (action.financialType === 'recruit') {
+    return `Recruit ${action.troopType ?? 'troops'}${settlement ? ` at ${settlement}` : ''}`;
+  }
+
+  if (action.financialType === 'constructShip') {
+    return `Construct ${action.shipType ?? 'ship'}${settlement ? ` at ${settlement}` : ''}`;
+  }
+
+  if (action.financialType === 'taxChange') {
+    return `Change tax to ${action.taxType ?? '?'}`;
+  }
+
+  return action.description || 'Spending';
+}
+
 export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: PlayerTurnReportPanelProps) {
   const [currentTurn, setCurrentTurn] = useState<CurrentTurnResponseDto | null>(null);
   const [history, setHistory] = useState<TurnHistoryEntry[]>([]);
   const [settlementOptions, setSettlementOptions] = useState<SelectOption[]>([]);
   const [realmOptions, setRealmOptions] = useState<SelectOption[]>([]);
   const [nobleOptions, setNobleOptions] = useState<SelectOption[]>([]);
+  const [economyProjection, setEconomyProjection] = useState<EconomyProjectionDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
   const [commentActionId, setCommentActionId] = useState<string | null>(null);
@@ -44,18 +79,30 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
     setError('');
 
     try {
-      const [turnData, historyData, settlements, allRealms, realmNobles] = await Promise.all([
-        parseResponse<CurrentTurnResponseDto>(await fetch(`/api/game/${gameId}/turn`, { cache: 'no-store' })),
-        parseResponse<{ history: TurnHistoryEntry[] }>(await fetch(`/api/game/${gameId}/turn/history`, { cache: 'no-store' })),
-        parseResponse<Array<{ id: string; name: string }>>(
-          await fetch(`/api/game/${gameId}/settlements?realmId=${realmId}`, { cache: 'no-store' }),
-        ),
-        parseResponse<Array<{ id: string; name: string }>>(
-          await fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
-        ),
-        parseResponse<Array<{ id: string; name: string; reasonSkill: number; cunningSkill: number }>>(
-          await fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`, { cache: 'no-store' }),
-        ),
+      const realmQuery = `realmId=${encodeURIComponent(realmId)}`;
+      const [
+        turnResponse,
+        historyResponse,
+        settlementsResponse,
+        realmsResponse,
+        noblesResponse,
+        projectionResponse,
+      ] = await Promise.all([
+        fetch(`/api/game/${gameId}/turn?${realmQuery}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/turn/history?${realmQuery}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/settlements?${realmQuery}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/nobles?${realmQuery}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/economy/projection?${realmQuery}`, { cache: 'no-store' }),
+      ]);
+
+      const [turnData, historyData, settlements, allRealms, realmNobles, projection] = await Promise.all([
+        parseResponse<CurrentTurnResponseDto>(turnResponse),
+        parseResponse<{ history: TurnHistoryEntry[] }>(historyResponse),
+        parseResponse<Array<{ id: string; name: string }>>(settlementsResponse),
+        parseResponse<Array<{ id: string; name: string }>>(realmsResponse),
+        parseResponse<Array<{ id: string; name: string; reasonSkill: number; cunningSkill: number }>>(noblesResponse),
+        parseOptionalResponse<EconomyProjectionDto>(projectionResponse),
       ]);
 
       startTransition(() => {
@@ -64,6 +111,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         setSettlementOptions(settlements.map((s) => ({ value: s.id, label: s.name })));
         setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
         setNobleOptions(realmNobles.map((n) => ({ value: n.id, label: `${n.name} (R${n.reasonSkill} / C${n.cunningSkill})` })));
+        setEconomyProjection(projection);
       });
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Failed to load turn data');
@@ -165,6 +213,27 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
   const realm = currentTurn?.realm;
   const isEditable = realm?.report?.status !== 'submitted' && realm?.report?.status !== 'resolved';
   const actions = realm?.actions ?? [];
+  const taxProjectionContext = currentTurn?.game && economyProjection
+    ? {
+      currentTaxType: economyProjection.realm.taxType as TaxType,
+      grossSettlementWealth: economyProjection.settlementBreakdown.reduce((sum, settlement) => sum + settlement.totalWealth, 0),
+      currentYear: currentTurn.game.currentYear,
+      currentSeason: currentTurn.game.currentSeason,
+    }
+    : null;
+  const financialActionsTaken = [
+    ...actions,
+    ...history.flatMap((entry) => entry.actions),
+  ]
+    .filter((action) =>
+      action.kind === 'financial'
+      && (action.status === 'submitted' || action.status === 'executed'),
+    )
+    .sort((left, right) => {
+      if (left.year !== right.year) return right.year - left.year;
+      if (left.season !== right.season) return SEASONS.indexOf(right.season) - SEASONS.indexOf(left.season);
+      return left.sortOrder - right.sortOrder;
+    });
 
   if (loading) {
     return (
@@ -219,6 +288,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
                   nobleOptions={nobleOptions}
                   editable={isEditable && action.status === 'draft'}
                   commentable
+                  taxProjectionContext={taxProjectionContext}
                   saving={savingActionId === action.id}
                   commentSaving={commentActionId === action.id}
                   onSave={(patch) => saveAction(action.id, patch)}
@@ -230,6 +300,42 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
           )}
         </CardContent>
       </Card>
+
+      {compact ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Financial Actions Taken</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {financialActionsTaken.length === 0 ? (
+              <p className="text-sm text-ink-300">No submitted financial actions yet.</p>
+            ) : (
+              financialActionsTaken.map((action) => (
+                <div key={`financial-${action.id}:${action.updatedAt ?? ''}`} className="rounded border border-ink-100 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="gold">Y{action.year} {action.season}</Badge>
+                        <Badge>{action.financialType ?? 'financial'}</Badge>
+                        <Badge>{action.status}</Badge>
+                      </div>
+                      <p className="text-sm font-medium text-ink-600">
+                        {formatFinancialActionSummary(action, settlementOptions)}
+                      </p>
+                      {action.description ? (
+                        <p className="text-sm text-ink-400">{action.description}</p>
+                      ) : null}
+                    </div>
+                    {action.cost > 0 ? (
+                      <Badge>Cost {action.cost.toLocaleString()}gc</Badge>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {!compact ? (
         <div className="space-y-4">

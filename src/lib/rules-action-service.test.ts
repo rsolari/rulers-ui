@@ -203,6 +203,17 @@ describe('prepareBuildingCreation', () => {
     expect(error.details).toEqual({ requiredType: 'Order' });
   });
 
+  it('uses a matching realm G.O.S. as the default allotment for required buildings', () => {
+    const prepared = prepareBuildingCreation({
+      settlementId: 'settlement-1',
+      type: 'Church',
+    }, createBuildingContext({
+      gos: [{ id: 'order-1', type: 'Order' }],
+    }), () => 'building-5b');
+
+    expect(prepared.row.allottedGosId).toBe('order-1');
+  });
+
   it('uses matching traded technical knowledge keys for building prerequisites', () => {
     const prepared = prepareBuildingCreation({
       settlementId: 'settlement-1',

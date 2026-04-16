@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
 import { TurnHistoryList } from '@/components/turn-actions/turn-history-list';
-import type { CurrentTurnResponseDto, TurnActionCreateDto, TurnActionRecord, TurnActionUpdateDto, TurnHistoryEntry } from '@/types/game';
+import type { CurrentTurnResponseDto, GOSType, TurnActionCreateDto, TurnActionRecord, TurnActionUpdateDto, TurnHistoryEntry } from '@/types/game';
 
 interface PlayerTurnReportPanelProps {
   gameId: string;
@@ -17,6 +17,10 @@ interface PlayerTurnReportPanelProps {
 interface SelectOption {
   value: string;
   label: string;
+}
+
+interface GOSOption extends SelectOption {
+  type: GOSType;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -33,6 +37,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
   const [settlementOptions, setSettlementOptions] = useState<SelectOption[]>([]);
   const [realmOptions, setRealmOptions] = useState<SelectOption[]>([]);
   const [nobleOptions, setNobleOptions] = useState<SelectOption[]>([]);
+  const [gosOptions, setGosOptions] = useState<GOSOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
   const [commentActionId, setCommentActionId] = useState<string | null>(null);
@@ -44,7 +49,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
     setError('');
 
     try {
-      const [turnData, historyData, settlements, allRealms, realmNobles] = await Promise.all([
+      const [turnData, historyData, settlements, allRealms, realmNobles, gosList] = await Promise.all([
         parseResponse<CurrentTurnResponseDto>(await fetch(`/api/game/${gameId}/turn`, { cache: 'no-store' })),
         parseResponse<{ history: TurnHistoryEntry[] }>(await fetch(`/api/game/${gameId}/turn/history`, { cache: 'no-store' })),
         parseResponse<Array<{ id: string; name: string }>>(
@@ -56,6 +61,9 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         parseResponse<Array<{ id: string; name: string; reasonSkill: number; cunningSkill: number }>>(
           await fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`, { cache: 'no-store' }),
         ),
+        parseResponse<Array<{ id: string; name: string; type: GOSType }>>(
+          await fetch(`/api/game/${gameId}/gos?realmId=${realmId}`, { cache: 'no-store' }),
+        ),
       ]);
 
       startTransition(() => {
@@ -64,6 +72,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         setSettlementOptions(settlements.map((s) => ({ value: s.id, label: s.name })));
         setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
         setNobleOptions(realmNobles.map((n) => ({ value: n.id, label: `${n.name} (R${n.reasonSkill} / C${n.cunningSkill})` })));
+        setGosOptions(gosList.map((gos) => ({ value: gos.id, label: `${gos.name} (${gos.type})`, type: gos.type })));
       });
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Failed to load turn data');
@@ -217,6 +226,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
                   settlementOptions={settlementOptions}
                   realmOptions={realmOptions}
                   nobleOptions={nobleOptions}
+                  gosOptions={gosOptions}
                   editable={isEditable && action.status === 'draft'}
                   commentable
                   saving={savingActionId === action.id}

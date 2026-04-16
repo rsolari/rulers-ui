@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
   requireGM: vi.fn(),
+  requireOwnedRealmAccess: vi.fn(),
+  resolveSessionFromCookies: vi.fn(),
   isAuthError: vi.fn((error: unknown) => (
     typeof error === 'object' &&
     error !== null &&
@@ -17,6 +19,7 @@ const actionMocks = vi.hoisted(() => ({
 
 const dbMocks = vi.hoisted(() => ({
   select: vi.fn(),
+  update: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => authMocks);
@@ -24,10 +27,11 @@ vi.mock('@/lib/rules-action-service', () => actionMocks);
 vi.mock('@/db', () => ({
   db: {
     select: dbMocks.select,
+    update: dbMocks.update,
   },
 }));
 
-import { GET, POST } from './route';
+import { GET, PATCH, POST } from './route';
 
 function mockSelectWhereOnce(result: unknown) {
   const where = vi.fn().mockResolvedValue(result);
@@ -150,6 +154,76 @@ describe('POST /api/game/[gameId]/buildings', () => {
       error: 'Settlement has no free building slots',
       code: 'building_slot_limit_exceeded',
       details: { settlementId: 'settlement-1' },
+    });
+  });
+});
+
+describe('PATCH /api/game/[gameId]/buildings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function mockSelectGetOnce(result: unknown) {
+    const get = vi.fn().mockResolvedValue(result);
+    const where = vi.fn(() => ({ get }));
+    const from = vi.fn(() => ({ where }));
+    dbMocks.select.mockReturnValueOnce({ from });
+  }
+
+  it('allows players to assign G.O.S. ownership on buildings in their realm', async () => {
+    authMocks.resolveSessionFromCookies.mockResolvedValue({
+      gameId: 'game-1',
+      role: 'player',
+      realmId: 'realm-1',
+    });
+    authMocks.requireOwnedRealmAccess.mockResolvedValue({
+      realmId: 'realm-1',
+      session: { gameId: 'game-1', role: 'player', realmId: 'realm-1' },
+    });
+    mockSelectGetOnce({
+      id: 'building-1',
+      settlementId: 'settlement-1',
+      territoryId: 'territory-1',
+    });
+    mockSelectGetOnce({ realmId: 'realm-1' });
+    mockSelectGetOnce({ gosId: 'gos-1' });
+
+    const where = vi.fn();
+    const set = vi.fn(() => ({ where }));
+    dbMocks.update.mockReturnValueOnce({ set });
+
+    const response = await PATCH(new Request('http://localhost/api/game/game-1/buildings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ buildingId: 'building-1', ownerGosId: 'gos-1' }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(authMocks.requireOwnedRealmAccess).toHaveBeenCalledWith('game-1', 'realm-1');
+    expect(set).toHaveBeenCalledWith({ ownerGosId: 'gos-1' });
+    expect(where).toHaveBeenCalled();
+    expect(response.status).toBe(200);
+  });
+
+  it('prevents players from using the ownership path to edit building structure', async () => {
+    authMocks.resolveSessionFromCookies.mockResolvedValue({
+      gameId: 'game-1',
+      role: 'player',
+      realmId: 'realm-1',
+    });
+
+    const response = await PATCH(new Request('http://localhost/api/game/game-1/buildings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ buildingId: 'building-1', type: 'Castle' }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Player building edits may only assign G.O.S. ownership or allotment',
     });
   });
 });

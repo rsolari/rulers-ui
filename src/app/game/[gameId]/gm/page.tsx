@@ -21,7 +21,7 @@ import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import { readErrorMessage } from '@/lib/http';
 import { TECHNICAL_KNOWLEDGE_OPTIONS, parseTechnicalKnowledge } from '@/lib/technical-knowledge';
-import type { GovernmentType, TechnicalKnowledgeKey, Tradition } from '@/types/game';
+import type { GovernmentType, GOSType, TechnicalKnowledgeKey, Tradition } from '@/types/game';
 
 const GOVERNMENT_OPTIONS = [
   { value: 'Monarch', label: 'Monarch' },
@@ -111,6 +111,8 @@ interface Building {
   constructionTurnsRemaining: number;
   settlementId: string | null;
   territoryId: string | null;
+  ownerGosId?: string | null;
+  allottedGosId?: string | null;
 }
 
 interface Troop {
@@ -964,6 +966,15 @@ export default function GMDashboard() {
                 </div>
               )}
 
+              {editingRealmId && (
+                <RealmManagementEditor
+                  gameId={gameId}
+                  realmId={editingRealmId}
+                  settlements={worldSettlements.filter((settlement) => settlement.realmId === editingRealmId)}
+                  onChanged={loadDashboard}
+                />
+              )}
+
               <div className="flex gap-2">
                 <Button variant="accent" onClick={() => void saveRealm()} disabled={savingRealm || !realmForm.name.trim()}>
                   {savingRealm ? 'Saving...' : editingRealmId ? 'Update Realm' : 'Create Realm'}
@@ -1609,6 +1620,590 @@ export default function GMDashboard() {
       {isActive && <GlobalGOSPanel gameId={gameId} />}
 
     </main>
+  );
+}
+
+interface RealmNobleFamily {
+  id: string;
+  name: string;
+  isRulingFamily: boolean;
+}
+
+interface RealmManagedNoble {
+  id: string;
+  familyId: string;
+  name: string;
+  gender: string;
+  age: string;
+  reasonSkill: number;
+  cunningSkill: number;
+  isAlive?: boolean;
+  isPrisoner: boolean;
+  officeAssignments?: string[];
+  gmStatusText: string | null;
+}
+
+interface RealmManagedGOS {
+  id: string;
+  name: string;
+  type: string;
+  focus: string | null;
+  leaderId: string | null;
+  treasury: number;
+}
+
+const REALM_GENDER_OPTIONS = [
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+];
+
+const REALM_AGE_OPTIONS = [
+  { value: 'Infant', label: 'Infant' },
+  { value: 'Adolescent', label: 'Adolescent' },
+  { value: 'Adult', label: 'Adult' },
+  { value: 'Elderly', label: 'Elderly' },
+];
+
+const REALM_SKILL_OPTIONS = Array.from({ length: 6 }, (_, index) => ({
+  value: String(index),
+  label: String(index),
+}));
+
+const REALM_GOS_TYPE_OPTIONS = [
+  { value: 'Guild', label: 'Guild' },
+  { value: 'Order', label: 'Order' },
+  { value: 'Society', label: 'Society' },
+];
+
+function RealmManagementEditor({
+  gameId,
+  realmId,
+  settlements,
+  onChanged,
+}: {
+  gameId: string;
+  realmId: string;
+  settlements: Settlement[];
+  onChanged: () => Promise<void>;
+}) {
+  const [families, setFamilies] = useState<RealmNobleFamily[]>([]);
+  const [nobles, setNobles] = useState<RealmManagedNoble[]>([]);
+  const [gosList, setGosList] = useState<RealmManagedGOS[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [newFamilyName, setNewFamilyName] = useState('');
+  const [newNoble, setNewNoble] = useState({ familyId: '', name: '' });
+  const [editingNoble, setEditingNoble] = useState<{
+    id: string;
+    name: string;
+    gender: string;
+    age: string;
+    reasonSkill: string;
+    cunningSkill: string;
+    gmStatusText: string;
+  } | null>(null);
+  const [newGos, setNewGos] = useState({
+    name: '',
+    type: 'Guild' as GOSType,
+    focus: '',
+    treasury: 0,
+  });
+  const [editingGos, setEditingGos] = useState<{
+    id: string;
+    name: string;
+    type: GOSType;
+    focus: string;
+    treasury: number;
+    leaderId: string;
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const [familiesResponse, noblesResponse, gosResponse] = await Promise.all([
+        fetch(`/api/game/${gameId}/noble-families?realmId=${realmId}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/nobles?realmId=${realmId}`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/gos?realmId=${realmId}`, { cache: 'no-store' }),
+      ]);
+
+      if (!familiesResponse.ok || !noblesResponse.ok || !gosResponse.ok) {
+        throw new Error('Failed to load realm management data');
+      }
+
+      const [nextFamilies, nextNobles, nextGosList] = await Promise.all([
+        familiesResponse.json() as Promise<RealmNobleFamily[]>,
+        noblesResponse.json() as Promise<RealmManagedNoble[]>,
+        gosResponse.json() as Promise<RealmManagedGOS[]>,
+      ]);
+
+      setFamilies(nextFamilies);
+      setNobles(nextNobles);
+      setGosList(nextGosList);
+      setNewNoble((current) => ({
+        ...current,
+        familyId: current.familyId || nextFamilies[0]?.id || '',
+      }));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load realm management data');
+    } finally {
+      setLoading(false);
+    }
+  }, [gameId, realmId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function refreshAfterChange() {
+    await Promise.all([load(), onChanged()]);
+  }
+
+  async function createFamily() {
+    if (!newFamilyName.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/noble-families`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realmId, name: newFamilyName.trim() }),
+      });
+      if (!response.ok) {
+        setError(await readErrorMessage(response, 'Failed to create noble family'));
+        return;
+      }
+      setNewFamilyName('');
+      await refreshAfterChange();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createNoble() {
+    if (!newNoble.name.trim() || !newNoble.familyId) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/nobles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          realmId,
+          familyId: newNoble.familyId,
+          name: newNoble.name.trim(),
+        }),
+      });
+      if (!response.ok) {
+        setError(await readErrorMessage(response, 'Failed to create noble'));
+        return;
+      }
+      setNewNoble({ familyId: newNoble.familyId, name: '' });
+      await refreshAfterChange();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveNoble() {
+    if (!editingNoble || !editingNoble.name.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/nobles/${editingNoble.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingNoble.name.trim(),
+          gender: editingNoble.gender,
+          age: editingNoble.age,
+          reasonSkill: Number(editingNoble.reasonSkill),
+          cunningSkill: Number(editingNoble.cunningSkill),
+          gmStatusText: editingNoble.gmStatusText.trim() || null,
+        }),
+      });
+      if (!response.ok) {
+        setError(await readErrorMessage(response, 'Failed to update noble'));
+        return;
+      }
+      setEditingNoble(null);
+      await refreshAfterChange();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createGos() {
+    if (!newGos.name.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/gos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          realmId,
+          realmIds: [realmId],
+          name: newGos.name.trim(),
+          type: newGos.type,
+          focus: newGos.focus.trim() || null,
+          treasury: newGos.treasury,
+        }),
+      });
+      if (!response.ok) {
+        setError(await readErrorMessage(response, 'Failed to create G.O.S.'));
+        return;
+      }
+      setNewGos({ name: '', type: 'Guild', focus: '', treasury: 0 });
+      await refreshAfterChange();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveGos() {
+    if (!editingGos || !editingGos.name.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/gos`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gosId: editingGos.id,
+          name: editingGos.name.trim(),
+          type: editingGos.type,
+          focus: editingGos.focus.trim() || null,
+          treasury: editingGos.treasury,
+        }),
+      });
+      if (!response.ok) {
+        setError(await readErrorMessage(response, 'Failed to update G.O.S.'));
+        return;
+      }
+
+      const leaderResponse = await fetch(`/api/game/${gameId}/gos/${editingGos.id}/leader`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nobleId: editingGos.leaderId || null }),
+      });
+      if (!leaderResponse.ok) {
+        setError(await readErrorMessage(leaderResponse, 'G.O.S. saved, but leader assignment failed'));
+        return;
+      }
+
+      setEditingGos(null);
+      await refreshAfterChange();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function assignBuildingGos(buildingId: string, field: 'ownerGosId' | 'allottedGosId', gosId: string) {
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/game/${gameId}/buildings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buildingId, [field]: gosId || null }),
+      });
+      if (!response.ok) {
+        setError(await readErrorMessage(response, 'Failed to assign G.O.S. to building'));
+        return;
+      }
+      await refreshAfterChange();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const nobleOptions = [
+    { value: '', label: 'No leader' },
+    ...nobles
+      .filter((noble) => noble.isAlive !== false && !noble.isPrisoner)
+      .map((noble) => ({ value: noble.id, label: noble.name })),
+  ];
+  const gosOptions = [
+    { value: '', label: 'Unassigned' },
+    ...gosList.map((gos) => ({ value: gos.id, label: `${gos.name} (${gos.type})` })),
+  ];
+
+  return (
+    <div className="space-y-4 border-t border-card-border pt-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-heading text-sm font-semibold text-ink-500">Nobles &amp; G.O.S.</p>
+        {loading ? <span className="text-xs text-ink-300">Loading...</span> : null}
+      </div>
+      {error && <p className="text-sm text-red-500">{error}</p>}
+
+      <div className="rounded border border-ink-200 bg-parchment-50/70 p-3 space-y-3">
+        <p className="font-heading text-sm font-semibold">Noble Families</p>
+        <div className="flex flex-wrap gap-2">
+          {families.map((family) => (
+            <Badge key={family.id} variant={family.isRulingFamily ? 'gold' : 'default'}>
+              House {family.name}
+            </Badge>
+          ))}
+          {families.length === 0 && <span className="text-sm text-ink-300">No families yet.</span>}
+        </div>
+        <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+          <Input
+            label="New Family"
+            value={newFamilyName}
+            onChange={(event) => setNewFamilyName(event.target.value)}
+          />
+          <Button variant="outline" className="self-end" disabled={saving || !newFamilyName.trim()} onClick={() => void createFamily()}>
+            Create Family
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded border border-ink-200 bg-parchment-50/70 p-3 space-y-3">
+        <p className="font-heading text-sm font-semibold">Nobles</p>
+        <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+          <Select
+            label="Family"
+            options={families.map((family) => ({ value: family.id, label: `House ${family.name}` }))}
+            value={newNoble.familyId}
+            onChange={(event) => setNewNoble((current) => ({ ...current, familyId: event.target.value }))}
+          />
+          <Input
+            label="New Noble"
+            value={newNoble.name}
+            onChange={(event) => setNewNoble((current) => ({ ...current, name: event.target.value }))}
+          />
+          <Button
+            variant="outline"
+            className="self-end"
+            disabled={saving || !newNoble.name.trim() || !newNoble.familyId}
+            onClick={() => void createNoble()}
+          >
+            Create Noble
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {nobles.map((noble) => (
+            <div key={noble.id} className="rounded bg-parchment-100/60 p-2">
+              {editingNoble?.id === noble.id ? (
+                <div className="space-y-2">
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <Input
+                      label="Name"
+                      value={editingNoble.name}
+                      onChange={(event) => setEditingNoble((current) => current ? { ...current, name: event.target.value } : current)}
+                    />
+                    <Select
+                      label="Gender"
+                      options={REALM_GENDER_OPTIONS}
+                      value={editingNoble.gender}
+                      onChange={(event) => setEditingNoble((current) => current ? { ...current, gender: event.target.value } : current)}
+                    />
+                    <Select
+                      label="Age"
+                      options={REALM_AGE_OPTIONS}
+                      value={editingNoble.age}
+                      onChange={(event) => setEditingNoble((current) => current ? { ...current, age: event.target.value } : current)}
+                    />
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <Select
+                      label="Reason"
+                      options={REALM_SKILL_OPTIONS}
+                      value={editingNoble.reasonSkill}
+                      onChange={(event) => setEditingNoble((current) => current ? { ...current, reasonSkill: event.target.value } : current)}
+                    />
+                    <Select
+                      label="Cunning"
+                      options={REALM_SKILL_OPTIONS}
+                      value={editingNoble.cunningSkill}
+                      onChange={(event) => setEditingNoble((current) => current ? { ...current, cunningSkill: event.target.value } : current)}
+                    />
+                    <Input
+                      label="GM Status"
+                      value={editingNoble.gmStatusText}
+                      onChange={(event) => setEditingNoble((current) => current ? { ...current, gmStatusText: event.target.value } : current)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="accent" size="sm" disabled={saving || !editingNoble.name.trim()} onClick={() => void saveNoble()}>
+                      Save Noble
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setEditingNoble(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-heading font-semibold">{noble.name}</span>
+                    <Badge variant="default">{noble.gender}</Badge>
+                    <Badge variant="default">{noble.age}</Badge>
+                    <span className="text-xs text-ink-300">R{noble.reasonSkill} C{noble.cunningSkill}</span>
+                    {noble.officeAssignments?.length ? <Badge variant="gold">{noble.officeAssignments.join(', ')}</Badge> : null}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingNoble({
+                      id: noble.id,
+                      name: noble.name,
+                      gender: noble.gender,
+                      age: noble.age,
+                      reasonSkill: String(noble.reasonSkill),
+                      cunningSkill: String(noble.cunningSkill),
+                      gmStatusText: noble.gmStatusText ?? '',
+                    })}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+          {nobles.length === 0 && <p className="text-sm text-ink-300">No nobles yet.</p>}
+        </div>
+      </div>
+
+      <div className="rounded border border-ink-200 bg-parchment-50/70 p-3 space-y-3">
+        <p className="font-heading text-sm font-semibold">Guilds, Orders &amp; Societies</p>
+        <div className="grid gap-2 md:grid-cols-[1fr_160px_1fr_140px_auto]">
+          <Input
+            label="Name"
+            value={newGos.name}
+            onChange={(event) => setNewGos((current) => ({ ...current, name: event.target.value }))}
+          />
+          <Select
+            label="Type"
+            options={REALM_GOS_TYPE_OPTIONS}
+            value={newGos.type}
+            onChange={(event) => setNewGos((current) => ({ ...current, type: event.target.value as GOSType }))}
+          />
+          <Input
+            label="Focus"
+            value={newGos.focus}
+            onChange={(event) => setNewGos((current) => ({ ...current, focus: event.target.value }))}
+          />
+          <Input
+            label="Treasury"
+            type="number"
+            value={String(newGos.treasury)}
+            onChange={(event) => setNewGos((current) => ({ ...current, treasury: Number(event.target.value) || 0 }))}
+          />
+          <Button variant="outline" className="self-end" disabled={saving || !newGos.name.trim()} onClick={() => void createGos()}>
+            Create G.O.S.
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {gosList.map((gos) => (
+            <div key={gos.id} className="rounded bg-parchment-100/60 p-2">
+              {editingGos?.id === gos.id ? (
+                <div className="space-y-2">
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <Input
+                      label="Name"
+                      value={editingGos.name}
+                      onChange={(event) => setEditingGos((current) => current ? { ...current, name: event.target.value } : current)}
+                    />
+                    <Select
+                      label="Type"
+                      options={REALM_GOS_TYPE_OPTIONS}
+                      value={editingGos.type}
+                      onChange={(event) => setEditingGos((current) => current ? { ...current, type: event.target.value as GOSType } : current)}
+                    />
+                    <Select
+                      label="Leader"
+                      options={nobleOptions}
+                      value={editingGos.leaderId}
+                      onChange={(event) => setEditingGos((current) => current ? { ...current, leaderId: event.target.value } : current)}
+                    />
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <Input
+                      label="Focus"
+                      value={editingGos.focus}
+                      onChange={(event) => setEditingGos((current) => current ? { ...current, focus: event.target.value } : current)}
+                    />
+                    <Input
+                      label="Treasury"
+                      type="number"
+                      value={String(editingGos.treasury)}
+                      onChange={(event) => setEditingGos((current) => current ? { ...current, treasury: Number(event.target.value) || 0 } : current)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="accent" size="sm" disabled={saving || !editingGos.name.trim()} onClick={() => void saveGos()}>
+                      Save G.O.S.
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setEditingGos(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-heading font-semibold">{gos.name}</span>
+                    <Badge variant="gold">{gos.type}</Badge>
+                    {gos.focus ? <span className="text-sm text-ink-300">{gos.focus}</span> : null}
+                    <span className="text-sm text-ink-400">{gos.treasury.toLocaleString()}gc</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingGos({
+                      id: gos.id,
+                      name: gos.name,
+                      type: gos.type as GOSType,
+                      focus: gos.focus ?? '',
+                      treasury: gos.treasury,
+                      leaderId: gos.leaderId ?? '',
+                    })}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+          {gosList.length === 0 && <p className="text-sm text-ink-300">No G.O.S. yet.</p>}
+        </div>
+      </div>
+
+      <div className="rounded border border-ink-200 bg-parchment-50/70 p-3 space-y-3">
+        <p className="font-heading text-sm font-semibold">Building G.O.S. Assignments</p>
+        {settlements.flatMap((settlement) => settlement.buildings ?? []).length === 0 ? (
+          <p className="text-sm text-ink-300">No settlement buildings available.</p>
+        ) : (
+          <div className="space-y-2">
+            {settlements.map((settlement) => (
+              <div key={settlement.id} className="space-y-2">
+                <p className="text-xs font-heading font-semibold text-ink-400">{settlement.name}</p>
+                {(settlement.buildings ?? []).map((building) => (
+                  <div key={building.id} className="grid gap-2 rounded bg-parchment-100/60 p-2 md:grid-cols-[1fr_220px_220px] md:items-end">
+                    <div>
+                      <span className="font-heading font-semibold">{building.type}</span>
+                      <span className="ml-2 text-xs text-ink-300">{building.size}</span>
+                    </div>
+                    <Select
+                      label="Owner"
+                      options={gosOptions}
+                      value={building.ownerGosId ?? ''}
+                      onChange={(event) => void assignBuildingGos(building.id, 'ownerGosId', event.target.value)}
+                    />
+                    <Select
+                      label="Allotted"
+                      options={gosOptions}
+                      value={building.allottedGosId ?? ''}
+                      onChange={(event) => void assignBuildingGos(building.id, 'allottedGosId', event.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

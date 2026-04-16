@@ -185,6 +185,37 @@ describe('prepareBuildingCreation', () => {
     expect(error.status).toBe(409);
   });
 
+  it('rejects duplicate limited buildings inside the same settlement', () => {
+    const error = expectRuleError(() => prepareBuildingCreation({
+      settlementId: 'settlement-1',
+      type: 'Port',
+    }, createBuildingContext({
+      existingBuildings: [{
+        id: 'port-1',
+        type: 'Port',
+        takesBuildingSlot: true,
+        constructionTurnsRemaining: 0,
+      }],
+    }), () => 'building-4b'));
+
+    expect(error.code).toBe('building_duplicate_in_settlement');
+    expect(error.details).toEqual({
+      type: 'Port',
+      settlementId: 'settlement-1',
+    });
+  });
+
+  it('allows limited buildings when the duplicate exists in a different settlement in the same realm', () => {
+    const prepared = prepareBuildingCreation({
+      settlementId: 'settlement-1',
+      type: 'Port',
+    }, createBuildingContext({
+      allRealmBuildingTypes: ['Port'],
+    }), () => 'building-4c');
+
+    expect(prepared.row.type).toBe('Port');
+  });
+
   it('requires an allotted order or society when the building definition calls for one', () => {
     const error = expectRuleError(() => prepareBuildingCreation({
       settlementId: 'settlement-1',

@@ -8,11 +8,14 @@ const mocks = vi.hoisted(() => {
   }> = [];
 
   const db = {
+    transaction: vi.fn((callback: (tx: unknown) => unknown) => callback(db)),
     update: vi.fn((table: unknown) => ({
       set: (values: Record<string, unknown>) => ({
-        where: () => {
-          operations.push({ table, values });
-        },
+        where: () => ({
+          run: () => {
+            operations.push({ table, values });
+          },
+        }),
       }),
     })),
   };
@@ -33,9 +36,14 @@ const readinessMocks = vi.hoisted(() => ({
   recomputeGameInitState: vi.fn(),
 }));
 
+const gosIncomeMocks = vi.hoisted(() => ({
+  seedGosStartingTreasuries: vi.fn(),
+}));
+
 vi.mock('@/db', () => ({ db: mocks.db }));
 vi.mock('@/lib/auth', () => authMocks);
 vi.mock('@/lib/game-init-state', () => readinessMocks);
+vi.mock('@/lib/gos-income', () => gosIncomeMocks);
 
 import { POST } from './route';
 
@@ -114,6 +122,8 @@ describe('POST /api/game/[gameId]/start', () => {
       gamePhase: 'Active',
       initState: 'active',
     });
+    expect(mocks.db.transaction).toHaveBeenCalledOnce();
+    expect(gosIncomeMocks.seedGosStartingTreasuries).toHaveBeenCalledWith(mocks.db, 'game-1');
     expect(mocks.operations).toEqual([{
       table: games,
       values: {

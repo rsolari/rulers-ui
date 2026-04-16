@@ -5,6 +5,7 @@ import { games } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { requireGM } from '@/lib/auth';
 import { getGameSetupReadiness, recomputeGameInitState } from '@/lib/game-init-state';
+import { seedGosStartingTreasuries } from '@/lib/gos-income';
 
 export async function POST(
   _request: Request,
@@ -41,9 +42,13 @@ export async function POST(
       }, { status: 409 });
     }
 
-    await db.update(games)
-      .set({ initState: 'active', gamePhase: 'Active' })
-      .where(eq(games.id, gameId));
+    await db.transaction((tx) => {
+      seedGosStartingTreasuries(tx, gameId);
+      tx.update(games)
+        .set({ initState: 'active', gamePhase: 'Active' })
+        .where(eq(games.id, gameId))
+        .run();
+    });
 
     return NextResponse.json({ gameId, gamePhase: 'Active', initState: 'active' });
   } catch (error) {

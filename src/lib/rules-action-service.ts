@@ -62,7 +62,7 @@ const OUTSIDE_SETTLEMENT_TYPES = new Set<BuildingType>(['Castle', 'Fort', 'Walls
 const SLOTLESS_SETTLEMENT_TYPES = new Set<BuildingType>(['Gatehouse', 'Walls', 'Watchtower']);
 const VARIABLE_MATERIAL_TYPES = new Set<BuildingType>(['Gatehouse', 'Walls', 'Watchtower']);
 
-/** Building types that provide realm-wide effects and should not be constructed more than once per realm. */
+/** Building types that should not be duplicated inside the same settlement. */
 const UNIQUE_BUILDING_TYPES = new Set<BuildingType>([
   'Armoursmith', 'BrickMakers', 'CannonFoundry', 'Castle', 'Coliseum',
   'Fort', 'Gunsmith', 'Weaponsmith', 'Watchtower', 'Walls', 'Stables',
@@ -656,13 +656,12 @@ export function prepareBuildingCreation(
 
   if (!input.gmOverride && UNIQUE_BUILDING_TYPES.has(buildingType)) {
     const alreadyInSettlement = context.existingBuildings.some((b) => b.type === buildingType);
-    const alreadyInRealm = context.allRealmBuildingTypes?.includes(buildingType) ?? false;
-    if (alreadyInSettlement || alreadyInRealm) {
+    if (alreadyInSettlement) {
       throw new RuleValidationError(
-        `Your realm already has a ${buildingType}`,
+        `This settlement already has a ${buildingType}`,
         409,
-        'building_duplicate_in_realm',
-        { type: buildingType },
+        'building_duplicate_in_settlement',
+        { type: buildingType, settlementId: settlement?.id ?? null },
       );
     }
   }

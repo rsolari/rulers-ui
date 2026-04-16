@@ -26,6 +26,11 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
       .catch(() => {});
   }, [gameId]);
 
+  // Scroll to top on page navigation so breadcrumbs aren't hidden behind sticky nav
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   // Don't show nav on the join/auth page itself
   const isJoinPage = pathname === `/game/${gameId}`;
 

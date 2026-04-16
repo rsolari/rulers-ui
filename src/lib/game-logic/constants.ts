@@ -510,6 +510,7 @@ export function getTraditionGrantedBuildings(traditions: readonly Tradition[]) {
 // --- Seasons order ---
 
 export const SEASONS: Season[] = ['Spring', 'Summer', 'Autumn', 'Winter'];
+export const LEVY_DURATION_SEASONS = SEASONS.length;
 
 export function getNextSeason(season: Season): { season: Season; yearIncrement: number } {
   const idx = SEASONS.indexOf(season);

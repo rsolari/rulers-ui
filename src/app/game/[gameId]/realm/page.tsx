@@ -334,7 +334,7 @@ export default function RealmDashboard() {
                 { key: 'nobleSetupCompleted', label: 'Recruit at least one supporting noble', link: `/game/${gameId}/realm/nobles` },
                 { key: 'guildOrderSocietySetupCompleted', label: 'Establish a Guild, Order, or Society', link: `/game/${gameId}/realm/gos` },
                 { key: 'startingArmyPresent', label: 'Raise a starting army', link: `/game/${gameId}/realm/army` },
-                { key: 'settlementsPlacedNamed', label: 'Name your settlements (including a Town capital)', link: `/game/${gameId}/realm/settlements` },
+                { key: 'settlementsPlacedNamed', label: 'Name your settlements (including a City capital)', link: `/game/${gameId}/realm/settlements` },
                 { key: 'economyInitialized', label: 'Set up your economy (tax policy & treasury)', link: `/game/${gameId}/realm/treasury` },
               ] as const).map((item) => {
                 const done = setupChecklist[item.key];

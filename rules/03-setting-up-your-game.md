@@ -23,7 +23,7 @@ We recommend no more than 6 players, but no less than 3.[^1] The N.O. cannot be 
 
 - 3 Common Resources
 - 1 Luxury Resource
-- 5 Settlements: 4 Villages and 1 Town — one at each Resource site and one free-standing Settlement
+- 5 Settlements: 4 Villages and 1 City — one at each Resource site and one free-standing Settlement (your capital)
 - A Standing Army of 5 Troops
 - A Tax Rate of: Low
 

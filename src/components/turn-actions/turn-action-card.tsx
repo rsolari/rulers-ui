@@ -14,6 +14,7 @@ import {
   type TurnActionRecord,
   type TurnActionUpdateDto,
   type TurnActionOutcome,
+  type TurnActionResolutionRoll,
   type TurnActionStatus,
 } from '@/types/game';
 import { BUILDING_DEFS, LEVY_DURATION_SEASONS, SEASONS, TAX_RATES, TAX_TURMOIL, TROOP_DEFS } from '@/lib/game-logic/constants';
@@ -47,6 +48,7 @@ const GOS_PREREQUISITES = new Set<GOSType>(['Guild', 'Order', 'Society']);
 
 const DICE_POOL_SIZE = 5;
 const DICE_SUCCESS_THRESHOLD = 5;
+const DICE_SIDES = 6;
 
 interface TurnActionCardProps {
   action: TurnActionRecord;
@@ -98,6 +100,7 @@ function createDraftState(action: TurnActionRecord): TurnActionUpdateDto {
     status: action.status,
     outcome: action.outcome,
     resolutionSummary: action.resolutionSummary,
+    resolutionRolls: action.resolutionRolls,
   };
 }
 
@@ -184,29 +187,32 @@ function TaxImpactBadges({
   );
 }
 
-function DiceRoller() {
-  const [rolls, setRolls] = useState<number[] | null>(null);
+function createResolutionRoll(): TurnActionResolutionRoll {
+  const dice = Array.from({ length: DICE_POOL_SIZE }, () => Math.floor(Math.random() * DICE_SIDES) + 1);
 
-  function roll() {
-    const dice = Array.from({ length: DICE_POOL_SIZE }, () => Math.floor(Math.random() * 6) + 1);
-    setRolls(dice);
-  }
+  return {
+    dice,
+    sides: DICE_SIDES,
+    target: DICE_SUCCESS_THRESHOLD,
+    successes: dice.filter((d) => d >= DICE_SUCCESS_THRESHOLD).length,
+    failures: dice.filter((d) => d <= 2).length,
+    rolledAt: new Date().toISOString(),
+  };
+}
 
-  const successes = rolls?.filter((d) => d >= DICE_SUCCESS_THRESHOLD).length ?? 0;
+function DiceRollRows({ rolls }: { rolls: TurnActionResolutionRoll[] }) {
+  if (rolls.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-3">
-      <Button variant="outline" size="sm" onClick={roll}>
-        Roll {DICE_POOL_SIZE}d6
-      </Button>
-      {rolls && (
-        <div className="flex items-center gap-2">
+    <div className="space-y-2">
+      {rolls.map((roll, rollIndex) => (
+        <div key={`${roll.rolledAt ?? 'roll'}-${rollIndex}`} className="flex flex-wrap items-center gap-2">
           <span className="flex gap-1">
-            {rolls.map((d, i) => (
+            {roll.dice.map((d, dieIndex) => (
               <span
-                key={i}
+                key={`${rollIndex}-${dieIndex}`}
                 className={`inline-flex h-7 w-7 items-center justify-center rounded border text-sm font-mono font-bold ${
-                  d >= DICE_SUCCESS_THRESHOLD
+                  d >= roll.target
                     ? 'border-green-600 bg-green-50 text-green-700'
                     : 'border-ink-200 bg-parchment-100 text-ink-400'
                 }`}
@@ -215,11 +221,63 @@ function DiceRoller() {
               </span>
             ))}
           </span>
-          <Badge variant={successes > 0 ? 'green' : 'default'}>
-            {successes} {successes === 1 ? 'success' : 'successes'}
+          <Badge variant={roll.successes > 0 ? 'green' : 'default'}>
+            {roll.successes} {roll.successes === 1 ? 'success' : 'successes'}
           </Badge>
+          <span className="text-xs text-ink-300">{roll.dice.length}d{roll.sides}, target {roll.target}+</span>
         </div>
-      )}
+      ))}
+    </div>
+  );
+}
+
+function DiceRoller({
+  rolls,
+  onChange,
+}: {
+  rolls: TurnActionResolutionRoll[];
+  onChange: (rolls: TurnActionResolutionRoll[]) => void;
+}) {
+  function roll() {
+    onChange([...rolls, createResolutionRoll()]);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={roll}>
+          Roll {DICE_POOL_SIZE}d{DICE_SIDES}
+        </Button>
+        {rolls.length > 0 ? (
+          <Button variant="ghost" size="sm" onClick={() => onChange([])}>
+            Clear Rolls
+          </Button>
+        ) : null}
+      </div>
+      <DiceRollRows rolls={rolls} />
+    </div>
+  );
+}
+
+function ResolutionMetadata({
+  action,
+}: {
+  action: TurnActionRecord;
+}) {
+  const hasResolution = action.status !== 'draft' || action.outcome !== 'pending' || action.resolutionSummary || action.resolutionRolls.length > 0;
+  if (!hasResolution) return null;
+
+  return (
+    <div className="space-y-2 rounded border border-ink-100 bg-parchment-50 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-ink-500">Resolution</span>
+        <ActionStatusBadge status={action.status} />
+        <ActionOutcomeBadge outcome={action.outcome} />
+      </div>
+      <DiceRollRows rolls={action.resolutionRolls} />
+      {action.resolutionSummary ? (
+        <p className="whitespace-pre-wrap text-sm text-ink-600">{action.resolutionSummary}</p>
+      ) : null}
     </div>
   );
 }
@@ -388,13 +446,16 @@ export function TurnActionCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {showReadOnlySummary ? (
-          <ReadOnlySummary
-            action={action}
-            settlementOptions={settlementOptions}
-            realmOptions={realmOptions}
-            nobleOptions={nobleOptions}
-            taxProjectionContext={taxProjectionContext}
-          />
+          <>
+            <ReadOnlySummary
+              action={action}
+              settlementOptions={settlementOptions}
+              realmOptions={realmOptions}
+              nobleOptions={nobleOptions}
+              taxProjectionContext={taxProjectionContext}
+            />
+            <ResolutionMetadata action={action} />
+          </>
         ) : action.kind === 'political' ? (
           <div className="space-y-4">
             <div>
@@ -537,7 +598,10 @@ export function TurnActionCard({
         {gmExecutable ? (
           <div className="space-y-3 border-t border-ink-100 pt-3">
             <p className="text-sm font-semibold text-ink-500">Noble Action Check</p>
-            <DiceRoller />
+            <DiceRoller
+              rolls={draft.resolutionRolls ?? []}
+              onChange={(resolutionRolls) => setDraft((current) => ({ ...current, resolutionRolls }))}
+            />
             <div className="grid gap-3 md:grid-cols-2">
               <Select
                 label="Workflow Status"
@@ -553,7 +617,7 @@ export function TurnActionCard({
               />
             </div>
             <Textarea
-              label="Resolution Summary"
+              label="Resolution Notes"
               rows={3}
               value={draft.resolutionSummary ?? ''}
               onChange={(event) => setDraft((current) => ({ ...current, resolutionSummary: event.target.value }))}

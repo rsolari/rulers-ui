@@ -1,18 +1,32 @@
-import { BUILDING_DEFS } from '@/lib/game-logic/constants';
 import { parseJson } from '@/lib/json';
-import type { BuildingType, TechnicalKnowledgeKey } from '@/types/game';
+import type { TechnicalKnowledgeKey } from '@/types/game';
 
 export function formatTechnicalKnowledgeLabel(value: string) {
   return value.replace(/([a-z])([A-Z])/g, '$1 $2');
 }
 
-export const TECHNICAL_KNOWLEDGE_OPTIONS = Object.values(BUILDING_DEFS)
-  .filter((definition) => definition.prerequisites.includes('TechnicalKnowledge'))
-  .map((definition) => ({
-    value: definition.type as TechnicalKnowledgeKey,
-    label: formatTechnicalKnowledgeLabel(definition.type),
-    description: BUILDING_DEFS[definition.type as BuildingType].description,
-  }));
+export const TECHNICAL_KNOWLEDGE_OPTIONS = [
+  {
+    value: 'CannonFoundry' as TechnicalKnowledgeKey,
+    label: 'Cannon Foundry',
+    description: 'Specialized casting and boring techniques for cannon production.',
+  },
+  {
+    value: 'Dockyards' as TechnicalKnowledgeKey,
+    label: 'Dockyards',
+    description: 'Specialized shipbuilding knowledge for large-scale naval construction.',
+  },
+  {
+    value: 'Gunsmith' as TechnicalKnowledgeKey,
+    label: 'Gunsmith',
+    description: 'Specialized firearm manufacturing and maintenance knowledge.',
+  },
+  {
+    value: 'PowderMill' as TechnicalKnowledgeKey,
+    label: 'Powder Mill',
+    description: 'Specialized powder milling and handling knowledge.',
+  },
+] as const;
 
 const TECHNICAL_KNOWLEDGE_OPTION_SET = new Set(
   TECHNICAL_KNOWLEDGE_OPTIONS.map((option) => option.value),

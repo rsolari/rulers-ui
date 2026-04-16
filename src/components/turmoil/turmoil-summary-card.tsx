@@ -6,6 +6,7 @@ import type { TaxType, TurmoilSource } from '@/types/game';
 interface TurmoilSummaryCardProps {
   title?: string;
   projectedTurmoil: number;
+  buildingTurmoilReduction?: number;
   turmoilBreakdown: TurmoilSource[];
   taxType: TaxType;
   incidentLabel?: string | null;
@@ -14,6 +15,7 @@ interface TurmoilSummaryCardProps {
 export function TurmoilSummaryCard({
   title = 'Turmoil',
   projectedTurmoil,
+  buildingTurmoilReduction = 0,
   turmoilBreakdown,
   taxType,
   incidentLabel,
@@ -48,6 +50,12 @@ export function TurmoilSummaryCard({
               <strong>{source.amount > 0 ? `+${source.amount}` : source.amount}</strong>
             </div>
           ))}
+          {buildingTurmoilReduction > 0 ? (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-ink-300">Building reductions</span>
+              <strong>-{buildingTurmoilReduction}</strong>
+            </div>
+          ) : null}
         </div>
       </CardContent>
     </Card>

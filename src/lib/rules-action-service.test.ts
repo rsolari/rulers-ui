@@ -367,7 +367,7 @@ describe('prepareShipConstruction', () => {
     }, createShipContext({
       localBuildings: ['Port'],
       settlementBuildings: ['Port'],
-      tradedBuildings: ['Shipwrights', 'CannonFoundry'],
+      tradedBuildings: ['CannonFoundry'],
       fleetId: 'fleet-1',
       garrisonSettlementId: null,
       fleetWaterZoneType: 'ocean',

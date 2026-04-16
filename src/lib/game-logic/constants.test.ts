@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getNextSeason } from './constants';
+import { getNextSeason, SHIP_DEFS } from './constants';
 
 describe('getNextSeason', () => {
   it('returns Summer with yearIncrement 0 for Spring', () => {
@@ -16,5 +16,11 @@ describe('getNextSeason', () => {
 
   it('returns Spring with yearIncrement 1 for Winter', () => {
     expect(getNextSeason('Winter')).toEqual({ season: 'Spring', yearIncrement: 1 });
+  });
+});
+
+describe('SHIP_DEFS', () => {
+  it('does not require Shipwrights for any ship', () => {
+    expect(Object.values(SHIP_DEFS).flatMap((ship) => ship.requires)).not.toContain('Shipwrights');
   });
 });

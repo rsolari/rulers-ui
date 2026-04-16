@@ -230,10 +230,27 @@ describe('turn action service', () => {
       status: 'executed',
       outcome: 'success',
       resolutionSummary: 'The message was delivered without incident.',
+      resolutionRolls: [{
+        dice: [6, 5, 2, 1, 4],
+        sides: 6,
+        target: 5,
+        successes: 0,
+        failures: 0,
+        rolledAt: '2026-04-16T12:00:00.000Z',
+      }],
     });
 
     expect(updated.status).toBe('executed');
     expect(updated.outcome).toBe('success');
+    expect(updated.resolutionSummary).toBe('The message was delivered without incident.');
+    expect(updated.resolutionRolls).toEqual([{
+      dice: [6, 5, 2, 1, 4],
+      sides: 6,
+      target: 5,
+      successes: 2,
+      failures: 2,
+      rolledAt: '2026-04-16T12:00:00.000Z',
+    }]);
 
     const report = db.select().from(schema.turnReports).where(eq(schema.turnReports.realmId, 'realm-1')).get();
     expect(report?.status).toBe('resolved');

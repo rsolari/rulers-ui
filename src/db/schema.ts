@@ -806,6 +806,7 @@ export const turnActions = sqliteTable('turn_actions', {
   technicalKnowledgeKey: text('technical_knowledge_key').$type<TechnicalKnowledgeKey>(),
   cost: integer('cost').default(0).notNull(),
   resolutionSummary: text('resolution_summary'),
+  resolutionRolls: text('resolution_rolls').default('[]').notNull(),
   submittedAt: integer('submitted_at', { mode: 'timestamp' }),
   submittedBy: text('submitted_by'),
   executedAt: integer('executed_at', { mode: 'timestamp' }),

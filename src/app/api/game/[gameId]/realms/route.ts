@@ -26,6 +26,7 @@ export async function GET(
   return NextResponse.json(realmList.map((realm) => ({
     ...realm,
     projectedTurmoil: overviewByRealmId.get(realm.id)?.projectedTurmoil ?? null,
+    buildingTurmoilReduction: overviewByRealmId.get(realm.id)?.buildingTurmoilReduction ?? 0,
     turmoilBreakdown: overviewByRealmId.get(realm.id)?.turmoilBreakdown ?? [],
     openTurmoilEventId: overviewByRealmId.get(realm.id)?.openTurmoilEventId ?? null,
     winterUnrestPending: overviewByRealmId.get(realm.id)?.winterUnrestPending ?? false,

@@ -47,6 +47,7 @@ export interface EconomyProjectionDto {
   foodNeeded: number;
   foodSurplus: number;
   projectedTurmoil: number;
+  buildingTurmoilReduction: number;
   turmoilBreakdown: TurmoilSource[];
   openTurmoilEventId?: string | null;
   winterUnrestPending?: boolean;
@@ -64,6 +65,7 @@ export interface EconomyOverviewRealmDto {
   projectedTreasury: number;
   foodSurplus: number;
   projectedTurmoil: number;
+  buildingTurmoilReduction: number;
   turmoilBreakdown: TurmoilSource[];
   openTurmoilEventId?: string | null;
   winterUnrestPending?: boolean;

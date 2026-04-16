@@ -191,8 +191,10 @@ The N.O. may agree that a smaller version of the same Building is acceptable, or
 
 ## Gaining Technical Knowledge
 
-Certain Buildings, or [Troops](27-armies.md), may need Technical Knowledge in order to be constructed or recruited. This Technical Knowledge represents a high degree of mastery for a given skill, or a special process, which is necessary to create or operate the thing in question.
+Certain Buildings, [Troops](27-armies.md), or Ships may need Technical Knowledge in order to be constructed or recruited. This Technical Knowledge represents a high degree of mastery for a given skill, or a special process, which is necessary to create or operate the thing in question.
 
 To obtain Technical Knowledge, a Realm can [trade](25-trade.md) with a Realm that already has the necessary knowledge. Buildings or Troops constructed or recruited in this manner cost an **additional 25%** during the construction or recruiting phase, to represent the hiring of a foreign expert. The N.O. can decide if certain events can also trigger the acquisition of Technical Knowledge, although what this knowledge might be can vary dramatically.
+
+The in-game Technical Knowledge list tracks specific keys so trade and construction can be resolved consistently. The current supported knowledge includes **Dockyards**, representing specialized large-scale shipbuilding knowledge, alongside powder, gunsmithing, and cannon-founding expertise.
 
 [^31]: A harquebus is a smoothbore gun with a matchlock firing mechanism that pre-dates early muskets. It has an accurate range of about 50 yards.

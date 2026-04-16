@@ -28,6 +28,7 @@ import type {
   TurnActionCreateDto,
   TurnActionOutcome,
   TurnActionRecord,
+  TurnActionResolutionRoll,
   TurnActionStatus,
   TurnActionUpdateDto,
   TurnHistoryEntry,
@@ -98,6 +99,46 @@ function serializeComment(comment: ActionCommentRow): ActionCommentRecord {
   };
 }
 
+function normalizeResolutionRolls(value: unknown): TurnActionResolutionRoll[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((roll): TurnActionResolutionRoll[] => {
+    if (typeof roll !== 'object' || roll === null) {
+      return [];
+    }
+
+    const candidate = roll as Partial<TurnActionResolutionRoll>;
+    const sides = Number.isInteger(candidate.sides) && candidate.sides! >= 2 && candidate.sides! <= 100
+      ? candidate.sides!
+      : 6;
+    const target = Number.isInteger(candidate.target) && candidate.target! >= 1 && candidate.target! <= sides
+      ? candidate.target!
+      : 5;
+    const dice = Array.isArray(candidate.dice)
+      ? candidate.dice
+        .filter((die): die is number => Number.isInteger(die) && die >= 1 && die <= sides)
+        .slice(0, 100)
+      : [];
+
+    if (dice.length === 0) {
+      return [];
+    }
+
+    return [{
+      dice,
+      sides,
+      target,
+      successes: dice.filter((die) => die >= target).length,
+      failures: dice.filter((die) => sides === 6 ? die <= 2 : die === 1).length,
+      rolledAt: typeof candidate.rolledAt === 'string' && candidate.rolledAt.trim().length > 0
+        ? candidate.rolledAt
+        : null,
+    }];
+  });
+}
+
 function serializeAction(action: TurnActionRow, comments: ActionCommentRecord[]): TurnActionRecord {
   return {
     id: action.id,
@@ -134,6 +175,7 @@ function serializeAction(action: TurnActionRow, comments: ActionCommentRecord[])
     technicalKnowledgeKey: action.technicalKnowledgeKey ?? null,
     cost: action.cost,
     resolutionSummary: action.resolutionSummary ?? null,
+    resolutionRolls: normalizeResolutionRolls(parseJson<unknown[]>(action.resolutionRolls, [])),
     submittedAt: toIsoString(action.submittedAt),
     submittedBy: action.submittedBy ?? null,
     executedAt: toIsoString(action.executedAt),
@@ -911,6 +953,7 @@ export function createTurnActionService(database: DB = defaultDb) {
         sortOrder,
         ...fields,
         resolutionSummary: null,
+        resolutionRolls: '[]',
         submittedAt: null,
         submittedBy: null,
         executedAt: null,
@@ -954,7 +997,7 @@ export function createTurnActionService(database: DB = defaultDb) {
       } else {
         assertCurrentPoliticalAction(action, game);
 
-        const allowedKeys = new Set(['status', 'outcome', 'resolutionSummary']);
+        const allowedKeys = new Set(['status', 'outcome', 'resolutionSummary', 'resolutionRolls']);
         for (const key of Object.keys(input)) {
           if (!allowedKeys.has(key)) {
             throw new TurnActionError('GM updates may only change execution fields.', 400, 'invalid_gm_action_update');
@@ -971,7 +1014,12 @@ export function createTurnActionService(database: DB = defaultDb) {
           .set({
             status: nextStatus,
             outcome: nextOutcome,
-            resolutionSummary: normalizeNullableString(input.resolutionSummary) ?? null,
+            resolutionSummary: input.resolutionSummary !== undefined
+              ? normalizeNullableString(input.resolutionSummary) ?? null
+              : action.resolutionSummary,
+            resolutionRolls: input.resolutionRolls !== undefined
+              ? JSON.stringify(normalizeResolutionRolls(input.resolutionRolls))
+              : action.resolutionRolls,
             executedAt: nextStatus === 'executed' ? new Date() : action.executedAt,
             executedBy: nextStatus === 'executed' ? actor.label : action.executedBy,
             updatedAt: new Date(),

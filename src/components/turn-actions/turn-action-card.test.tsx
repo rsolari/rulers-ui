@@ -4,7 +4,7 @@ import { TurnActionCard } from './turn-action-card';
 import type { TurnActionRecord } from '@/types/game';
 
 function createAction(overrides: Partial<TurnActionRecord> = {}): TurnActionRecord {
-  return {
+  const base: TurnActionRecord = {
     id: 'action-1',
     turnReportId: 'report-1',
     gameId: 'game-1',
@@ -39,6 +39,7 @@ function createAction(overrides: Partial<TurnActionRecord> = {}): TurnActionReco
     technicalKnowledgeKey: null,
     cost: 0,
     resolutionSummary: null,
+    resolutionRolls: [],
     submittedAt: null,
     submittedBy: null,
     executedAt: null,
@@ -46,7 +47,12 @@ function createAction(overrides: Partial<TurnActionRecord> = {}): TurnActionReco
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     comments: [],
+  };
+
+  return {
+    ...base,
     ...overrides,
+    resolutionRolls: overrides.resolutionRolls ?? base.resolutionRolls,
   };
 }
 

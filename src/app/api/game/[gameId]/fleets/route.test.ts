@@ -148,13 +148,13 @@ describe('/api/game/[gameId]/fleets', () => {
       type: 'Caravel',
       canConstruct: true,
       usesTradeAccess: true,
-      requiredBuildings: ['Port', 'Shipwrights', 'CannonFoundry'],
+      requiredBuildings: ['Port', 'CannonFoundry'],
     });
     expect(payload.shipConstructionOptions).toContainEqual({
       type: 'Galleon',
       canConstruct: false,
       usesTradeAccess: false,
-      requiredBuildings: ['Port', 'Shipwrights', 'Dockyard', 'CannonFoundry'],
+      requiredBuildings: ['Port', 'Dockyard', 'CannonFoundry'],
     });
     expect(payload.shipConstructionOptionsBySettlement).toMatchObject({
       'settlement-1': expect.arrayContaining([

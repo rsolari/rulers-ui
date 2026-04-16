@@ -110,6 +110,23 @@
 | [Fort](26-buildings.md#fort) | 6 |
 | [Castle](26-buildings.md#castle) | 8 |
 
+## [Ships & Fleets](27b-ships-and-fleets.md)
+
+| Ship | Build Cost | Upkeep | Type | Quality | Bonus | Build Time | Weather | Navigation |
+|---|---|---|---|---|---|---|---|---|
+| Galley | 250g | 250g | Light | Basic | +1 Coastal | 1 S | 5+ | Coasts, Rivers |
+| War Galley | 500g | 500g | Heavy | Elite | +1 Coastal | 1 S | 5+ | Coasts |
+| Galleass | 1,000g | 1,000g | Heavy | Elite | +1 Coastal, +1 vs. Light | 2 S | 5+ | Coasts |
+| Cog | 200g | 100g | Heavy | Basic | — | 1 S | 3+ | Coasts |
+| Holk | 1,000g | 500g | Heavy | Basic | +1 vs. Light | 2 S | 3+ | Coasts |
+| Carrack | 1,500g | 750g | Heavy | Elite | +1 vs. Light | 2 S | 2+ | Ocean, Coasts |
+| Galleon | 2,000g | 1,000g | Heavy | Elite | +2 vs. Light | 3 S | 2+ | Ocean, Coasts |
+| Caravel | 1,500g | 750g | Light | Basic | +1 Open Seas | 2 S | 3+ | Ocean, Coasts, Rivers |
+
+- **Basic Ships** = 4d6 (Full Combat) / 5–6 success (Quick Combat)
+- **Elite Ships** = 6d6 (Full Combat) / 4–6 success (Quick Combat)
+- Weather roll of **1** = severe storms, all Ships must return to port
+
 ## [Sieges](30-besieging.md)
 
 | Settlement | Defence Rating |

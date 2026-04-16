@@ -4,6 +4,8 @@
 
 **[Army](27-armies.md)** — A collection of military Troops outside of a [Settlement](19-settlements.md).
 
+**[Fleet](27b-ships-and-fleets.md)** — A collection of [Ships](27b-ships-and-fleets.md) commanded by a [Noble](16-nobles.md) acting as Admiral.
+
 **[Building](26-buildings.md)** — A structure that provides a benefit to a Realm.
 
 **Character** — Can refer to a [Ruler](12-creating-your-ruler.md), Realm or Significant Individual. A Player's character is both the Ruler and the Realm.
@@ -35,6 +37,8 @@
 **Season** — Each turn in Rulers reflects the passage of one season of the year (Spring, Summer, Autumn, Winter). See [The Basics](05-the-basics-of-rulers.md).
 
 **[Settlement](19-settlements.md)** — Centres of [Industries](24-resources-and-industries.md), Wealth generation, [Food](20-food-for-the-people.md) Production and homes for the populace.
+
+**[Ship](27b-ships-and-fleets.md)** — A naval vessel that is Constructed and assigned to a [Fleet](27b-ships-and-fleets.md). Ships are stationed at [Ports](26-buildings.md#port) and can navigate rivers, coasts, or the open ocean depending on their type.
 
 **[Taxes](23-making-money.md)** — The means by which a Ruler receives an income from the Settlements of a Realm.
 

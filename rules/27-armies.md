@@ -28,6 +28,8 @@ Once recruited, Troops immediately report to the Garrison they were assigned. Th
 
 If a collection of Troops — an Army — wants to travel to a location that does not have a Garrison, they must be led by a [Noble](16-nobles.md). Nobles who fight well in your service and lead you to Victory will expect an increase in their holdings and rank.
 
+For naval forces, see [Ships & Fleets](27b-ships-and-fleets.md). Ships are Constructed separately and form Fleets rather than Armies, but combat is resolved using the same rules.
+
 It costs nothing to Recruit Troops, but it does cost to keep them fed, train them once recruited, and maintain their equipment. This is all done by paying Upkeep. In order to recruit a type of Troop, the Realm needs access to the necessary equipment. These armaments[^32] usually come from [Buildings](26-buildings.md) within the Realm. However, a Realm is treated as having the same equipment of Realms it is [trading](25-trade.md) with for the purposes of Recruiting Troops. Although, Troops recruited in this way cost **25% more**, as the equipment has to be purchased from the other Realm.
 
 ## Troop Summary

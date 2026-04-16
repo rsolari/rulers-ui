@@ -61,6 +61,13 @@ type AccessSource = 'local' | 'traded' | 'none';
 const OUTSIDE_SETTLEMENT_TYPES = new Set<BuildingType>(['Castle', 'Fort', 'Walls', 'Watchtower']);
 const SLOTLESS_SETTLEMENT_TYPES = new Set<BuildingType>(['Gatehouse', 'Walls', 'Watchtower']);
 const VARIABLE_MATERIAL_TYPES = new Set<BuildingType>(['Gatehouse', 'Walls', 'Watchtower']);
+
+/** Building types that provide realm-wide effects and should not be constructed more than once per realm. */
+const UNIQUE_BUILDING_TYPES = new Set<BuildingType>([
+  'Armoursmith', 'BrickMakers', 'CannonFoundry', 'Castle', 'Coliseum',
+  'Fort', 'Gunsmith', 'Weaponsmith', 'Watchtower', 'Walls', 'Stables',
+  'Port', 'SiegeWorkshop', 'Academy', 'University', 'Bank', 'College',
+]);
 const RESOURCE_TOKENS = new Set<ResourceType>(Object.keys(RESOURCE_RARITY) as ResourceType[]);
 const VALID_WALL_SIZES: BuildingSize[] = ['Small', 'Medium', 'Large'];
 const SETTLEMENT_MAX_BUILDING_SIZE: Record<SettlementSize, BuildingSize> = {
@@ -130,6 +137,7 @@ interface BuildingPreparationContext {
   localTechnicalKnowledge: string[];
   tradedTechnicalKnowledge: string[];
   hasFoodAccess: boolean;
+  allRealmBuildingTypes?: BuildingType[];
 }
 
 interface TroopPreparationContext {
@@ -643,6 +651,19 @@ export function prepareBuildingCreation(
           { settlementId: settlement.id, occupiedSlots, totalSlots },
         );
       }
+    }
+  }
+
+  if (!input.gmOverride && UNIQUE_BUILDING_TYPES.has(buildingType)) {
+    const alreadyInSettlement = context.existingBuildings.some((b) => b.type === buildingType);
+    const alreadyInRealm = context.allRealmBuildingTypes?.includes(buildingType) ?? false;
+    if (alreadyInSettlement || alreadyInRealm) {
+      throw new RuleValidationError(
+        `Your realm already has a ${buildingType}`,
+        409,
+        'building_duplicate_in_realm',
+        { type: buildingType },
+      );
     }
   }
 
@@ -1356,6 +1377,7 @@ function loadRealmRuleAccess(database: DatabaseExecutor, gameId: string, realmId
       parseJson<string[]>(partnerRealm.technicalKnowledge, [])
     ))),
     hasFoodAccess: hasRealmFoodAccess(realmTerritories, realmSettlements, realmBuildingRows),
+    allRealmBuildingTypes: dedupe(realmBuildingRows.map((building) => building.type as BuildingType)),
   };
 }
 

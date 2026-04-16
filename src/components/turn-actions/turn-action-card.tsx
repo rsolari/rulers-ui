@@ -6,8 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ACTION_WORDS, type GOSType, type TurnActionRecord, type TurnActionUpdateDto, type TurnActionOutcome, type TurnActionStatus } from '@/types/game';
-import { BUILDING_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
+import {
+  ACTION_WORDS,
+  type GOSType,
+  type Season,
+  type TaxType,
+  type TurnActionRecord,
+  type TurnActionUpdateDto,
+  type TurnActionOutcome,
+  type TurnActionStatus,
+} from '@/types/game';
+import { BUILDING_DEFS, LEVY_DURATION_SEASONS, SEASONS, TAX_RATES, TAX_TURMOIL, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { ActionComments } from '@/components/turn-actions/action-comments';
 import { ActionKindBadge, ActionOutcomeBadge, ActionStatusBadge } from '@/components/turn-actions/action-status-badge';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +53,7 @@ interface TurnActionCardProps {
   settlementOptions: Array<{ value: string; label: string }>;
   realmOptions?: Array<{ value: string; label: string }>;
   nobleOptions?: Array<{ value: string; label: string }>;
+  taxProjectionContext?: TaxProjectionContext | null;
   editable?: boolean;
   gmExecutable?: boolean;
   commentable?: boolean;
@@ -53,6 +63,13 @@ interface TurnActionCardProps {
   onSave?: (patch: TurnActionUpdateDto) => Promise<void>;
   onDelete?: () => Promise<void>;
   onComment?: (body: string) => Promise<void>;
+}
+
+interface TaxProjectionContext {
+  currentTaxType: TaxType;
+  grossSettlementWealth: number;
+  currentYear: number;
+  currentSeason: Season;
 }
 
 function createDraftState(action: TurnActionRecord): TurnActionUpdateDto {
@@ -94,6 +111,77 @@ function getRequiredAllotmentType(buildingType: string | null | undefined): GOST
   return BUILDING_DEFS[buildingType as keyof typeof BUILDING_DEFS].prerequisites.find(
     (prerequisite): prerequisite is GOSType => GOS_PREREQUISITES.has(prerequisite as GOSType),
   ) ?? null;
+}
+
+function addSeasons(season: Season, year: number, seasonsToAdd: number) {
+  let nextSeasonIndex = SEASONS.indexOf(season);
+  let nextYear = year;
+
+  for (let index = 0; index < seasonsToAdd; index += 1) {
+    nextSeasonIndex += 1;
+    if (nextSeasonIndex >= SEASONS.length) {
+      nextSeasonIndex = 0;
+      nextYear += 1;
+    }
+  }
+
+  return {
+    season: SEASONS[nextSeasonIndex],
+    year: nextYear,
+  };
+}
+
+function formatSignedGc(value: number) {
+  return `${value >= 0 ? '+' : ''}${value.toLocaleString()}gc`;
+}
+
+function formatSignedInteger(value: number) {
+  return `${value >= 0 ? '+' : ''}${value}`;
+}
+
+function getTaxImpact(taxType: TaxType | null | undefined, context: TaxProjectionContext | null | undefined) {
+  if (!taxType || !context) return null;
+
+  const currentRevenue = Math.floor(context.grossSettlementWealth * TAX_RATES[context.currentTaxType]);
+  const projectedRevenue = Math.floor(context.grossSettlementWealth * TAX_RATES[taxType]);
+  const revenueDelta = projectedRevenue - currentRevenue;
+  const turmoilDelta = TAX_TURMOIL[taxType] - TAX_TURMOIL[context.currentTaxType];
+  const expiresAt = taxType === 'Levy'
+    ? addSeasons(context.currentSeason, context.currentYear, LEVY_DURATION_SEASONS)
+    : null;
+
+  return {
+    revenueDelta,
+    turmoilDelta,
+    expiresAt,
+  };
+}
+
+function TaxImpactBadges({
+  taxType,
+  context,
+}: {
+  taxType: TaxType | null | undefined;
+  context?: TaxProjectionContext | null;
+}) {
+  const impact = getTaxImpact(taxType, context);
+  if (!impact) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2 text-xs">
+      <Badge variant={impact.revenueDelta >= 0 ? 'green' : 'red'}>
+        Revenue {formatSignedGc(impact.revenueDelta)} / season
+      </Badge>
+      <Badge variant={impact.turmoilDelta > 0 ? 'red' : impact.turmoilDelta < 0 ? 'green' : 'default'}>
+        Turmoil {formatSignedInteger(impact.turmoilDelta)}
+      </Badge>
+      {impact.expiresAt ? (
+        <Badge variant="gold">
+          Duration 1 year, expires {impact.expiresAt.season} Y{impact.expiresAt.year}
+        </Badge>
+      ) : null}
+    </div>
+  );
 }
 
 function DiceRoller() {
@@ -141,11 +229,13 @@ function ReadOnlySummary({
   settlementOptions,
   realmOptions,
   nobleOptions,
+  taxProjectionContext,
 }: {
   action: TurnActionRecord;
   settlementOptions: Array<{ value: string; label: string }>;
   realmOptions: Array<{ value: string; label: string }>;
   nobleOptions: Array<{ value: string; label: string }>;
+  taxProjectionContext?: TaxProjectionContext | null;
 }) {
   if (action.kind === 'political') {
     const words = action.actionWords ?? [];
@@ -179,6 +269,8 @@ function ReadOnlySummary({
     lines.push(`Build ${action.buildingType ?? 'building'}${settlement ? ` in ${settlement}` : ''}`);
   } else if (action.financialType === 'recruit') {
     lines.push(`Recruit ${action.troopType ?? 'troops'}${settlement ? ` at ${settlement}` : ''}`);
+  } else if (action.financialType === 'constructShip') {
+    lines.push(`Construct ${action.shipType ?? 'ship'}${settlement ? ` at ${settlement}` : ''}`);
   } else if (action.financialType === 'taxChange') {
     lines.push(`Change tax to ${action.taxType ?? '?'}`);
   } else if (action.financialType === 'spending') {
@@ -192,6 +284,9 @@ function ReadOnlySummary({
         <span className="text-ink-600">{lines[0]}</span>
         {action.cost > 0 && <Badge>Cost: {action.cost}</Badge>}
       </div>
+      {action.financialType === 'taxChange' ? (
+        <TaxImpactBadges taxType={action.taxType} context={taxProjectionContext} />
+      ) : null}
       {action.description && <p className="text-sm text-ink-600 whitespace-pre-wrap">{action.description}</p>}
     </div>
   );
@@ -202,6 +297,7 @@ export function TurnActionCard({
   settlementOptions,
   realmOptions = [],
   nobleOptions = [],
+  taxProjectionContext = null,
   editable = false,
   gmExecutable = false,
   commentable = false,
@@ -297,6 +393,7 @@ export function TurnActionCard({
             settlementOptions={settlementOptions}
             realmOptions={realmOptions}
             nobleOptions={nobleOptions}
+            taxProjectionContext={taxProjectionContext}
           />
         ) : action.kind === 'political' ? (
           <div className="space-y-4">
@@ -416,13 +513,16 @@ export function TurnActionCard({
               </div>
             ) : null}
             {draft.financialType === 'taxChange' ? (
-              <Select
-                label="Tax Type"
-                options={TAX_OPTIONS}
-                value={draft.taxType ?? 'Tribute'}
-                onChange={(event) => setDraft((current) => ({ ...current, taxType: event.target.value as TurnActionUpdateDto['taxType'] }))}
-                disabled={!editable}
-              />
+              <div className="space-y-2">
+                <Select
+                  label="Tax Type"
+                  options={TAX_OPTIONS}
+                  value={draft.taxType ?? 'Tribute'}
+                  onChange={(event) => setDraft((current) => ({ ...current, taxType: event.target.value as TurnActionUpdateDto['taxType'] }))}
+                  disabled={!editable}
+                />
+                <TaxImpactBadges taxType={draft.taxType ?? 'Tribute'} context={taxProjectionContext} />
+              </div>
             ) : null}
             <Textarea
               label="Description"

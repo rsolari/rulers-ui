@@ -454,7 +454,7 @@ export default function SettlementsPage() {
                   {settlement.buildings?.map((building) => {
                     const ownerGos = gosOptions.find((g) => g.id === building.ownerGosId);
                     return (
-                      <div key={building.id} className="flex items-center justify-between p-2 medieval-border rounded">
+                      <div key={building.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 p-2 medieval-border rounded">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold">{building.type}</span>
                           <Badge>{building.category}</Badge>
@@ -463,10 +463,12 @@ export default function SettlementsPage() {
                             <span className="text-xs text-ink-300">({ownerGos.name})</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-center">
                           {building.constructionTurnsRemaining > 0 && (
                             <Badge variant="gold">{building.constructionTurnsRemaining} turns left</Badge>
                           )}
+                        </div>
+                        <div className="flex items-center gap-2">
                           {isSetup && gosOptions.length > 0 && (
                             <select
                               className="text-xs bg-input-bg border border-input-border rounded px-1.5 py-1 cursor-pointer"
@@ -479,11 +481,7 @@ export default function SettlementsPage() {
                               ))}
                             </select>
                           )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {building.constructionTurnsRemaining > 0 ? (
-                            <Badge variant="gold">{building.constructionTurnsRemaining} turns left</Badge>
-                          ) : (
+                          {building.constructionTurnsRemaining <= 0 && (
                             <Button
                               variant="outline"
                               size="sm"

@@ -22,6 +22,7 @@ import {
   BUILDING_DEFS,
   BUILDING_SIZE_DATA,
   ESTATE_COSTS,
+  LEVY_DURATION_SEASONS,
   SEASONS,
   SETTLEMENT_DATA,
   SHIP_DEFS,
@@ -415,14 +416,14 @@ function resolveTaxState(
   let levyExpiresSeason = realm.levyExpiresSeason ?? null;
 
   if (requestedTaxType === 'Levy') {
-    const expiresAt = addSeasons(currentSeason, currentYear, 4);
+    const expiresAt = addSeasons(currentSeason, currentYear, LEVY_DURATION_SEASONS);
     levyExpiresYear = expiresAt.year;
     levyExpiresSeason = expiresAt.season;
   } else if (requestedTaxType === 'Tribute') {
     levyExpiresYear = null;
     levyExpiresSeason = null;
   } else if (appliedTaxType === 'Levy' && (levyExpiresYear === null || levyExpiresSeason === null)) {
-    const inferredExpiry = addSeasons(currentSeason, currentYear, 4);
+    const inferredExpiry = addSeasons(currentSeason, currentYear, LEVY_DURATION_SEASONS);
     levyExpiresYear = inferredExpiry.year;
     levyExpiresSeason = inferredExpiry.season;
     warnings.push('Levy tax had no expiry state; one year from the current turn was assumed.');

@@ -135,7 +135,7 @@ describe('POST /api/game/[gameId]/realms/place-capital', () => {
         hexId: 'hex-2',
         realmId: 'realm-1',
         name: 'Highgate',
-        size: 'Town',
+        size: 'City',
         isCapital: true,
         governingNobleId: null,
       },

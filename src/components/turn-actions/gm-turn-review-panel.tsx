@@ -29,6 +29,7 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
   const [commentActionId, setCommentActionId] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const [advanceConfirm, setAdvanceConfirm] = useState(false);
+  const [collapsedRealms, setCollapsedRealms] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
@@ -208,37 +209,55 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
         {realms.length === 0 ? (
           <p className="text-sm text-ink-300">No realms found for this game.</p>
         ) : (
-          realms.map((realm) => (
-            <Card key={realm.realmId} variant="gold">
-              <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CardTitle className="text-lg">{realm.realmName}</CardTitle>
-                  {realm.report ? <Badge>{realm.report.status}</Badge> : <Badge>No report</Badge>}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {realm.actions.length === 0 ? (
-                  <p className="text-sm text-ink-300">No actions submitted for this realm yet.</p>
-                ) : (
-                  realm.actions.map((action: TurnActionRecord) => (
-                    <TurnActionCard
-                      key={`${action.id}:${action.updatedAt ?? ''}`}
-                      action={action}
-                      settlementOptions={settlementOptions}
-                      realmOptions={realmOptions}
-                      nobleOptions={nobleOptionsByRealm[realm.realmId] ?? []}
-                      gmExecutable={action.kind === 'political'}
-                      commentable
-                      saving={savingActionId === action.id}
-                      commentSaving={commentActionId === action.id}
-                      onSave={action.kind === 'political' ? (patch) => saveAction(action.id, patch) : undefined}
-                      onComment={(body) => addComment(action.id, body)}
-                    />
-                  ))
+          realms.map((realm) => {
+            const isCollapsed = collapsedRealms.has(realm.realmId);
+            return (
+              <Card key={realm.realmId} variant="gold">
+                <CardHeader>
+                  <button
+                    type="button"
+                    className="flex w-full flex-wrap items-center justify-between gap-3 text-left cursor-pointer"
+                    onClick={() => setCollapsedRealms((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(realm.realmId)) next.delete(realm.realmId);
+                      else next.add(realm.realmId);
+                      return next;
+                    })}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-ink-300 text-sm">{isCollapsed ? '▶' : '▼'}</span>
+                      <CardTitle className="text-lg">{realm.realmName}</CardTitle>
+                      <Badge variant="default">{realm.actions.length} action{realm.actions.length !== 1 ? 's' : ''}</Badge>
+                    </div>
+                    {realm.report ? <Badge>{realm.report.status}</Badge> : <Badge>No report</Badge>}
+                  </button>
+                </CardHeader>
+                {!isCollapsed && (
+                  <CardContent className="space-y-4">
+                    {realm.actions.length === 0 ? (
+                      <p className="text-sm text-ink-300">No actions submitted for this realm yet.</p>
+                    ) : (
+                      realm.actions.map((action: TurnActionRecord) => (
+                        <TurnActionCard
+                          key={`${action.id}:${action.updatedAt ?? ''}`}
+                          action={action}
+                          settlementOptions={settlementOptions}
+                          realmOptions={realmOptions}
+                          nobleOptions={nobleOptionsByRealm[realm.realmId] ?? []}
+                          gmExecutable={action.kind === 'political'}
+                          commentable
+                          saving={savingActionId === action.id}
+                          commentSaving={commentActionId === action.id}
+                          onSave={action.kind === 'political' ? (patch) => saveAction(action.id, patch) : undefined}
+                          onComment={(body) => addComment(action.id, body)}
+                        />
+                      ))
+                    )}
+                  </CardContent>
                 )}
-              </CardContent>
-            </Card>
-          ))
+              </Card>
+            );
+          })
         )}
       </CardContent>
     </Card>

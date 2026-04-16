@@ -27,12 +27,15 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
   const [commentActionId, setCommentActionId] = useState<string | null>(null);
+  const [advancing, setAdvancing] = useState(false);
+  const [advanceConfirm, setAdvanceConfirm] = useState(false);
   const [collapsedRealms, setCollapsedRealms] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError('');
+    setAdvanceConfirm(false);
 
     try {
       const [turnData, settlements, allRealms] = await Promise.all([
@@ -114,6 +117,30 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
     }
   }
 
+  async function advanceTurn() {
+    setAdvancing(true);
+    setError('');
+
+    try {
+      await parseResponse(
+        await fetch(`/api/game/${gameId}/turn/advance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            expectedYear: currentTurn?.game.currentYear,
+            expectedSeason: currentTurn?.game.currentSeason,
+          }),
+        }),
+      );
+      setAdvanceConfirm(false);
+      await refresh();
+    } catch (advanceError) {
+      setError(advanceError instanceof Error ? advanceError.message : 'Failed to advance turn');
+    } finally {
+      setAdvancing(false);
+    }
+  }
+
   if (loading) {
     return (
       <Card className="mt-6">
@@ -125,6 +152,8 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
   }
 
   const realms = currentTurn?.realms ?? [];
+  const unsubmittedRealms = realms.filter((r) => !r.report || r.report.status !== 'submitted');
+  const allSubmitted = unsubmittedRealms.length === 0;
 
   return (
     <Card className="mt-6">
@@ -145,6 +174,38 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {realms.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-card-border bg-parchment-100/40 p-3">
+            <div className="text-sm">
+              <span className="font-semibold">Submissions: </span>
+              {realms.length - unsubmittedRealms.length}/{realms.length} realms submitted
+              {unsubmittedRealms.length > 0 && (
+                <span className="ml-2 text-ink-300">
+                  (waiting: {unsubmittedRealms.map((r) => r.realmName).join(', ')})
+                </span>
+              )}
+            </div>
+            {advanceConfirm ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-ink-400">
+                  {allSubmitted
+                    ? 'Advance to next turn?'
+                    : 'Not all realms submitted. Advance anyway?'}
+                </span>
+                <Button variant="accent" size="sm" onClick={() => void advanceTurn()} disabled={advancing}>
+                  {advancing ? 'Advancing...' : 'Confirm'}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setAdvanceConfirm(false)} disabled={advancing}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button variant="accent" size="sm" onClick={() => setAdvanceConfirm(true)}>
+                Advance Turn
+              </Button>
+            )}
+          </div>
+        )}
         {realms.length === 0 ? (
           <p className="text-sm text-ink-300">No realms found for this game.</p>
         ) : (

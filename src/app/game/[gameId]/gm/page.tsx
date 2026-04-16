@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -150,6 +150,7 @@ interface PlayerSlot {
   territoryId: string;
   territoryName: string | null;
   realmId: string | null;
+  realmName: string | null;
   displayName: string | null;
   status: 'claimed' | 'unclaimed';
   setupState: string;
@@ -226,6 +227,7 @@ export default function GMDashboard() {
   const [savingBuilding, setSavingBuilding] = useState(false);
   const [addingTroop, setAddingTroop] = useState<{ realmId: string; settlementId: string; type: string } | null>(null);
   const [savingTroop, setSavingTroop] = useState(false);
+  const realmFormRef = useRef<HTMLDivElement>(null);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -356,6 +358,9 @@ export default function GMDashboard() {
       setRealmForm({ name: '', governmentType: 'Monarch', traditions: [], technicalKnowledge: [], treasury: 0 });
     }
     setShowRealmForm(true);
+    requestAnimationFrame(() => {
+      realmFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   function toggleTradition(tradition: Tradition) {
@@ -768,7 +773,7 @@ export default function GMDashboard() {
                 {playerSlots.map((slot) => (
                   <div key={slot.id} className="p-3 medieval-border rounded flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-heading font-semibold">{slot.territoryName || slot.territoryId}</p>
+                      <p className="font-heading font-semibold">{slot.realmName || slot.territoryName || slot.territoryId}</p>
                       <p className="text-sm text-ink-300">{slot.displayName || 'Unlabeled player slot'}</p>
                     </div>
                     <div className="text-right">
@@ -798,7 +803,7 @@ export default function GMDashboard() {
                     <div key={slot.id} className="rounded border border-card-border bg-parchment-100/40 p-4 space-y-3">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className="font-heading font-semibold">{slot.displayName || slot.territoryName || 'Claimed slot'}</p>
+                          <p className="font-heading font-semibold">{slot.realmName || slot.displayName || slot.territoryName || 'Claimed slot'}</p>
                           <p className="text-sm text-ink-300">
                             {slot.territoryName || slot.territoryId}
                             {slot.realmId ? ` · realm created` : ' · realm not created yet'}
@@ -849,7 +854,7 @@ export default function GMDashboard() {
         </CardHeader>
         <CardContent>
           {showRealmForm && (
-            <div className="p-4 medieval-border rounded mb-4 space-y-3">
+            <div ref={realmFormRef} className="p-4 medieval-border rounded mb-4 space-y-3">
               <p className="font-heading font-semibold">{editingRealmId ? 'Edit Realm' : 'New NPC Realm'}</p>
               <Input
                 label="Realm Name"
@@ -1591,6 +1596,8 @@ export default function GMDashboard() {
         </CardContent>
       </Card>
 
+      {isActive && <GlobalGOSPanel gameId={gameId} />}
+
     </main>
   );
 }
@@ -2163,5 +2170,98 @@ function RealmTroopPanel({ gameId, realmId, settlements: allSettlements, realmNa
         </div>
       )}
     </div>
+  );
+}
+
+// ── Global GOS panel (all GOS across all realms) ──
+
+interface GlobalGOS {
+  id: string;
+  name: string;
+  type: string;
+  focus: string | null;
+  treasury: number;
+  monopolyProduct: string | null;
+  leader: { id: string; name: string } | null;
+  realms: Array<{ id: string; name: string; isPrimary: boolean }>;
+  isShared: boolean;
+}
+
+function GlobalGOSPanel({ gameId }: { gameId: string }) {
+  const [gosList, setGosList] = useState<GlobalGOS[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/game/${gameId}/gos?all=true`, { cache: 'no-store' });
+      if (!response.ok) {
+        setError('Failed to load GOS');
+        return;
+      }
+      setGosList(await response.json());
+    } catch {
+      setError('Failed to load GOS');
+    } finally {
+      setLoaded(true);
+    }
+  }, [gameId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  if (!loaded) {
+    return (
+      <Card className="mt-6">
+        <CardContent><p className="pt-4 text-sm text-ink-300">Loading GOS...</p></CardContent>
+      </Card>
+    );
+  }
+
+  const totalTreasury = gosList.reduce((sum, gos) => sum + gos.treasury, 0);
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Guilds, Orders &amp; Societies</CardTitle>
+          <div className="flex items-center gap-2">
+            <Badge variant="gold">{gosList.length} total</Badge>
+            <Badge>Combined treasury: {totalTreasury.toLocaleString()}gc</Badge>
+            <Button variant="outline" size="sm" onClick={() => void load()}>Refresh</Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+        {gosList.length === 0 ? (
+          <p className="text-sm text-ink-300">No guilds, orders, or societies yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {gosList.map((gos) => (
+              <div key={gos.id} className="p-3 medieval-border rounded flex items-center justify-between gap-4">
+                <div>
+                  <span className="font-heading font-semibold">{gos.name}</span>
+                  <span className="text-ink-300 ml-2 text-sm">{gos.type}</span>
+                  {gos.focus && <span className="text-ink-300 ml-1 text-sm">· {gos.focus}</span>}
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  {gos.leader && <Badge variant="default">{gos.leader.name}</Badge>}
+                  {gos.monopolyProduct && <Badge variant="gold">Monopoly: {gos.monopolyProduct}</Badge>}
+                  <span className="text-ink-400">{gos.treasury.toLocaleString()}gc</span>
+                  {gos.realms.map((realm) => (
+                    <Badge key={realm.id} variant={realm.isPrimary ? 'gold' : 'default'}>
+                      {realm.name}
+                    </Badge>
+                  ))}
+                  <Link href={`/game/${gameId}/realm/gos?realmId=${gos.realms.find((r) => r.isPrimary)?.id ?? gos.realms[0]?.id}`}>
+                    <Button variant="ghost" size="sm">Manage</Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

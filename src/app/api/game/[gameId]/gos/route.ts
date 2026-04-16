@@ -25,16 +25,23 @@ function normalizeRealmIds(body: Record<string, unknown>) {
 }
 
 export async function GET(
-  _request: Request
+  _request: Request,
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
+  const { gameId } = await params;
   const url = new URL(_request.url);
   const realmId = url.searchParams.get('realmId');
+  const allForGame = url.searchParams.get('all') === 'true';
 
-  if (!realmId) {
-    return NextResponse.json({ error: 'realmId required' }, { status: 400 });
+  if (!realmId && !allForGame) {
+    return NextResponse.json({ error: 'realmId required (or pass all=true for GM global view)' }, { status: 400 });
   }
 
-  const list = await db.select({
+  if (allForGame) {
+    await requireGM(gameId);
+  }
+
+  const gosFields = {
     id: guildsOrdersSocieties.id,
     realmId: guildsOrdersSocieties.realmId,
     name: guildsOrdersSocieties.name,
@@ -47,10 +54,17 @@ export async function GET(
     alcoveNames: guildsOrdersSocieties.alcoveNames,
     centreNames: guildsOrdersSocieties.centreNames,
     firstBuildingId: guildsOrdersSocieties.firstBuildingId,
-  })
-    .from(guildsOrdersSocieties)
-    .innerJoin(gosRealms, eq(gosRealms.gosId, guildsOrdersSocieties.id))
-    .where(eq(gosRealms.realmId, realmId));
+  };
+
+  const list = allForGame
+    ? await db.select(gosFields)
+        .from(guildsOrdersSocieties)
+        .innerJoin(realms, eq(guildsOrdersSocieties.realmId, realms.id))
+        .where(eq(realms.gameId, gameId))
+    : await db.select(gosFields)
+        .from(guildsOrdersSocieties)
+        .innerJoin(gosRealms, eq(gosRealms.gosId, guildsOrdersSocieties.id))
+        .where(eq(gosRealms.realmId, realmId!));
   const gosIds = list.map((gos) => gos.id);
   const membershipRows = gosIds.length > 0
     ? await db.select({

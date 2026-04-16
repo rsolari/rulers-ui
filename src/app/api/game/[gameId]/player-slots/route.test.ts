@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { playerSlots, territories } from '@/db/schema';
+import { playerSlots, realms, territories } from '@/db/schema';
 
 const routeMocks = vi.hoisted(() => {
   const select = vi.fn(() => ({
@@ -30,6 +30,10 @@ const routeMocks = vi.hoisted(() => {
             hasRiverAccess: false,
             hasSeaAccess: false,
           }];
+        }
+
+        if (table === realms) {
+          return [{ id: 'realm-1', name: 'Kingdom of Albion' }];
         }
 
         return [];
@@ -99,6 +103,7 @@ describe('GET /api/game/[gameId]/player-slots', () => {
       territoryId: 'territory-1',
       territoryName: 'Northreach',
       realmId: 'realm-1',
+      realmName: 'Kingdom of Albion',
       displayName: 'Alice',
       setupState: 'ruler_created',
       status: 'claimed',

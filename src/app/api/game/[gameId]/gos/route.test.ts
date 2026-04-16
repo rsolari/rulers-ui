@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
+  requireGM: vi.fn(),
   requireRealmOwner: vi.fn(),
   isAuthError: vi.fn((error: unknown) => (
     typeof error === 'object' &&
@@ -75,7 +76,10 @@ describe('GET /api/game/[gameId]/gos', () => {
       { id: 'noble-1', name: 'Lady Merrow', gmStatusText: null },
     ]);
 
-    const response = await GET(new Request('http://localhost/api/game/game-1/gos?realmId=realm-1'));
+    const response = await GET(
+      new Request('http://localhost/api/game/game-1/gos?realmId=realm-1'),
+      { params: Promise.resolve({ gameId: 'game-1' }) },
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual([
@@ -101,6 +105,59 @@ describe('GET /api/game/[gameId]/gos', () => {
         isShared: true,
       },
     ]);
+  });
+
+  it('returns all GOS across all realms when all=true (GM-only)', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+
+    mockSelectInnerJoinWhereOnce([
+      {
+        id: 'gos-1',
+        realmId: 'realm-1',
+        name: 'Order of the Bridge',
+        type: 'Order',
+        focus: 'Trade',
+        leaderId: null,
+        treasury: 200,
+        creationSource: null,
+        monopolyProduct: null,
+        alcoveNames: null,
+        centreNames: null,
+        firstBuildingId: null,
+      },
+      {
+        id: 'gos-2',
+        realmId: 'realm-2',
+        name: 'Merchants Guild',
+        type: 'Guild',
+        focus: 'Commerce',
+        leaderId: null,
+        treasury: 500,
+        creationSource: null,
+        monopolyProduct: 'Silk',
+        alcoveNames: null,
+        centreNames: null,
+        firstBuildingId: null,
+      },
+    ]);
+    mockSelectInnerJoinWhereOnce([
+      { gosId: 'gos-1', realmId: 'realm-1', realmName: 'Albion' },
+      { gosId: 'gos-2', realmId: 'realm-2', realmName: 'Burgund' },
+    ]);
+    mockSelectWhereOnce([]);
+
+    const response = await GET(
+      new Request('http://localhost/api/game/game-1/gos?all=true'),
+      { params: Promise.resolve({ gameId: 'game-1' }) },
+    );
+
+    expect(authMocks.requireGM).toHaveBeenCalledWith('game-1');
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data).toHaveLength(2);
+    expect(data[0].name).toBe('Order of the Bridge');
+    expect(data[1].name).toBe('Merchants Guild');
+    expect(data[1].monopolyProduct).toBe('Silk');
   });
 });
 

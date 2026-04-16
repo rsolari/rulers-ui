@@ -615,6 +615,7 @@ function createBaseSchema(database: Database.Database) {
       technical_knowledge_key text,
       cost integer NOT NULL DEFAULT 0,
       resolution_summary text,
+      resolution_rolls text NOT NULL DEFAULT '[]',
       submitted_at integer,
       submitted_by text,
       executed_at integer,
@@ -1353,6 +1354,7 @@ function ensureEconomySchema(database: Database.Database) {
   addColumnIfMissing(database, 'troops', 'gos_id text', 'gos_id');
   addColumnIfMissing(database, 'armies', 'gos_id text', 'gos_id');
   addColumnIfMissing(database, 'turn_actions', 'owner_gos_id text', 'owner_gos_id');
+  addColumnIfMissing(database, 'turn_actions', "resolution_rolls text DEFAULT '[]' NOT NULL", 'resolution_rolls');
   addColumnIfMissing(database, 'guilds_orders_societies', 'treasury integer DEFAULT 0 NOT NULL', 'treasury');
   addColumnIfMissing(database, 'guilds_orders_societies', 'creation_source text', 'creation_source');
   addColumnIfMissing(database, 'guilds_orders_societies', 'monopoly_product text', 'monopoly_product');

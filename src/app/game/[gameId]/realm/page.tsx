@@ -56,6 +56,7 @@ interface Realm {
   traditions: string;
   technicalKnowledge: TechnicalKnowledgeKey[];
   projectedTurmoil?: number | null;
+  buildingTurmoilReduction?: number | null;
   openTurmoilEventId?: string | null;
   winterUnrestPending?: boolean;
   capitalSettlementId?: string | null;
@@ -572,6 +573,7 @@ export default function RealmDashboard() {
         <TurmoilSummaryCard
           title="Realm Turmoil"
           projectedTurmoil={economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0}
+          buildingTurmoilReduction={economyProjection?.buildingTurmoilReduction ?? realm.buildingTurmoilReduction ?? 0}
           turmoilBreakdown={economyProjection?.turmoilBreakdown ?? []}
           taxType={(economyProjection?.realm.taxTypeApplied ?? realm.taxType) as TaxType}
           incidentLabel={economyProjection?.winterUnrestPending ? 'Winter unrest pending' : economyProjection?.openTurmoilEventId ? 'Turmoil review open' : null}

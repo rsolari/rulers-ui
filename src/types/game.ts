@@ -133,6 +133,15 @@ export type ActionAuthorRole = 'player' | 'gm';
 export type TurnEventKind = 'gm_event' | 'turmoil_review' | 'winter_unrest';
 export type TurnEventStatus = 'open' | 'resolved' | 'dismissed';
 
+export interface TurnActionResolutionRoll {
+  dice: number[];
+  sides: number;
+  target: number;
+  successes: number;
+  failures: number;
+  rolledAt: string | null;
+}
+
 // Industry Quality
 export type IndustryQuality = 'Basic' | 'HighQuality';
 export type TradeRoutePathMode = 'land' | 'river' | 'sea' | 'mixed';
@@ -313,6 +322,7 @@ export interface TurnActionRecord {
   technicalKnowledgeKey: TechnicalKnowledgeKey | null;
   cost: number;
   resolutionSummary: string | null;
+  resolutionRolls: TurnActionResolutionRoll[];
   submittedAt: string | null;
   submittedBy: string | null;
   executedAt: string | null;
@@ -405,6 +415,7 @@ export interface TurnActionUpdateDto {
   cost?: number;
   outcome?: TurnActionOutcome;
   resolutionSummary?: string | null;
+  resolutionRolls?: TurnActionResolutionRoll[];
   status?: TurnActionStatus;
 }
 

@@ -71,6 +71,7 @@ interface Realm {
   capitalSettlementId?: string | null;
   technicalKnowledge: TechnicalKnowledgeKey[];
   projectedTurmoil?: number | null;
+  buildingTurmoilReduction?: number | null;
   turmoilBreakdown?: TurmoilSourceDto[];
   openTurmoilEventId?: string | null;
   winterUnrestPending?: boolean;
@@ -1136,9 +1137,18 @@ export default function GMDashboard() {
                           Turmoil Sources
                         </summary>
                         <div className="mt-3 space-y-2">
-                          {(realm.turmoilBreakdown ?? []).length === 0 && (
+                          {(realm.turmoilBreakdown ?? []).length === 0 && !realm.buildingTurmoilReduction && (
                             <p className="text-ink-300 text-sm">No turmoil sources.</p>
                           )}
+                          {realm.buildingTurmoilReduction ? (
+                            <div className="flex items-center justify-between p-2 bg-parchment-100 rounded text-sm">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="green">-{realm.buildingTurmoilReduction}</Badge>
+                                <span>Building reductions</span>
+                                <Badge variant="default">buildings</Badge>
+                              </div>
+                            </div>
+                          ) : null}
                           {(realm.turmoilBreakdown ?? []).map((source) => (
                             <div key={source.id} className="flex items-center justify-between p-2 bg-parchment-100 rounded text-sm">
                               <div className="flex items-center gap-2">

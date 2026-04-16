@@ -99,7 +99,7 @@ export default function CreateRealmPage() {
       {
         id: 'capital-preview',
         name: townName.trim() || 'Capital',
-        size: 'Town',
+        size: 'City',
         hexId: capitalHexId,
       },
     ];
@@ -241,7 +241,7 @@ export default function CreateRealmPage() {
                   variant="full"
                 />
                 <p className="text-xs text-ink-300">
-                  Click an open land hex to place your capital town.
+                  Click an open land hex to place your capital city.
                 </p>
               </div>
             ) : null}
@@ -283,7 +283,7 @@ export default function CreateRealmPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-ink-300">
-              Your territory already has its own name. Choose your realm&apos;s name and the name and location of its capital town.
+              Your territory already has its own name. Choose your realm&apos;s name and the name and location of its capital city.
             </p>
             <Input label="Realm Name" value={name} onChange={(event) => setName(event.target.value)} />
             <Select
@@ -293,7 +293,7 @@ export default function CreateRealmPage() {
               onChange={(event) => setGovernmentType(event.target.value as GovernmentType)}
             />
             <Input
-              label="Capital Town Name"
+              label="Capital City Name"
               value={townName}
               onChange={(event) => setTownName(event.target.value)}
             />

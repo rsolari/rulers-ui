@@ -117,7 +117,7 @@ export async function POST(
         industries: territoryIndustries,
         capitalSettlementId,
         capitalName: trimmedCapitalName,
-        capitalSize: capitalSize || 'Town',
+        capitalSize: capitalSize || 'City',
         currentYear: game.currentYear,
         currentSeason: game.currentSeason as Season,
         traditions,
@@ -132,7 +132,7 @@ export async function POST(
         capitalHexId: hexId,
         capitalName: trimmedCapitalName,
         capitalSettlementId,
-        capitalSize: capitalSize || 'Town',
+        capitalSize: capitalSize || 'City',
         traditions,
       });
 

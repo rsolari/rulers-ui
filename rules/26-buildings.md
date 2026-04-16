@@ -93,6 +93,13 @@ While it takes a skilled craftsman to carve a bow, the complex mechanical parts 
 
 This large foundry smelts ore and pours the molten metal into moulds for cannon. These large, heavy and cumbersome contraptions can blast [Castle](#castle) Walls with terrifying force, and can shake the morale of a garrison to its very foundation. Once built, this building allows for the construction of Cannons as a Siege Weapon. This process is different to Recruitment — consult the rules on [Siege Weapon Troops](28-siege-units.md) for details.
 
+#### Dockyard
+**Size:** Large | **Effect:** Allows for the Construction of advanced Ships | **Requirements:** Timber [Resource](08-territories-and-resources.md), coastal or river access, [Technical Knowledge](#gaining-technical-knowledge) (Dockyards)
+
+Where lesser shipwrights can fashion a cog or a galley with little more than skilled hands and seasoned timber, a Dockyard is a facility of serious naval ambition. With vast dry docks, rope-walks, and master craftsmen, the Dockyard allows for the construction of the greatest warships the seas have ever seen. Without one, no Realm can lay claim to a [Galleon](27b-ships-and-fleets.md#galleon).
+
+A Dockyard must be situated in a Settlement with access to a coastline or a navigable river. It requires both Timber and the Technical Knowledge of large-scale shipbuilding to operate.
+
 #### Gunsmith
 **Size:** Medium | **Effect:** Allows for the recruitment of [Harquebusiers](27-armies.md) | **Requirements:** Ore Resource, [Technical Knowledge](#gaining-technical-knowledge)
 

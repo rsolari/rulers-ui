@@ -11,7 +11,7 @@ import { Select } from '@/components/ui/select';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { useRole } from '@/hooks/use-role';
 import { BUILDING_DEFS, getEligibleBuildingUpgradeTargets, SETTLEMENT_DATA } from '@/lib/game-logic/constants';
-import type { BuildingSize, BuildingType, SettlementSize } from '@/types/game';
+import type { BuildingSize, BuildingType, SettlementKind, SettlementSize } from '@/types/game';
 
 interface GoverningNoble {
   id: string;
@@ -21,6 +21,7 @@ interface GoverningNoble {
 interface Settlement {
   id: string;
   name: string;
+  kind: SettlementKind;
   size: SettlementSize;
   territoryId: string;
   governingNobleId: string | null;
@@ -152,6 +153,8 @@ export default function SettlementsPage() {
   const [selectedUpgradeType, setSelectedUpgradeType] = useState('');
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [strongholdActionId, setStrongholdActionId] = useState<string | null>(null);
+  const [strongholdActionError, setStrongholdActionError] = useState<string | null>(null);
 
   async function refreshSettlements() {
     if (!realmId) return;
@@ -351,6 +354,29 @@ export default function SettlementsPage() {
     }
   }
 
+  async function updateStronghold(settlementId: string, body: Record<string, unknown>) {
+    setStrongholdActionId(settlementId);
+    setStrongholdActionError(null);
+
+    try {
+      const response = await fetch(`/api/game/${gameId}/settlements`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settlementId, ...body }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setStrongholdActionError(data.error ?? 'Stronghold update failed');
+        return;
+      }
+
+      await refreshSettlements();
+    } finally {
+      setStrongholdActionId(null);
+    }
+  }
+
   const selectedOption = buildingOptions.find((o) => o.type === selectedBuildingType);
   const hasBuildableOptions = buildingOptions.some((o) => o.canBuild);
   const requiredAllotmentType = getRequiredAllotmentType(selectedOption?.prerequisites);
@@ -428,8 +454,14 @@ export default function SettlementsPage() {
 
       <div className="space-y-6">
         {settlements.map((settlement) => {
-          const data = SETTLEMENT_DATA[settlement.size];
+          const isStronghold = settlement.kind === 'fort' || settlement.kind === 'castle';
+          const data = isStronghold ? null : SETTLEMENT_DATA[settlement.size];
           const usedSlots = settlement.buildings?.filter((building) => building.takesBuildingSlot !== false).length ?? 0;
+          const titleLabel = settlement.kind === 'fort'
+            ? 'Fort'
+            : settlement.kind === 'castle'
+              ? 'Castle'
+              : settlement.size;
 
           return (
             <Card key={settlement.id} variant="gold">
@@ -464,15 +496,15 @@ export default function SettlementsPage() {
                     </CardTitle>
                   )}
                   <div className="flex items-center gap-2">
-                    <Badge variant="gold">{settlement.size}</Badge>
-                    <Badge>{usedSlots}/{data.buildingSlots} slots</Badge>
+                    <Badge variant="gold">{titleLabel}</Badge>
+                    {data ? <Badge>{usedSlots}/{data.buildingSlots} slots</Badge> : null}
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-3 mb-4 p-3 rounded medieval-border bg-parchment-800/30">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-gold-400 text-lg shrink-0">👑</span>
+                    <span className="text-gold-400 text-lg shrink-0">{isStronghold ? '⚑' : '👑'}</span>
                     <span className="font-heading font-semibold text-sm shrink-0">Governor:</span>
                     {isSetup ? (
                       <div className="flex-1 min-w-[200px]">
@@ -491,18 +523,51 @@ export default function SettlementsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  <p className="text-sm"><strong>Food Need:</strong> {data.foodNeed}</p>
-                  <p className="text-sm"><strong>Max Troops:</strong> {data.maxTroops}</p>
-                  <p className="text-sm"><strong>Recruit/Season:</strong> {data.recruitPerSeason}</p>
-                </div>
+                {data ? (
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <p className="text-sm"><strong>Food Need:</strong> {data.foodNeed}</p>
+                    <p className="text-sm"><strong>Max Troops:</strong> {data.maxTroops}</p>
+                    <p className="text-sm"><strong>Recruit/Season:</strong> {data.recruitPerSeason}</p>
+                  </div>
+                ) : (
+                  <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+                    <Badge>No building slots</Badge>
+                    <Badge>No recruitment</Badge>
+                    <Badge>No food production</Badge>
+                    {role === 'gm' && settlement.kind === 'fort' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={strongholdActionId === settlement.id}
+                        onClick={() => updateStronghold(settlement.id, { kind: 'castle' })}
+                      >
+                        Upgrade to Castle
+                      </Button>
+                    ) : null}
+                    {role === 'gm' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={strongholdActionId === settlement.id}
+                        onClick={() => updateStronghold(settlement.id, { kind: 'settlement', size: 'Village' })}
+                      >
+                        Establish Village
+                      </Button>
+                    ) : null}
+                    {strongholdActionError && strongholdActionId === null ? (
+                      <span className="text-red-700">{strongholdActionError}</span>
+                    ) : null}
+                  </div>
+                )}
 
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-heading font-semibold">Buildings</p>
-                  <Button variant="outline" size="sm" onClick={() => openBuildDialog(settlement.id)}>+ Build</Button>
-                </div>
-                <div className="space-y-1">
-                  {settlement.buildings?.map((building) => {
+                {!isStronghold ? (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-heading font-semibold">Buildings</p>
+                      <Button variant="outline" size="sm" onClick={() => openBuildDialog(settlement.id)}>+ Build</Button>
+                    </div>
+                    <div className="space-y-1">
+                      {settlement.buildings?.map((building) => {
                     const ownerGos = gosOptions.find((g) => g.id === building.ownerGosId);
                     return (
                       <div key={building.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 p-2 medieval-border rounded">
@@ -555,11 +620,13 @@ export default function SettlementsPage() {
                         </div>
                       </div>
                     );
-                  })}
-                  {(!settlement.buildings || settlement.buildings.length === 0) && (
-                    <p className="text-ink-300 text-sm">No buildings yet.</p>
-                  )}
-                </div>
+                      })}
+                      {(!settlement.buildings || settlement.buildings.length === 0) && (
+                        <p className="text-ink-300 text-sm">No buildings yet.</p>
+                      )}
+                    </div>
+                  </>
+                ) : null}
               </CardContent>
             </Card>
           );

@@ -47,7 +47,8 @@ export const HexTooltip = forwardRef<HTMLDivElement, HexTooltipProps>(function H
       ) : null}
       {hex.settlement ? (
         <p className="mt-1">
-          Settlement: {hex.settlement.name} ({hex.settlement.size})
+          {hex.settlement.kind === 'settlement' ? 'Settlement' : hex.settlement.kind === 'castle' ? 'Castle' : 'Fort'}: {hex.settlement.name}
+          {hex.settlement.kind === 'settlement' ? ` (${hex.settlement.size})` : null}
         </p>
       ) : null}
       {hex.armies.length > 0 ? (

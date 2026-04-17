@@ -48,6 +48,8 @@ const TERRAIN_COLORS: Record<string, string> = {
 interface HexMapProps {
   data: GameMapData;
   playerRealmId?: string | null;
+  selectedHexId?: string | null;
+  onHexSelect?: (hex: MapHexData) => void;
 }
 
 interface HexRenderData {
@@ -94,7 +96,7 @@ function buildHoveredHex(
   };
 }
 
-export function HexMap({ data, playerRealmId }: HexMapProps) {
+export function HexMap({ data, playerRealmId, selectedHexId: controlledSelectedHexId, onHexSelect }: HexMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -109,7 +111,7 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
     moved: false,
   });
   const suppressClickRef = useRef(false);
-  const [selectedHexId, setSelectedHexId] = useState<string | null>(null);
+  const [internalSelectedHexId, setInternalSelectedHexId] = useState<string | null>(null);
   const [hoveredHexId, setHoveredHexId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 16, y: 16 });
 
@@ -237,6 +239,7 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
   }, [hexById, hoveredHexId, realmById, territoryById]);
 
   const hoveredPoints = hoveredHexId ? hexPointsById.get(hoveredHexId) ?? null : null;
+  const selectedHexId = controlledSelectedHexId ?? internalSelectedHexId;
   const selectedPoints = selectedHexId ? hexPointsById.get(selectedHexId) ?? null : null;
 
   const applyViewBox = useCallback((nextViewBox: ViewBox) => {
@@ -315,8 +318,12 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
       return;
     }
 
-    setSelectedHexId(hexId);
-  }, []);
+    setInternalSelectedHexId(hexId);
+    const hex = hexById.get(hexId);
+    if (hex) {
+      onHexSelect?.(hex);
+    }
+  }, [hexById, onHexSelect]);
 
   const hexTiles = useMemo(() => (
     hexRenderData.map((hex) => (
@@ -416,6 +423,7 @@ export function HexMap({ data, playerRealmId }: HexMapProps) {
               x={hex.centerX}
               y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -4 : 0)}
               size={hex.settlement.size}
+              kind={hex.settlement.kind}
             />
             {hex.settlement.realmId ? (
               <RealmFlag

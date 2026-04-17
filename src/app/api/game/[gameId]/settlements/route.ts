@@ -8,12 +8,49 @@ import { getGmCode, requireGM, requireInitState, requireRealmOwner } from '@/lib
 import { getAvailableSettlementHexId, getLandHexById } from '@/lib/game-logic/maps';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { assertNobleCanHoldExclusiveOffice } from '@/lib/game-logic/nobles';
+import { BUILDING_DEFS } from '@/lib/game-logic/constants';
+import type { SettlementKind, SettlementSize } from '@/types/game';
 
 type GoverningNobleSummary = {
   id: string;
   name: string;
   gmStatusText: string | null;
 };
+
+const SETTLEMENT_KINDS = new Set<SettlementKind>(['settlement', 'fort', 'castle']);
+const SETTLEMENT_SIZES = new Set<SettlementSize>(['Village', 'Town', 'City']);
+const STRONGHOLD_BUILDING_TYPE: Record<Exclude<SettlementKind, 'settlement'>, 'Fort' | 'Castle'> = {
+  fort: 'Fort',
+  castle: 'Castle',
+};
+
+function parseSettlementKind(value: unknown): SettlementKind | null {
+  if (typeof value === 'string' && SETTLEMENT_KINDS.has(value as SettlementKind)) {
+    return value as SettlementKind;
+  }
+
+  return null;
+}
+
+function parseSettlementSize(value: unknown): SettlementSize | null {
+  if (typeof value === 'string' && SETTLEMENT_SIZES.has(value as SettlementSize)) {
+    return value as SettlementSize;
+  }
+
+  return null;
+}
+
+function normalizeSettlementKind(value: unknown): SettlementKind {
+  return parseSettlementKind(value) ?? 'settlement';
+}
+
+function normalizeSettlementSize(value: unknown): SettlementSize {
+  return parseSettlementSize(value) ?? 'Village';
+}
+
+function normalizeOptionalString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
 
 async function getGoverningNobleMap(settlementList: Array<{
   governingNobleId: string | null;
@@ -133,6 +170,10 @@ export async function POST(
         return NextResponse.json({ error: 'realmId required' }, { status: 400 });
       }
 
+      if (normalizeSettlementKind(body.kind) !== 'settlement') {
+        return NextResponse.json({ error: 'Only the GM can place forts and castles' }, { status: 403 });
+      }
+
       await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
       await requireRealmOwner(gameId, body.realmId);
 
@@ -168,13 +209,45 @@ export async function POST(
       return NextResponse.json({ error: 'Settlement hex must belong to the selected territory' }, { status: 400 });
     }
 
+    if (requestedHex) {
+      const existingLocation = await db.select({ id: settlements.id })
+        .from(settlements)
+        .where(eq(settlements.hexId, requestedHex.id))
+        .get();
+
+      if (existingLocation) {
+        return NextResponse.json({ error: 'Hex already has a settlement, fort, or castle' }, { status: 409 });
+      }
+    }
+
+    if (body.kind !== undefined && !parseSettlementKind(body.kind)) {
+      return NextResponse.json({ error: 'Settlement kind must be settlement, fort, or castle' }, { status: 400 });
+    }
+
+    if (body.size !== undefined && !parseSettlementSize(body.size)) {
+      return NextResponse.json({ error: 'Settlement size must be Village, Town, or City' }, { status: 400 });
+    }
+
     const hexId = requestedHex?.id ?? await getAvailableSettlementHexId(db, territory.id);
-    const governingNobleId = typeof body.governingNobleId === 'string' && body.governingNobleId.trim()
-      ? body.governingNobleId.trim()
-      : null;
+    const kind = normalizeSettlementKind(body.kind);
+    const size = normalizeSettlementSize(body.size);
+    const name = normalizeOptionalString(body.name);
+    const governingNobleId = normalizeOptionalString(body.governingNobleId);
+
+    if (!name) {
+      return NextResponse.json({ error: 'Settlement name is required' }, { status: 400 });
+    }
+
+    if (!isGM && size !== 'Town') {
+      return NextResponse.json({ error: 'Players can only place a Town' }, { status: 403 });
+    }
 
     if (governingNobleId) {
       const governingRealmId = body.realmId ?? territory.realmId;
+      if (!governingRealmId) {
+        return NextResponse.json({ error: 'Settlement has no realm to assign a governor' }, { status: 400 });
+      }
+
       const governingNoble = await db.select().from(nobles)
         .where(and(
           eq(nobles.id, governingNobleId),
@@ -195,14 +268,15 @@ export async function POST(
       territoryId: body.territoryId,
       hexId,
       realmId: body.realmId ?? territory.realmId,
-      name: body.name,
-      size: body.size || 'Village',
+      name,
+      kind,
+      size: kind === 'settlement' ? size : 'Village',
       governingNobleId,
     });
 
     await recomputeGameInitState(gameId);
 
-    return NextResponse.json({ id, ...body });
+    return NextResponse.json({ id, ...body, name, kind, size: kind === 'settlement' ? size : 'Village' });
   } catch (error) {
     const errorResponse = apiErrorResponse(error);
     if (errorResponse) return errorResponse;
@@ -259,8 +333,36 @@ export async function PATCH(
 
     const updates: Record<string, unknown> = {};
     if (body.name !== undefined) updates.name = body.name;
-    if (body.size !== undefined) updates.size = body.size;
+    if (body.size !== undefined) {
+      const nextSize = parseSettlementSize(body.size);
+      if (!nextSize) {
+        return NextResponse.json({ error: 'Settlement size must be Village, Town, or City' }, { status: 400 });
+      }
+      updates.size = nextSize;
+    }
     if (body.realmId !== undefined) updates.realmId = body.realmId;
+    if (body.kind !== undefined) {
+      const nextKind = parseSettlementKind(body.kind);
+      if (!nextKind) {
+        return NextResponse.json({ error: 'Settlement kind must be settlement, fort, or castle' }, { status: 400 });
+      }
+
+      if (settlement.kind === 'castle' && nextKind === 'fort') {
+        return NextResponse.json({ error: 'Castles cannot be downgraded to forts' }, { status: 400 });
+      }
+
+      if (settlement.kind === 'settlement' && nextKind !== 'settlement') {
+        return NextResponse.json({ error: 'Settlements cannot be converted back into forts or castles' }, { status: 400 });
+      }
+
+      updates.kind = nextKind;
+
+      if (nextKind !== 'settlement') {
+        updates.size = 'Village';
+      } else if (settlement.kind !== 'settlement') {
+        updates.size = normalizeSettlementSize(body.size);
+      }
+    }
     if (body.governingNobleId !== undefined) {
       const governingNobleId = typeof body.governingNobleId === 'string' && body.governingNobleId.trim()
         ? body.governingNobleId.trim()
@@ -293,9 +395,41 @@ export async function PATCH(
       updates.governingNobleId = governingNobleId;
     }
 
-    await db.update(settlements)
-      .set(updates)
-      .where(eq(settlements.id, body.settlementId));
+    const convertsStrongholdToSettlement = settlement.kind !== 'settlement' && updates.kind === 'settlement';
+
+    if (convertsStrongholdToSettlement) {
+      db.transaction((tx) => {
+        tx.update(settlements)
+          .set(updates)
+          .where(eq(settlements.id, body.settlementId))
+          .run();
+
+        const buildingType = STRONGHOLD_BUILDING_TYPE[settlement.kind as Exclude<SettlementKind, 'settlement'>];
+        const def = BUILDING_DEFS[buildingType];
+        tx.insert(buildings).values({
+          id: uuid(),
+          settlementId: settlement.id,
+          territoryId: settlement.territoryId,
+          hexId: settlement.hexId,
+          locationType: 'settlement',
+          type: buildingType,
+          category: def.category,
+          size: def.size,
+          material: buildingType === 'Fort' ? 'Timber' : 'Stone',
+          takesBuildingSlot: true,
+          isOperational: true,
+          maintenanceState: 'active',
+          constructionTurnsRemaining: 0,
+          ownerGosId: null,
+          allottedGosId: null,
+          customDefinitionId: null,
+        }).run();
+      });
+    } else {
+      await db.update(settlements)
+        .set(updates)
+        .where(eq(settlements.id, body.settlementId));
+    }
 
     if (body.realmId !== undefined && body.realmId !== settlement.realmId) {
       await db.update(troops)

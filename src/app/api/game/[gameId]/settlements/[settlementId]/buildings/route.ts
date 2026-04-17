@@ -81,6 +81,10 @@ export async function GET(
       return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
     }
 
+    if (settlement.kind && settlement.kind !== 'settlement') {
+      return NextResponse.json([]);
+    }
+
     const { realmId } = await requireOwnedRealmAccess(gameId, settlement.realmId);
 
     const options = getBuildingConstructionOptions(gameId, realmId, settlementId);
@@ -105,6 +109,10 @@ export async function POST(
 
     if (!settlement) {
       return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+    }
+
+    if (settlement.kind && settlement.kind !== 'settlement') {
+      return NextResponse.json({ error: 'Forts and castles do not have building slots' }, { status: 409 });
     }
 
     await requireOwnedRealmAccess(gameId, settlement.realmId);

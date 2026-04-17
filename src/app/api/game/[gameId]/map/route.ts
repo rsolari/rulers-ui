@@ -142,6 +142,7 @@ export async function GET(
         })),
         settlement: settlement ? {
           name: settlement.name,
+          kind: settlement.kind,
           size: settlement.size,
           realmId: settlement.realmId ?? null,
         } : null,

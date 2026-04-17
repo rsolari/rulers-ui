@@ -170,6 +170,7 @@ function hasRealmFoodAccess(realm: EconomyRealmInput) {
   const settlementsByTerritory = new Map<string, number>();
 
   for (const settlement of realm.settlements) {
+    if (settlement.kind && settlement.kind !== 'settlement') continue;
     const totalSlots = SETTLEMENT_DATA[settlement.size].buildingSlots;
     const occupiedSlots = settlement.buildings.filter((building) => building.takesBuildingSlot !== false).length;
     const emptySlots = Math.max(totalSlots - occupiedSlots, 0);
@@ -440,8 +441,16 @@ function loadGameEconomyState(
   }
 
   const settlementsByRealm = new Map<string, Array<typeof settlements.$inferSelect>>();
+  const strongholdsByRealm = new Map<string, Array<typeof settlements.$inferSelect>>();
   for (const settlement of settlementRows) {
     if (!settlement.realmId) continue;
+    if (settlement.kind !== 'settlement') {
+      const realmStrongholds = strongholdsByRealm.get(settlement.realmId) ?? [];
+      realmStrongholds.push(settlement);
+      strongholdsByRealm.set(settlement.realmId, realmStrongholds);
+      continue;
+    }
+
     const realmSettlements = settlementsByRealm.get(settlement.realmId) ?? [];
     realmSettlements.push(settlement);
     settlementsByRealm.set(settlement.realmId, realmSettlements);
@@ -636,51 +645,70 @@ function loadGameEconomyState(
           foodCapBonus: territory.foodCapBonus,
         })),
       settlements: realmSettlements.map((settlement) => ({
-      id: settlement.id,
-      name: settlement.name,
-      size: settlement.size as EconomyRealmInput['settlements'][number]['size'],
-      territoryId: settlement.territoryId,
-      buildings: (buildingsBySettlement.get(settlement.id) ?? []).map((building) => ({
-        id: building.id,
-        type: building.type,
-        size: building.size as EconomyRealmInput['settlements'][number]['buildings'][number]['size'],
-        constructionTurnsRemaining: building.constructionTurnsRemaining,
-        takesBuildingSlot: building.takesBuildingSlot,
-        isOperational: building.isOperational,
-        maintenanceState: building.maintenanceState,
-        ownerGosId: building.ownerGosId,
-        allottedGosId: building.allottedGosId,
-        material: building.material,
-      })),
-      resourceSites: (resourceSitesBySettlement.get(settlement.id) ?? []).map((resourceSite) => {
-        const industry = industriesByResourceSite.get(resourceSite.id);
+        id: settlement.id,
+        name: settlement.name,
+        kind: settlement.kind,
+        size: settlement.size as EconomyRealmInput['settlements'][number]['size'],
+        territoryId: settlement.territoryId,
+        buildings: (buildingsBySettlement.get(settlement.id) ?? []).map((building) => ({
+          id: building.id,
+          type: building.type,
+          size: building.size as EconomyRealmInput['settlements'][number]['buildings'][number]['size'],
+          constructionTurnsRemaining: building.constructionTurnsRemaining,
+          takesBuildingSlot: building.takesBuildingSlot,
+          isOperational: building.isOperational,
+          maintenanceState: building.maintenanceState,
+          ownerGosId: building.ownerGosId,
+          allottedGosId: building.allottedGosId,
+          material: building.material,
+        })),
+        resourceSites: (resourceSitesBySettlement.get(settlement.id) ?? []).map((resourceSite) => {
+          const industry = industriesByResourceSite.get(resourceSite.id);
 
-        return {
-          id: resourceSite.id,
-          resourceType: resourceSite.resourceType,
-          rarity: resourceSite.rarity,
-          industry: industry
-            ? {
-              id: industry.id,
-              outputProduct: industry.outputProduct,
-              quality: industry.quality as 'Basic' | 'HighQuality',
-              ingredients: parseJson<ResourceType[]>(industry.ingredients, []),
-            }
-            : null,
-        };
-      }),
+          return {
+            id: resourceSite.id,
+            resourceType: resourceSite.resourceType,
+            rarity: resourceSite.rarity,
+            industry: industry
+              ? {
+                id: industry.id,
+                outputProduct: industry.outputProduct,
+                quality: industry.quality as 'Basic' | 'HighQuality',
+                ingredients: parseJson<ResourceType[]>(industry.ingredients, []),
+              }
+              : null,
+          };
+        }),
       })),
-      standaloneBuildings: (standaloneBuildingsByRealm.get(realm.id) ?? []).map((building) => ({
-      id: building.id,
-      type: building.type,
-      size: building.size as EconomyRealmInput['standaloneBuildings'][number]['size'],
-      constructionTurnsRemaining: building.constructionTurnsRemaining,
-      territoryId: building.territoryId!,
-      territoryName: territoryById.get(building.territoryId!)?.name ?? 'Unknown Territory',
-      ownerGosId: building.ownerGosId,
-      allottedGosId: building.allottedGosId,
-      material: building.material,
-    })),
+      standaloneBuildings: [
+        ...(standaloneBuildingsByRealm.get(realm.id) ?? []).map((building) => ({
+          id: building.id,
+          type: building.type,
+          size: building.size as EconomyRealmInput['standaloneBuildings'][number]['size'],
+          constructionTurnsRemaining: building.constructionTurnsRemaining,
+          territoryId: building.territoryId!,
+          territoryName: territoryById.get(building.territoryId!)?.name ?? 'Unknown Territory',
+          ownerGosId: building.ownerGosId,
+          allottedGosId: building.allottedGosId,
+          material: building.material,
+        })),
+        ...(strongholdsByRealm.get(realm.id) ?? []).map((stronghold) => {
+          const type = stronghold.kind === 'castle' ? 'Castle' : 'Fort';
+          const definition = BUILDING_DEFS[type];
+
+          return {
+            id: `stronghold:${stronghold.id}`,
+            type,
+            size: definition.size,
+            constructionTurnsRemaining: 0,
+            territoryId: stronghold.territoryId,
+            territoryName: territoryById.get(stronghold.territoryId)?.name ?? 'Unknown Territory',
+            ownerGosId: null,
+            allottedGosId: null,
+            material: type === 'Castle' ? 'Stone' : 'Timber',
+          };
+        }),
+      ],
     troops: (troopsByRealm.get(realm.id) ?? []).map((troop) => ({
       id: troop.id,
       type: troop.type as EconomyRealmInput['troops'][number]['type'],

@@ -40,7 +40,7 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
     try {
       const [turnData, settlements, allRealms] = await Promise.all([
         parseResponse<CurrentTurnResponseDto>(await fetch(`/api/game/${gameId}/turn`, { cache: 'no-store' })),
-        parseResponse<Array<{ id: string; name: string }>>(
+        parseResponse<Array<{ id: string; name: string; kind?: string }>>(
           await fetch(`/api/game/${gameId}/settlements`, { cache: 'no-store' }),
         ),
         parseResponse<Array<{ id: string; name: string }>>(
@@ -62,7 +62,9 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
 
       startTransition(() => {
         setCurrentTurn(turnData);
-        setSettlementOptions(settlements.map((settlement) => ({ value: settlement.id, label: settlement.name })));
+        setSettlementOptions(settlements
+          .filter((settlement) => !settlement.kind || settlement.kind === 'settlement')
+          .map((settlement) => ({ value: settlement.id, label: settlement.name })));
         setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
         setNobleOptionsByRealm(noblesByRealm);
       });

@@ -83,6 +83,7 @@ export interface MapHexLandmark {
 
 export interface MapHexSettlement {
   name: string;
+  kind: 'settlement' | 'fort' | 'castle';
   size: string;
   realmId: string | null;
 }

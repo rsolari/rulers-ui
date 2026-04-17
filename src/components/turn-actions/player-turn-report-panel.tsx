@@ -106,7 +106,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
       const [turnData, historyData, settlements, allRealms, realmNobles, gosList, projection] = await Promise.all([
         parseResponse<CurrentTurnResponseDto>(turnResponse),
         parseResponse<{ history: TurnHistoryEntry[] }>(historyResponse),
-        parseResponse<Array<{ id: string; name: string }>>(settlementsResponse),
+        parseResponse<Array<{ id: string; name: string; kind?: string }>>(settlementsResponse),
         parseResponse<Array<{ id: string; name: string }>>(realmsResponse),
         parseResponse<Array<{ id: string; name: string; reasonSkill: number; cunningSkill: number }>>(noblesResponse),
         parseResponse<Array<{ id: string; name: string; type: GOSType }>>(gosResponse),
@@ -116,7 +116,9 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
       startTransition(() => {
         setCurrentTurn(turnData);
         setHistory(historyData.history);
-        setSettlementOptions(settlements.map((s) => ({ value: s.id, label: s.name })));
+        setSettlementOptions(settlements
+          .filter((settlement) => !settlement.kind || settlement.kind === 'settlement')
+          .map((s) => ({ value: s.id, label: s.name })));
         setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
         setNobleOptions(realmNobles.map((n) => ({ value: n.id, label: `${n.name} (R${n.reasonSkill} / C${n.cunningSkill})` })));
         setGosOptions(gosList.map((gos) => ({ value: gos.id, label: `${gos.name} (${gos.type})`, type: gos.type })));

@@ -76,6 +76,7 @@ interface SiegeUnit {
 interface SettlementSummary {
   id: string;
   name: string;
+  kind: string;
   size: string;
   territoryId: string;
 }
@@ -242,17 +243,18 @@ export default function ArmyPage() {
     };
   }, [gameId, realmId]);
 
-  const selectedRecruitmentSettlementId = settlements.some(
+  const recruitableSettlements = settlements.filter((settlement) => settlement.kind === 'settlement');
+  const selectedRecruitmentSettlementId = recruitableSettlements.some(
     (settlement) => settlement.id === recruitmentSettlementIdOverride,
   )
     ? recruitmentSettlementIdOverride
-    : (settlements[0]?.id ?? '');
+    : (recruitableSettlements[0]?.id ?? '');
   const defaultArmyTerritoryId = territoryId ?? settlements[0]?.territoryId ?? '';
-  const selectedConstructionSettlementId = settlements.some(
+  const selectedConstructionSettlementId = recruitableSettlements.some(
     (settlement) => settlement.id === constructionSettlementIdOverride,
   )
     ? constructionSettlementIdOverride
-    : (settlements[0]?.id ?? '');
+    : (recruitableSettlements[0]?.id ?? '');
 
   const activeTroopRecruitmentOptions = troopRecruitmentOptionsBySettlement[selectedRecruitmentSettlementId]
     ?? troopRecruitmentOptions;
@@ -428,7 +430,7 @@ export default function ArmyPage() {
     };
   });
 
-  const settlementOptions = settlements.map((settlement) => ({
+  const settlementOptions = recruitableSettlements.map((settlement) => ({
     value: settlement.id,
     label: `${settlement.name} (${settlement.size})`,
   }));
@@ -463,10 +465,11 @@ export default function ArmyPage() {
       if (troops.length === 0) {
         return null;
       }
+      const kindLabel = settlement.kind === 'fort' ? 'fort' : settlement.kind === 'castle' ? 'castle' : 'garrison';
 
       return {
         value: settlement.id,
-        label: `${settlement.name} garrison (${troops.length} ready)`,
+        label: `${settlement.name} ${kindLabel} (${troops.length} ready)`,
         troops,
         territoryId: settlement.territoryId,
       };

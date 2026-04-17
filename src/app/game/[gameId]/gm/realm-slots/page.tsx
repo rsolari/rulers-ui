@@ -69,6 +69,7 @@ interface Settlement {
   hexId: string | null;
   name: string;
   size: string;
+  kind: string;
 }
 
 interface ResourceSite {
@@ -147,7 +148,7 @@ export default function RealmSlotsPage() {
     // Existing settlements in this territory
     const existing = allSettlements
       .filter((s) => s.territoryId === newSlotTerritoryId && s.hexId)
-      .map((s) => ({ id: s.id, name: s.name, size: s.size, hexId: s.hexId }));
+      .map((s) => ({ id: s.id, name: s.name, size: s.size, kind: s.kind, hexId: s.hexId }));
 
     // Draft placements
     const drafts = newSlotSettlements
@@ -308,7 +309,7 @@ export default function RealmSlotsPage() {
             : null;
           const placements: TerritoryMapPlacement[] = slotSettlements
             .filter((s) => s.hexId)
-            .map((s) => ({ id: s.id, name: s.name, size: s.size, hexId: s.hexId }));
+            .map((s) => ({ id: s.id, name: s.name, size: s.size, kind: s.kind, hexId: s.hexId }));
 
           return (
             <Card key={slot.id} variant="gold">

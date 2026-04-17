@@ -15,8 +15,8 @@ import { computeTerritoryBorderSegments, computeViewBox, hexToPixel, hexVertices
 import { computeRiverPaths, type RiverHexInput } from '@/components/map/river-utils';
 
 const HEX_SIZE = 30;
-const MIN_ZOOM_FACTOR = 0.45;
-const MAX_ZOOM_FACTOR = 8.0;
+const MIN_VIEWBOX_WIDTH = 10 * Math.sqrt(3) * HEX_SIZE;
+const MAX_ZOOM_PADDING = 1.15;
 const REALM_COLORS = [
   '#8b2020',
   '#2a4a7a',
@@ -409,27 +409,29 @@ export function HexMap({ data, playerRealmId, selectedHexId: controlledSelectedH
   const hexDetailNodes = useMemo(() => (
     hexDetails.map((hex) => (
       <g key={`${hex.id}-details`} pointerEvents="none">
-        {hex.features.filter((f) => f.featureType !== 'river').slice(0, 3).map((feature, index) => (
+        {hex.features.filter((f) => f.featureType !== 'river' && f.featureType !== 'coast').slice(0, 3).map((feature, index) => (
           <FeatureIndicator
             key={`${hex.id}-${feature.featureType}-${index}`}
-            x={hex.centerX - 7 + index * 7}
-            y={hex.centerY - HEX_SIZE * 0.35}
+            x={hex.centerX}
+            y={hex.centerY}
             featureType={feature.featureType}
+            hexSize={HEX_SIZE}
           />
         ))}
         {hex.settlement ? (
           <>
             <SettlementMarker
               x={hex.centerX}
-              y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -4 : 0)}
+              y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -8 : 0)}
               size={hex.settlement.size}
               kind={hex.settlement.kind}
               fill={hex.settlement.realmId ? realmColorById.get(hex.settlement.realmId) ?? '#ffffff' : '#ffffff'}
+              hexSize={HEX_SIZE}
             />
             {hex.settlement.realmId ? (
               <RealmFlag
                 x={hex.centerX - 7}
-                y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -4 : 0)}
+                y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -8 : 0)}
                 fill={realmColorById.get(hex.settlement.realmId) ?? '#4a3728'}
               />
             ) : null}
@@ -438,14 +440,14 @@ export function HexMap({ data, playerRealmId, selectedHexId: controlledSelectedH
         {hex.armies.length > 0 ? (
           <>
             <ArmyMarker
-              x={hex.centerX + (hex.settlement ? 10 : 0) - (hex.fleets.length > 0 ? 8 : 0)}
-              y={hex.centerY + 10}
+              x={hex.centerX + (hex.settlement ? 14 : 0) - (hex.fleets.length > 0 ? 10 : 0)}
+              y={hex.centerY + (hex.settlement ? 16 : 10)}
               fill={realmColorById.get(hex.armies[0].realmId) ?? '#4a3728'}
               count={hex.armies.length}
             />
             {!hex.settlement ? (
               <RealmFlag
-                x={hex.centerX + (hex.settlement ? 10 : 0) - (hex.fleets.length > 0 ? 8 : 0) - 7}
+                x={hex.centerX - (hex.fleets.length > 0 ? 10 : 0) - 7}
                 y={hex.centerY + 10}
                 fill={realmColorById.get(hex.armies[0].realmId) ?? '#4a3728'}
               />
@@ -454,8 +456,8 @@ export function HexMap({ data, playerRealmId, selectedHexId: controlledSelectedH
         ) : null}
         {hex.fleets.length > 0 ? (
           <FleetMarker
-            x={hex.centerX + (hex.settlement ? 10 : 0) + (hex.armies.length > 0 ? 8 : 0)}
-            y={hex.centerY + 10}
+            x={hex.centerX + (hex.settlement ? 14 : 0) + (hex.armies.length > 0 ? 10 : 0)}
+            y={hex.centerY + (hex.settlement ? 16 : 10)}
             fill={realmColorById.get(hex.fleets[0].realmId) ?? '#2a4a7a'}
             count={hex.fleets.length}
           />
@@ -545,8 +547,8 @@ export function HexMap({ data, playerRealmId, selectedHexId: controlledSelectedH
       const pointerRatioX = (event.clientX - bounds.left) / bounds.width;
       const pointerRatioY = (event.clientY - bounds.top) / bounds.height;
       const zoomScale = event.deltaY < 0 ? 0.88 : 1.12;
-      const minWidth = baseViewBox.width * MIN_ZOOM_FACTOR;
-      const maxWidth = baseViewBox.width * MAX_ZOOM_FACTOR;
+      const minWidth = MIN_VIEWBOX_WIDTH;
+      const maxWidth = baseViewBox.width * MAX_ZOOM_PADDING;
       const currentViewBox = viewBoxRef.current;
       const nextWidth = clamp(currentViewBox.width * zoomScale, minWidth, maxWidth);
       const nextHeight = nextWidth * (currentViewBox.height / currentViewBox.width);

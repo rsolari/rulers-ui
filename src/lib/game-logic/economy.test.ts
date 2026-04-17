@@ -342,6 +342,23 @@ describe('resolveEconomyForRealm', () => {
     expect(result.food.surplus).toBe(2);
   });
 
+  it('does not count standalone watchtowers toward realm food needs', () => {
+    const result = resolveEconomyForRealm(createRealm({
+      standaloneBuildings: [{
+        id: 'watchtower-1',
+        type: 'Watchtower',
+        size: 'Small',
+        constructionTurnsRemaining: 0,
+        territoryId: 'territory-2',
+        territoryName: 'Border March',
+      }],
+    }), 1, 'Summer');
+
+    expect(result.food.produced).toBe(4);
+    expect(result.food.needed).toBe(1);
+    expect(result.food.surplus).toBe(3);
+  });
+
   it('increments food shortage counters when the realm has a deficit', () => {
     const result = resolveEconomyForRealm(createRealm({
       settlements: [{

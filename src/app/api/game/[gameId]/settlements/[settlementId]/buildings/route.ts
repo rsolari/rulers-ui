@@ -112,7 +112,7 @@ export async function POST(
     }
 
     if (settlement.kind && settlement.kind !== 'settlement') {
-      return NextResponse.json({ error: 'Forts and castles do not have building slots' }, { status: 409 });
+      return NextResponse.json({ error: 'Forts, castles, and watchtowers do not have building slots' }, { status: 409 });
     }
 
     await requireOwnedRealmAccess(gameId, settlement.realmId);

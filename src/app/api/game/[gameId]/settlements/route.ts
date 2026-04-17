@@ -17,9 +17,10 @@ type GoverningNobleSummary = {
   gmStatusText: string | null;
 };
 
-const SETTLEMENT_KINDS = new Set<SettlementKind>(['settlement', 'fort', 'castle']);
+const SETTLEMENT_KINDS = new Set<SettlementKind>(['settlement', 'watchtower', 'fort', 'castle']);
 const SETTLEMENT_SIZES = new Set<SettlementSize>(['Village', 'Town', 'City']);
-const STRONGHOLD_BUILDING_TYPE: Record<Exclude<SettlementKind, 'settlement'>, 'Fort' | 'Castle'> = {
+const STRONGHOLD_BUILDING_TYPE: Record<Exclude<SettlementKind, 'settlement'>, 'Watchtower' | 'Fort' | 'Castle'> = {
+  watchtower: 'Watchtower',
   fort: 'Fort',
   castle: 'Castle',
 };
@@ -171,7 +172,7 @@ export async function POST(
       }
 
       if (normalizeSettlementKind(body.kind) !== 'settlement') {
-        return NextResponse.json({ error: 'Only the GM can place forts and castles' }, { status: 403 });
+        return NextResponse.json({ error: 'Only the GM can place forts, castles, and watchtowers' }, { status: 403 });
       }
 
       await requireInitState(gameId, 'parallel_final_setup', 'ready_to_start');
@@ -216,12 +217,12 @@ export async function POST(
         .get();
 
       if (existingLocation) {
-        return NextResponse.json({ error: 'Hex already has a settlement, fort, or castle' }, { status: 409 });
+        return NextResponse.json({ error: 'Hex already has a settlement, fort, castle, or watchtower' }, { status: 409 });
       }
     }
 
     if (body.kind !== undefined && !parseSettlementKind(body.kind)) {
-      return NextResponse.json({ error: 'Settlement kind must be settlement, fort, or castle' }, { status: 400 });
+      return NextResponse.json({ error: 'Settlement kind must be settlement, watchtower, fort, or castle' }, { status: 400 });
     }
 
     if (body.size !== undefined && !parseSettlementSize(body.size)) {
@@ -240,6 +241,10 @@ export async function POST(
 
     if (!isGM && size !== 'Town') {
       return NextResponse.json({ error: 'Players can only place a Town' }, { status: 403 });
+    }
+
+    if (kind === 'watchtower' && governingNobleId) {
+      return NextResponse.json({ error: 'Watchtowers cannot be assigned a governing noble' }, { status: 400 });
     }
 
     if (governingNobleId) {
@@ -271,7 +276,7 @@ export async function POST(
       name,
       kind,
       size: kind === 'settlement' ? size : 'Village',
-      governingNobleId,
+      governingNobleId: kind === 'watchtower' ? null : governingNobleId,
     });
 
     await recomputeGameInitState(gameId);
@@ -344,21 +349,29 @@ export async function PATCH(
     if (body.kind !== undefined) {
       const nextKind = parseSettlementKind(body.kind);
       if (!nextKind) {
-        return NextResponse.json({ error: 'Settlement kind must be settlement, fort, or castle' }, { status: 400 });
+        return NextResponse.json({ error: 'Settlement kind must be settlement, watchtower, fort, or castle' }, { status: 400 });
       }
 
-      if (settlement.kind === 'castle' && nextKind === 'fort') {
-        return NextResponse.json({ error: 'Castles cannot be downgraded to forts' }, { status: 400 });
+      if (
+        settlement.kind !== 'settlement'
+        && nextKind !== 'settlement'
+        && nextKind !== settlement.kind
+        && !(settlement.kind === 'fort' && nextKind === 'castle')
+      ) {
+        return NextResponse.json({ error: 'Only forts can be upgraded to castles' }, { status: 400 });
       }
 
       if (settlement.kind === 'settlement' && nextKind !== 'settlement') {
-        return NextResponse.json({ error: 'Settlements cannot be converted back into forts or castles' }, { status: 400 });
+        return NextResponse.json({ error: 'Settlements cannot be converted back into forts, castles, or watchtowers' }, { status: 400 });
       }
 
       updates.kind = nextKind;
 
       if (nextKind !== 'settlement') {
         updates.size = 'Village';
+        if (nextKind === 'watchtower') {
+          updates.governingNobleId = null;
+        }
       } else if (settlement.kind !== 'settlement') {
         updates.size = normalizeSettlementSize(body.size);
       }
@@ -370,6 +383,11 @@ export async function PATCH(
       const governingRealmId = typeof body.realmId === 'string' && body.realmId.trim()
         ? body.realmId.trim()
         : settlement.realmId;
+      const effectiveKind = (updates.kind as SettlementKind | undefined) ?? settlement.kind;
+
+      if (effectiveKind === 'watchtower' && governingNobleId) {
+        return NextResponse.json({ error: 'Watchtowers cannot be assigned a governing noble' }, { status: 400 });
+      }
 
       if (governingNobleId) {
         if (!governingRealmId) {
@@ -415,7 +433,7 @@ export async function PATCH(
           type: buildingType,
           category: def.category,
           size: def.size,
-          material: buildingType === 'Fort' ? 'Timber' : 'Stone',
+          material: buildingType === 'Castle' ? 'Stone' : 'Timber',
           takesBuildingSlot: true,
           isOperational: true,
           maintenanceState: 'active',

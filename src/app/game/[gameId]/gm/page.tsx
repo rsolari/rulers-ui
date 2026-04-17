@@ -2239,6 +2239,7 @@ interface GovSettlement {
   id: string;
   name: string;
   size: string;
+  kind?: string;
   governingNobleId: string | null;
 }
 
@@ -2439,7 +2440,7 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
             <div>
               <p className="font-heading font-semibold text-sm mb-2">Settlement Governors</p>
               <div className="space-y-3">
-                {settlements.map((s) => (
+                {settlements.filter((s) => s.kind !== 'watchtower').map((s) => (
                   <NobleAssignmentSelect
                     key={s.id}
                     label={`${s.name} (${s.size})`}

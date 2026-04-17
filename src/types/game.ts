@@ -24,7 +24,7 @@ export type Tradition =
 
 // Settlement Sizes
 export type SettlementSize = 'Village' | 'Town' | 'City';
-export type SettlementKind = 'settlement' | 'fort' | 'castle';
+export type SettlementKind = 'settlement' | 'watchtower' | 'fort' | 'castle';
 
 // Building Types and Categories
 export type BuildingCategory = 'Civic' | 'Industrial' | 'Military' | 'Fortification';

@@ -1,7 +1,7 @@
 import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { realms, troops } from '@/db/schema';
+import { realms, settlements, troops } from '@/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { requireGM, requireOwnedRealmAccess } from '@/lib/auth';
 import { recomputeGameInitState } from '@/lib/game-init-state';
@@ -105,6 +105,21 @@ export async function PATCH(
 
     const updates: Record<string, unknown> = {};
     if (body.garrisonSettlementId !== undefined) {
+      if (body.garrisonSettlementId) {
+        const settlement = await db.select({ id: settlements.id, kind: settlements.kind })
+          .from(settlements)
+          .where(eq(settlements.id, body.garrisonSettlementId))
+          .get();
+
+        if (!settlement) {
+          return NextResponse.json({ error: 'Garrison settlement not found' }, { status: 404 });
+        }
+
+        if (settlement.kind === 'watchtower') {
+          return NextResponse.json({ error: 'Watchtowers cannot hold a garrison' }, { status: 409 });
+        }
+      }
+
       updates.garrisonSettlementId = body.garrisonSettlementId;
       updates.armyId = null;
     }

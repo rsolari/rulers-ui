@@ -601,7 +601,7 @@ export function prepareBuildingCreation(
 
   if (settlement && settlement.kind && settlement.kind !== 'settlement') {
     throw new RuleValidationError(
-      'Forts and castles do not have building slots',
+      'Forts, castles, and watchtowers do not have building slots',
       409,
       'stronghold_has_no_building_slots',
       { settlementId: settlement.id, kind: settlement.kind },
@@ -1903,7 +1903,7 @@ export function createTroopRecruitment(
     }
 
     if (input.garrisonSettlementId) {
-      const settlement = tx.select({ id: settlements.id })
+      const settlement = tx.select({ id: settlements.id, kind: settlements.kind })
         .from(settlements)
         .where(and(
           eq(settlements.id, input.garrisonSettlementId),
@@ -1916,6 +1916,15 @@ export function createTroopRecruitment(
           'Settlement not found for this realm',
           404,
           'garrison_settlement_not_found',
+          { settlementId: input.garrisonSettlementId, realmId },
+        );
+      }
+
+      if (settlement.kind === 'watchtower') {
+        throw new RuleValidationError(
+          'Watchtowers cannot hold a garrison',
+          409,
+          'watchtower_cannot_hold_garrison',
           { settlementId: input.garrisonSettlementId, realmId },
         );
       }
@@ -2022,7 +2031,7 @@ export function prepareRealmTroopRecruitment(
   }
 
   if (input.garrisonSettlementId) {
-    const settlement = database.select({ id: settlements.id })
+    const settlement = database.select({ id: settlements.id, kind: settlements.kind })
       .from(settlements)
       .where(and(
         eq(settlements.id, input.garrisonSettlementId),
@@ -2035,6 +2044,15 @@ export function prepareRealmTroopRecruitment(
         'Settlement not found for this realm',
         404,
         'garrison_settlement_not_found',
+        { settlementId: input.garrisonSettlementId, realmId },
+      );
+    }
+
+    if (settlement.kind === 'watchtower') {
+      throw new RuleValidationError(
+        'Watchtowers cannot hold a garrison',
+        409,
+        'watchtower_cannot_hold_garrison',
         { settlementId: input.garrisonSettlementId, realmId },
       );
     }
@@ -2156,7 +2174,7 @@ export function prepareRealmShipConstruction(
 
   if (settlement.kind && settlement.kind !== 'settlement') {
     throw new RuleValidationError(
-      'Forts and castles cannot construct ships',
+      'Forts, castles, and watchtowers cannot construct ships',
       409,
       'stronghold_cannot_construct_ships',
       { settlementId, kind: settlement.kind },

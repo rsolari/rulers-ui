@@ -638,13 +638,22 @@ export default function SetupWizard() {
 
           {territories.map((territory, index) => {
             const territoryMap = selectedMap?.territoryMaps[index];
+            const entry = generatedMap.find((e) => e.territoryIndex === index);
+            const territoryPlacements: TerritoryMapPlacement[] = entry
+              ? entry.resources.map((resource) => ({
+                  id: resource.id,
+                  name: resource.settlement.name,
+                  size: resource.settlement.size,
+                  hexId: resource.hexKey,
+                }))
+              : [];
 
             return (
               <Card key={`${selectedMapKey}-${index}`}>
                 <CardContent className="pt-4">
                   <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
                     <div className="space-y-2">
-                      {territoryMap ? <TerritoryHexMap data={territoryMap} showContext /> : null}
+                      {territoryMap ? <TerritoryHexMap data={territoryMap} placements={territoryPlacements} showContext /> : null}
                       <p className="text-xs text-ink-300">
                         {territoryMap?.selectableHexIds.length ?? 0} territory hexes
                       </p>

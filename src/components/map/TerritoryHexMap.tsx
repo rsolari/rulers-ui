@@ -297,7 +297,7 @@ export function TerritoryHexMap({
               ) : null}
               {placement ? (
                 <g pointerEvents="none">
-                  <SettlementMarker x={hex.center.x} y={hex.center.y} size={placement.size} kind={placement.kind} fill={placement.fill} />
+                  <SettlementMarker x={hex.center.x} y={hex.center.y} size={placement.size} kind={placement.kind} fill={placement.fill} hexSize={hexSize} />
                   {variant === 'full' ? (
                     <text
                       x={hex.center.x}

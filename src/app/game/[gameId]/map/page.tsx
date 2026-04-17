@@ -1,13 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { startTransition, useEffect, useState } from 'react';
+import { startTransition, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { HexMap } from '@/components/map/HexMap';
-import type { GameMapData } from '@/components/map/types';
+import type { GameMapData, MapHexData } from '@/components/map/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { useRole } from '@/hooks/use-role';
+import type { SettlementKind } from '@/types/game';
+
+interface NobleOption {
+  id: string;
+  name: string;
+  officeAssignments: string[];
+  isAlive?: boolean;
+  isPrisoner?: boolean;
+}
 
 export default function GameMapPage() {
   const params = useParams();
@@ -17,6 +28,35 @@ export default function GameMapPage() {
   const [mapData, setMapData] = useState<GameMapData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMap, setLoadingMap] = useState(true);
+  const [selectedHex, setSelectedHex] = useState<MapHexData | null>(null);
+  const [strongholdKind, setStrongholdKind] = useState<Exclude<SettlementKind, 'settlement'>>('fort');
+  const [strongholdName, setStrongholdName] = useState('');
+  const [selectedRealmId, setSelectedRealmId] = useState('');
+  const [selectedNobleId, setSelectedNobleId] = useState('');
+  const [nobleOptions, setNobleOptions] = useState<NobleOption[]>([]);
+  const [placing, setPlacing] = useState(false);
+  const [placementError, setPlacementError] = useState<string | null>(null);
+
+  const loadMap = useCallback(async (signal?: AbortSignal) => {
+    setLoadingMap(true);
+    setError(null);
+
+    const response = await fetch(`/api/game/${gameId}/map`, {
+      cache: 'no-store',
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to load map');
+    }
+
+    const payload = await response.json() as GameMapData;
+    startTransition(() => {
+      setMapData(payload);
+      setLoadingMap(false);
+      setSelectedRealmId((current) => current || (payload.realms[0]?.id ?? ''));
+    });
+  }, [gameId]);
 
   useEffect(() => {
     if (loading) {
@@ -31,25 +71,9 @@ export default function GameMapPage() {
   useEffect(() => {
     const controller = new AbortController();
 
-    async function loadMap() {
+    async function runLoadMap() {
       try {
-        setLoadingMap(true);
-        setError(null);
-
-        const response = await fetch(`/api/game/${gameId}/map`, {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to load map');
-        }
-
-        const payload = await response.json() as GameMapData;
-        startTransition(() => {
-          setMapData(payload);
-          setLoadingMap(false);
-        });
+        await loadMap(controller.signal);
       } catch (caughtError) {
         if (controller.signal.aborted) {
           return;
@@ -60,12 +84,117 @@ export default function GameMapPage() {
       }
     }
 
-    void loadMap();
+    void runLoadMap();
 
     return () => controller.abort();
-  }, [gameId]);
+  }, [loadMap]);
+
+  useEffect(() => {
+    if (role !== 'gm' || !selectedRealmId) {
+      setNobleOptions([]);
+      setSelectedNobleId('');
+      return;
+    }
+
+    const controller = new AbortController();
+    fetch(`/api/game/${gameId}/nobles?realmId=${selectedRealmId}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((response) => response.ok ? response.json() : [])
+      .then((nobles: NobleOption[]) => {
+        setNobleOptions(nobles);
+        setSelectedNobleId((current) => (
+          nobles.some((noble) => noble.id === current) ? current : ''
+        ));
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setNobleOptions([]);
+        }
+      });
+
+    return () => controller.abort();
+  }, [gameId, role, selectedRealmId]);
+
+  function handleHexSelect(hex: MapHexData) {
+    setSelectedHex(hex);
+    setPlacementError(null);
+  }
+
+  async function placeStronghold() {
+    if (!selectedHex || !mapData) return;
+
+    const trimmedName = strongholdName.trim();
+    if (!trimmedName) {
+      setPlacementError('Name is required.');
+      return;
+    }
+
+    if (!selectedRealmId) {
+      setPlacementError('Realm is required.');
+      return;
+    }
+
+    if (selectedHex.hexKind !== 'land' || !selectedHex.territoryId) {
+      setPlacementError('Choose a land hex inside a territory.');
+      return;
+    }
+
+    if (selectedHex.settlement) {
+      setPlacementError('That hex already has a settlement, fort, or castle.');
+      return;
+    }
+
+    setPlacing(true);
+    setPlacementError(null);
+
+    try {
+      const response = await fetch(`/api/game/${gameId}/settlements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          territoryId: selectedHex.territoryId,
+          hexId: selectedHex.id,
+          realmId: selectedRealmId,
+          name: trimmedName,
+          kind: strongholdKind,
+          governingNobleId: selectedNobleId || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setPlacementError(payload.error ?? 'Placement failed.');
+        return;
+      }
+
+      setStrongholdName('');
+      setSelectedNobleId('');
+      setSelectedHex(null);
+      await loadMap();
+    } finally {
+      setPlacing(false);
+    }
+  }
 
   const backHref = role === 'gm' ? `/game/${gameId}/gm` : `/game/${gameId}/realm`;
+  const selectedTerritory = selectedHex?.territoryId
+    ? mapData?.territories.find((territory) => territory.id === selectedHex.territoryId) ?? null
+    : null;
+  const canPlaceStronghold = role === 'gm'
+    && Boolean(selectedHex)
+    && selectedHex?.hexKind === 'land'
+    && Boolean(selectedHex?.territoryId)
+    && !selectedHex?.settlement
+    && Boolean(strongholdName.trim())
+    && Boolean(selectedRealmId);
+  const eligibleNobleOptions = nobleOptions
+    .filter((noble) => (
+      noble.id === selectedNobleId
+      || (noble.officeAssignments.length === 0 && noble.isAlive !== false && !noble.isPrisoner)
+    ))
+    .map((noble) => ({ value: noble.id, label: noble.name }));
 
   if (loading || loadingMap) {
     return (
@@ -130,7 +259,66 @@ export default function GameMapPage() {
         </div>
       </div>
 
-      <HexMap data={mapData} playerRealmId={realmId} />
+      {role === 'gm' ? (
+        <section className="mb-4 rounded-lg border border-ink-200 bg-parchment-50/80 p-4">
+          <div className="grid gap-3 lg:grid-cols-[10rem_1fr_1fr_1fr_auto] lg:items-end">
+            <Select
+              label="Type"
+              options={[
+                { value: 'fort', label: 'Fort' },
+                { value: 'castle', label: 'Castle' },
+              ]}
+              value={strongholdKind}
+              onChange={(event) => setStrongholdKind(event.target.value as Exclude<SettlementKind, 'settlement'>)}
+            />
+            <Input
+              label="Name"
+              value={strongholdName}
+              onChange={(event) => setStrongholdName(event.target.value)}
+              placeholder={strongholdKind === 'fort' ? 'Northwatch Fort' : 'Castle Greykeep'}
+            />
+            <Select
+              label="Realm"
+              options={mapData.realms.map((realm) => ({ value: realm.id, label: realm.name }))}
+              value={selectedRealmId}
+              onChange={(event) => setSelectedRealmId(event.target.value)}
+            />
+            <Select
+              label="Noble"
+              placeholder="Unassigned"
+              options={eligibleNobleOptions}
+              value={selectedNobleId}
+              onChange={(event) => setSelectedNobleId(event.target.value)}
+            />
+            <Button
+              variant="accent"
+              onClick={placeStronghold}
+              disabled={!canPlaceStronghold || placing}
+            >
+              {placing ? 'Placing...' : 'Place'}
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-ink-300">
+            <span>
+              Hex: {selectedHex ? `${selectedHex.q}, ${selectedHex.r}` : 'None'}
+            </span>
+            <span>
+              Territory: {selectedTerritory?.name ?? 'None'}
+            </span>
+            {selectedHex?.settlement ? (
+              <span className="text-red-700">Occupied by {selectedHex.settlement.name}</span>
+            ) : null}
+            {placementError ? <span className="text-red-700">{placementError}</span> : null}
+          </div>
+        </section>
+      ) : null}
+
+      <HexMap
+        data={mapData}
+        playerRealmId={realmId}
+        selectedHexId={selectedHex?.id ?? null}
+        onHexSelect={handleHexSelect}
+      />
     </main>
   );
 }

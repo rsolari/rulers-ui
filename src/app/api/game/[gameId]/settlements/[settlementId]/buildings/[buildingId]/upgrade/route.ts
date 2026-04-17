@@ -81,6 +81,10 @@ export async function GET(
       return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
     }
 
+    if (settlement.kind && settlement.kind !== 'settlement') {
+      return NextResponse.json({ error: 'Forts and castles do not have building upgrades here' }, { status: 409 });
+    }
+
     const building = await db.select({
       id: buildings.id,
       type: buildings.type,
@@ -130,6 +134,10 @@ export async function POST(
 
     if (!settlement) {
       return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+    }
+
+    if (settlement.kind && settlement.kind !== 'settlement') {
+      return NextResponse.json({ error: 'Forts and castles do not have building upgrades here' }, { status: 409 });
     }
 
     const building = await db.select({ id: buildings.id })

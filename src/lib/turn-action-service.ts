@@ -397,7 +397,10 @@ function getSettlementIdsForRealm(database: DatabaseExecutor, realmId: string) {
     database
       .select({ id: settlements.id })
       .from(settlements)
-      .where(eq(settlements.realmId, realmId))
+      .where(and(
+        eq(settlements.realmId, realmId),
+        eq(settlements.kind, 'settlement'),
+      ))
       .all()
       .map((settlement) => settlement.id),
   );

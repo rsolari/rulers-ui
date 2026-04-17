@@ -78,6 +78,7 @@ function createBenchmarkData(): GameMapData {
         }] : [],
         settlement: !isWater && index % 29 === 0 ? {
           name: `Settlement ${index}`,
+          kind: 'settlement',
           size: index % 2 === 0 ? 'Town' : 'Village',
           realmId: territory.realmId,
         } : null,

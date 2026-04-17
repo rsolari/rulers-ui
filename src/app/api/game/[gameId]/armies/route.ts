@@ -114,7 +114,10 @@ export async function GET(
     const siegeList = await db.select().from(siegeUnits).where(eq(siegeUnits.realmId, realmId)).all();
     const recruitmentSettlements = await db.select({ id: settlements.id })
       .from(settlements)
-      .where(eq(settlements.realmId, realmId))
+      .where(and(
+        eq(settlements.realmId, realmId),
+        eq(settlements.kind, 'settlement'),
+      ))
       .all();
     const recruitmentSettlementIds = recruitmentSettlements.map((settlement) => settlement.id);
 

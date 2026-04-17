@@ -128,6 +128,7 @@ export interface EconomyNobleInput {
 export interface EconomySettlementInput extends TradeSettlementInput {
   id: string;
   name: string;
+  kind?: string;
   size: keyof typeof SETTLEMENT_DATA;
   territoryId?: string | null;
   buildings: EconomyBuildingInput[];
@@ -361,6 +362,7 @@ function resolveSettlementFoodProduction(realm: EconomyRealmInput) {
   const settlementsByTerritory = new Map<string, Array<{ settlementId: string; uncappedFoodProduced: number }>>();
 
   for (const settlement of realm.settlements) {
+    if (settlement.kind && settlement.kind !== 'settlement') continue;
     const totalSlots = SETTLEMENT_DATA[settlement.size].buildingSlots;
     const occupiedSlots = settlement.buildings.filter((building) => building.takesBuildingSlot !== false).length;
     const uncappedFoodProduced = calculateFoodProduced(Math.max(totalSlots - occupiedSlots, 0));
@@ -658,6 +660,7 @@ export function calculateRealmEconomy(
   }, { forts: 0, castles: 0 });
 
   for (const settlement of realm.settlements) {
+    if (settlement.kind && settlement.kind !== 'settlement') continue;
     const totalSlots = SETTLEMENT_DATA[settlement.size].buildingSlots;
     const occupiedSlots = settlement.buildings.filter((building) => building.takesBuildingSlot !== false).length;
     const emptyBuildingSlots = Math.max(totalSlots - occupiedSlots, 0);
@@ -766,7 +769,7 @@ export function calculateRealmEconomy(
   }
 
   const completeBuildings = realm.settlements.flatMap((settlement) =>
-    settlement.buildings.map((building) => ({
+    settlement.kind && settlement.kind !== 'settlement' ? [] : settlement.buildings.map((building) => ({
       ...building,
       settlementId: settlement.id,
       settlementName: settlement.name,

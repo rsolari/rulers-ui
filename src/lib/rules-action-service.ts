@@ -102,6 +102,7 @@ interface PlacementSettlement {
   hexId?: string | null;
   realmId: string | null;
   name: string;
+  kind?: string;
   size: SettlementSize;
 }
 
@@ -595,6 +596,15 @@ export function prepareBuildingCreation(
       400,
       'building_settlement_required',
       { type: buildingType },
+    );
+  }
+
+  if (settlement && settlement.kind && settlement.kind !== 'settlement') {
+    throw new RuleValidationError(
+      'Forts and castles do not have building slots',
+      409,
+      'stronghold_has_no_building_slots',
+      { settlementId: settlement.id, kind: settlement.kind },
     );
   }
 
@@ -1235,6 +1245,7 @@ function hasRealmFoodAccess(
 
   const settlementsByTerritory = new Map<string, Array<typeof settlements.$inferSelect>>();
   for (const settlement of realmSettlements) {
+    if (settlement.kind !== 'settlement') continue;
     const territorySettlements = settlementsByTerritory.get(settlement.territoryId) ?? [];
     territorySettlements.push(settlement);
     settlementsByTerritory.set(settlement.territoryId, territorySettlements);
@@ -1805,12 +1816,14 @@ export function createTroopRecruitment(
     const realmSettlements = tx.select({
       id: settlements.id,
       size: settlements.size,
+      kind: settlements.kind,
     })
       .from(settlements)
       .where(eq(settlements.realmId, realmId))
       .all();
 
-    const recruitmentSettlement = realmSettlements.find((settlement) => settlement.id === recruitmentSettlementId);
+    const economicSettlements = realmSettlements.filter((settlement) => settlement.kind === 'settlement');
+    const recruitmentSettlement = economicSettlements.find((settlement) => settlement.id === recruitmentSettlementId);
     if (!recruitmentSettlement) {
       throw new RuleValidationError(
         'Recruitment settlement not found for this realm',
@@ -1822,7 +1835,9 @@ export function createTroopRecruitment(
 
     if (!input.gmOverride) {
       const totalTroopCap = realmSettlements.reduce(
-        (sum, settlement) => sum + getSettlementTroopCap(settlement.size as SettlementSize),
+        (sum, settlement) => settlement.kind === 'settlement'
+          ? sum + getSettlementTroopCap(settlement.size as SettlementSize)
+          : sum,
         0,
       );
       const currentTroopCount = tx.select({ id: troops.id })
@@ -1968,12 +1983,15 @@ export function prepareRealmTroopRecruitment(
   const realmSettlements = database.select({
     id: settlements.id,
     size: settlements.size,
+    kind: settlements.kind,
   })
     .from(settlements)
     .where(eq(settlements.realmId, realmId))
     .all();
 
-  const recruitmentSettlement = realmSettlements.find((settlement) => settlement.id === recruitmentSettlementId);
+  const recruitmentSettlement = realmSettlements.find((settlement) => (
+    settlement.id === recruitmentSettlementId && settlement.kind === 'settlement'
+  ));
   if (!recruitmentSettlement) {
     throw new RuleValidationError(
       'Recruitment settlement not found for this realm',
@@ -2133,6 +2151,15 @@ export function prepareRealmShipConstruction(
       404,
       'construction_settlement_not_found',
       { settlementId, realmId },
+    );
+  }
+
+  if (settlement.kind && settlement.kind !== 'settlement') {
+    throw new RuleValidationError(
+      'Forts and castles cannot construct ships',
+      409,
+      'stronghold_cannot_construct_ships',
+      { settlementId, kind: settlement.kind },
     );
   }
 

@@ -29,6 +29,13 @@
       "when": 1776297600000,
       "tag": "0003_action_resolution_rolls",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776384000000,
+      "tag": "0004_stronghold_settlement_kind",
+      "breakpoints": true
     }
   ]
 }

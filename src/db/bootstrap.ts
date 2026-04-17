@@ -265,6 +265,7 @@ function createBaseSchema(database: Database.Database) {
       hex_id text,
       realm_id text,
       name text NOT NULL,
+      kind text NOT NULL DEFAULT 'settlement',
       size text NOT NULL,
       is_capital integer NOT NULL DEFAULT false,
       governing_noble_id text,
@@ -910,6 +911,12 @@ function backfillInitStateFromLegacyGamePhase(database: Database.Database) {
       OR init_state = ''
       OR init_state = 'gm_world_setup';
   `);
+}
+
+function ensureSettlementKindColumn(database: Database.Database) {
+  if (tableExists(database, 'settlements') && !columnExists(database, 'settlements', 'kind')) {
+    database.exec("ALTER TABLE settlements ADD COLUMN kind text NOT NULL DEFAULT 'settlement';");
+  }
 }
 
 function backfillPlayerSlotSetupState(database: Database.Database) {
@@ -1641,6 +1648,8 @@ export function initializeDatabaseSchema(database: Database.Database) {
   if (buildingsSettlementIdIsNotNull(database)) {
     migrateBuildingsToSupportStandaloneLocations(database);
   }
+
+  ensureSettlementKindColumn(database);
 
   ensureEconomySchema(database);
   ensureGovernanceSchema(database);

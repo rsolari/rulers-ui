@@ -41,6 +41,7 @@ interface Settlement {
   hexId: string | null;
   name: string;
   size: string;
+  kind: string;
 }
 
 interface ResourceSite {
@@ -87,6 +88,7 @@ export default function CreateRealmPage() {
         id: settlement.id,
         name: settlement.name,
         size: settlement.size,
+        kind: settlement.kind,
         hexId: settlement.hexId,
       }));
 

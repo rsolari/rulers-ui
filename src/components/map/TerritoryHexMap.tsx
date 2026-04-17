@@ -29,6 +29,8 @@ export interface TerritoryMapPlacement {
   name: string;
   size: string;
   hexId: string | null;
+  kind?: string;
+  fill?: string;
 }
 
 interface TerritoryHexMapProps {
@@ -295,7 +297,7 @@ export function TerritoryHexMap({
               ) : null}
               {placement ? (
                 <g pointerEvents="none">
-                  <SettlementMarker x={hex.center.x} y={hex.center.y} size={placement.size} />
+                  <SettlementMarker x={hex.center.x} y={hex.center.y} size={placement.size} kind={placement.kind} fill={placement.fill} />
                   {variant === 'full' ? (
                     <text
                       x={hex.center.x}

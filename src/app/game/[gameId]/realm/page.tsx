@@ -76,6 +76,8 @@ interface Settlement {
   id: string;
   name: string;
   size: string;
+  kind: string;
+  hexId: string | null;
   territoryId: string;
   buildings: Array<{ id: string; type: string; size: string; constructionTurnsRemaining: number }>;
 }
@@ -264,6 +266,12 @@ export default function RealmDashboard() {
     }
     setFinalizingSetup(false);
   }
+
+  const realmColor = useMemo(() => {
+    if (!mapData || !realmId) return '#ffffff';
+    const realm = mapData.realms.find((r) => r.id === realmId);
+    return realm?.color ?? '#ffffff';
+  }, [mapData, realmId]);
 
   const territoryMapsByTerritoryId = useMemo(() => {
     if (!mapData) return new Map<string, ReturnType<typeof buildGameTerritoryMapData>>();
@@ -594,13 +602,16 @@ export default function RealmDashboard() {
                   {ownTerritories.map((territory) => {
                     const territorySettlements = settlements.filter((s) => s.territoryId === territory.id);
                     const territoryMap = territoryMapsByTerritoryId.get(territory.id) ?? null;
+                    const placements = territorySettlements
+                      .filter((s) => s.hexId)
+                      .map((s) => ({ id: s.id, name: s.name, size: s.size, kind: s.kind, fill: realmColor, hexId: s.hexId }));
                     return (
                       <div key={territory.id} className="p-3 medieval-border rounded space-y-2 border-gold-500/50">
                         <div className="flex items-center justify-between">
                           <span className="font-heading font-semibold">{territory.name}</span>
                         </div>
                         {territoryMap ? (
-                          <TerritoryHexMap data={territoryMap} />
+                          <TerritoryHexMap data={territoryMap} placements={placements} />
                         ) : null}
                         {territorySettlements.length > 0 && (
                           <div className="space-y-1 ml-4">

@@ -1,9 +1,24 @@
 'use client';
 
-const SETTLEMENT_RADIUS: Record<string, number> = {
-  Village: 3.5,
-  Town: 5,
-  City: 6.5,
+import {
+  ICON_VILLAGE,
+  ICON_TOWN,
+  ICON_CITY,
+  ICON_FORT,
+  ICON_CASTLE,
+  ICON_WATCHTOWER,
+} from '@/components/map/icon-paths';
+
+const SETTLEMENT_ICON: Record<string, { path: string; size: number }> = {
+  Village: { path: ICON_VILLAGE, size: 14 },
+  Town: { path: ICON_TOWN, size: 16 },
+  City: { path: ICON_CITY, size: 18 },
+};
+
+const KIND_ICON: Record<string, { path: string; size: number }> = {
+  fort: { path: ICON_FORT, size: 16 },
+  castle: { path: ICON_CASTLE, size: 18 },
+  watchtower: { path: ICON_WATCHTOWER, size: 14 },
 };
 
 interface SettlementMarkerProps {
@@ -11,60 +26,23 @@ interface SettlementMarkerProps {
   y: number;
   size: string;
   kind?: string;
+  fill?: string;
 }
 
-export function SettlementMarker({ x, y, size, kind = 'settlement' }: SettlementMarkerProps) {
-  if (kind === 'watchtower') {
-    return (
-      <g pointerEvents="none">
-        <path
-          d={`M ${x} ${y - 8} L ${x + 6} ${y - 3} L ${x + 3.5} ${y - 3} L ${x + 3.5} ${y + 7} L ${x - 3.5} ${y + 7} L ${x - 3.5} ${y - 3} L ${x - 6} ${y - 3} Z`}
-          fill="rgba(253, 248, 240, 0.92)"
-          stroke="#4a3728"
-          strokeWidth={2.5}
-          strokeLinejoin="round"
-        />
-        <path
-          d={`M ${x} ${y - 5.7} L ${x + 3.5} ${y - 2.7} L ${x + 1.6} ${y - 2.7} L ${x + 1.6} ${y + 5.2} L ${x - 1.6} ${y + 5.2} L ${x - 1.6} ${y - 2.7} L ${x - 3.5} ${y - 2.7} Z`}
-          fill="#3f5f66"
-          stroke="#f0d080"
-          strokeWidth={1}
-          strokeLinejoin="round"
-        />
-      </g>
-    );
-  }
+export function SettlementMarker({ x, y, size, kind = 'settlement', fill = '#ffffff' }: SettlementMarkerProps) {
+  const icon = kind !== 'settlement' ? KIND_ICON[kind] : SETTLEMENT_ICON[size];
+  if (!icon) return null;
 
-  if (kind === 'fort' || kind === 'castle') {
-    const scale = kind === 'castle' ? 1.15 : 1;
-
-    return (
-      <g pointerEvents="none">
-        <path
-          d={`M ${x - 7 * scale} ${y + 6 * scale} L ${x - 7 * scale} ${y - 2 * scale} L ${x - 4 * scale} ${y - 2 * scale} L ${x - 4 * scale} ${y - 6 * scale} L ${x} ${y - 6 * scale} L ${x} ${y - 2 * scale} L ${x + 4 * scale} ${y - 2 * scale} L ${x + 4 * scale} ${y - 6 * scale} L ${x + 7 * scale} ${y - 6 * scale} L ${x + 7 * scale} ${y + 6 * scale} Z`}
-          fill="rgba(253, 248, 240, 0.92)"
-          stroke="#4a3728"
-          strokeWidth={3}
-          strokeLinejoin="round"
-        />
-        <path
-          d={`M ${x - 5.2 * scale} ${y + 4.4 * scale} L ${x - 5.2 * scale} ${y - 0.5 * scale} L ${x - 2.4 * scale} ${y - 0.5 * scale} L ${x - 2.4 * scale} ${y - 4.3 * scale} L ${x + 0.1 * scale} ${y - 4.3 * scale} L ${x + 0.1 * scale} ${y - 0.5 * scale} L ${x + 3 * scale} ${y - 0.5 * scale} L ${x + 3 * scale} ${y - 4.3 * scale} L ${x + 5.2 * scale} ${y - 4.3 * scale} L ${x + 5.2 * scale} ${y + 4.4 * scale} Z`}
-          fill={kind === 'castle' ? '#5a4634' : '#7a5a3a'}
-          stroke="#f0d080"
-          strokeWidth={1}
-          strokeLinejoin="round"
-        />
-      </g>
-    );
-  }
-
-  const radius = SETTLEMENT_RADIUS[size] ?? 4;
+  const half = icon.size / 2;
+  const scale = icon.size / 512;
 
   return (
     <g pointerEvents="none">
-      <circle cx={x} cy={y} r={radius + 1.5} fill="rgba(253, 248, 240, 0.9)" />
-      <circle cx={x} cy={y} r={radius} fill="#8b2020" stroke="#f0d080" strokeWidth={1} />
-      <circle cx={x} cy={y} r={Math.max(radius - 2.2, 1.2)} fill="#f5ead6" />
+      <circle cx={x} cy={y} r={half + 2} fill="rgba(253, 248, 240, 0.9)" />
+      <circle cx={x} cy={y} r={half + 0.5} fill={fill} stroke="#3a2a1e" strokeWidth={0.8} />
+      <g transform={`translate(${x - half}, ${y - half}) scale(${scale})`}>
+        <path d={icon.path} fill="#f5ead6" />
+      </g>
     </g>
   );
 }

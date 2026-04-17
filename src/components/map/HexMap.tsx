@@ -424,6 +424,7 @@ export function HexMap({ data, playerRealmId, selectedHexId: controlledSelectedH
               y={hex.centerY + (hex.armies.length > 0 || hex.fleets.length > 0 ? -4 : 0)}
               size={hex.settlement.size}
               kind={hex.settlement.kind}
+              fill={hex.settlement.realmId ? realmColorById.get(hex.settlement.realmId) ?? '#ffffff' : '#ffffff'}
             />
             {hex.settlement.realmId ? (
               <RealmFlag

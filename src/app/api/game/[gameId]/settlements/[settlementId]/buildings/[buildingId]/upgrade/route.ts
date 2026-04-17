@@ -82,7 +82,7 @@ export async function GET(
     }
 
     if (settlement.kind && settlement.kind !== 'settlement') {
-      return NextResponse.json({ error: 'Forts and castles do not have building upgrades here' }, { status: 409 });
+      return NextResponse.json({ error: 'Forts, castles, and watchtowers do not have building upgrades here' }, { status: 409 });
     }
 
     const building = await db.select({
@@ -137,7 +137,7 @@ export async function POST(
     }
 
     if (settlement.kind && settlement.kind !== 'settlement') {
-      return NextResponse.json({ error: 'Forts and castles do not have building upgrades here' }, { status: 409 });
+      return NextResponse.json({ error: 'Forts, castles, and watchtowers do not have building upgrades here' }, { status: 409 });
     }
 
     const building = await db.select({ id: buildings.id })

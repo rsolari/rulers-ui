@@ -259,6 +259,10 @@ export function assignSettlementGovernor(
     throw new GovernanceError('Settlement not found', 404);
   }
 
+  if (settlement.kind === 'watchtower' && input.nobleId) {
+    throw new GovernanceError('Watchtowers cannot be assigned a governing noble', 400);
+  }
+
   const realm = requireRealm(database, input.gameId, settlement.realmId);
   assertRealmNotFallen(realm);
 

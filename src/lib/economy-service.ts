@@ -693,7 +693,11 @@ function loadGameEconomyState(
           material: building.material,
         })),
         ...(strongholdsByRealm.get(realm.id) ?? []).map((stronghold) => {
-          const type = stronghold.kind === 'castle' ? 'Castle' : 'Fort';
+          const type = stronghold.kind === 'watchtower'
+            ? 'Watchtower'
+            : stronghold.kind === 'castle'
+              ? 'Castle'
+              : 'Fort';
           const definition = BUILDING_DEFS[type];
 
           return {

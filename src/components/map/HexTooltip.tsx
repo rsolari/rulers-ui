@@ -19,6 +19,13 @@ function humanize(value: string | null | undefined) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function settlementKindLabel(kind: string) {
+  if (kind === 'settlement') return 'Settlement';
+  if (kind === 'watchtower') return 'Watchtower';
+  if (kind === 'castle') return 'Castle';
+  return 'Fort';
+}
+
 export const HexTooltip = forwardRef<HTMLDivElement, HexTooltipProps>(function HexTooltip({ hex, x, y }, ref) {
   if (!hex) {
     return null;
@@ -47,7 +54,7 @@ export const HexTooltip = forwardRef<HTMLDivElement, HexTooltipProps>(function H
       ) : null}
       {hex.settlement ? (
         <p className="mt-1">
-          {hex.settlement.kind === 'settlement' ? 'Settlement' : hex.settlement.kind === 'castle' ? 'Castle' : 'Fort'}: {hex.settlement.name}
+          {settlementKindLabel(hex.settlement.kind)}: {hex.settlement.name}
           {hex.settlement.kind === 'settlement' ? ` (${hex.settlement.size})` : null}
         </p>
       ) : null}

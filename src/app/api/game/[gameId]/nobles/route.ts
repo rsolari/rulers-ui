@@ -35,6 +35,7 @@ export async function GET(
     db.select({
       id: settlements.id,
       name: settlements.name,
+      kind: settlements.kind,
       size: settlements.size,
       governingNobleId: settlements.governingNobleId,
     }).from(settlements).where(eq(settlements.realmId, realmId)),
@@ -75,7 +76,7 @@ export async function GET(
     addGovernanceLabel(realm.rulerNobleId, 'Ruler');
   }
   for (const settlement of settlementList) {
-    if (settlement.governingNobleId) {
+    if (settlement.kind !== 'watchtower' && settlement.governingNobleId) {
       const label = `${settlement.name} Governor`;
       addGovernanceLabel(settlement.governingNobleId, label);
       addOfficeAssignment(settlement.governingNobleId, label);

@@ -14,6 +14,27 @@ interface SettlementMarkerProps {
 }
 
 export function SettlementMarker({ x, y, size, kind = 'settlement' }: SettlementMarkerProps) {
+  if (kind === 'watchtower') {
+    return (
+      <g pointerEvents="none">
+        <path
+          d={`M ${x} ${y - 8} L ${x + 6} ${y - 3} L ${x + 3.5} ${y - 3} L ${x + 3.5} ${y + 7} L ${x - 3.5} ${y + 7} L ${x - 3.5} ${y - 3} L ${x - 6} ${y - 3} Z`}
+          fill="rgba(253, 248, 240, 0.92)"
+          stroke="#4a3728"
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+        />
+        <path
+          d={`M ${x} ${y - 5.7} L ${x + 3.5} ${y - 2.7} L ${x + 1.6} ${y - 2.7} L ${x + 1.6} ${y + 5.2} L ${x - 1.6} ${y + 5.2} L ${x - 1.6} ${y - 2.7} L ${x - 3.5} ${y - 2.7} Z`}
+          fill="#3f5f66"
+          stroke="#f0d080"
+          strokeWidth={1}
+          strokeLinejoin="round"
+        />
+      </g>
+    );
+  }
+
   if (kind === 'fort' || kind === 'castle') {
     const scale = kind === 'castle' ? 1.15 : 1;
 

@@ -460,6 +460,7 @@ export default function ArmyPage() {
     garrisonGroupMap.set(key, list);
   }
   const availableArmySources = settlements
+    .filter((settlement) => settlement.kind !== 'watchtower')
     .map((settlement) => {
       const troops = garrisonGroupMap.get(settlement.id) ?? [];
       if (troops.length === 0) {

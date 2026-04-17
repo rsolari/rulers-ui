@@ -454,14 +454,17 @@ export default function SettlementsPage() {
 
       <div className="space-y-6">
         {settlements.map((settlement) => {
-          const isStronghold = settlement.kind === 'fort' || settlement.kind === 'castle';
+          const isStronghold = settlement.kind !== 'settlement';
+          const hasGovernor = settlement.kind !== 'watchtower';
           const data = isStronghold ? null : SETTLEMENT_DATA[settlement.size];
           const usedSlots = settlement.buildings?.filter((building) => building.takesBuildingSlot !== false).length ?? 0;
-          const titleLabel = settlement.kind === 'fort'
-            ? 'Fort'
-            : settlement.kind === 'castle'
-              ? 'Castle'
-              : settlement.size;
+          const titleLabel = settlement.kind === 'watchtower'
+            ? 'Watchtower'
+            : settlement.kind === 'fort'
+              ? 'Fort'
+              : settlement.kind === 'castle'
+                ? 'Castle'
+                : settlement.size;
 
           return (
             <Card key={settlement.id} variant="gold">
@@ -502,26 +505,28 @@ export default function SettlementsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-3 mb-4 p-3 rounded medieval-border bg-parchment-800/30">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-gold-400 text-lg shrink-0">{isStronghold ? '⚑' : '👑'}</span>
-                    <span className="font-heading font-semibold text-sm shrink-0">Governor:</span>
-                    {isSetup ? (
-                      <div className="flex-1 min-w-[200px]">
-                        <NobleAssignmentSelect
-                          label=""
-                          nobles={getOfficeEligibleNobles(settlement.governingNobleId)}
-                          currentNobleId={settlement.governingNobleId}
-                          onAssign={(nobleId) => assignGovernor(settlement.id, nobleId)}
-                        />
-                      </div>
-                    ) : (
-                      <span className={settlement.governingNoble ? 'font-semibold text-ink-100' : 'text-ink-400 italic'}>
-                        {settlement.governingNoble ? settlement.governingNoble.name : 'Unassigned'}
-                      </span>
-                    )}
+                {hasGovernor ? (
+                  <div className="flex items-center gap-3 mb-4 p-3 rounded medieval-border bg-parchment-800/30">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-gold-400 text-lg shrink-0">{isStronghold ? '⚑' : '👑'}</span>
+                      <span className="font-heading font-semibold text-sm shrink-0">Governor:</span>
+                      {isSetup ? (
+                        <div className="flex-1 min-w-[200px]">
+                          <NobleAssignmentSelect
+                            label=""
+                            nobles={getOfficeEligibleNobles(settlement.governingNobleId)}
+                            currentNobleId={settlement.governingNobleId}
+                            onAssign={(nobleId) => assignGovernor(settlement.id, nobleId)}
+                          />
+                        </div>
+                      ) : (
+                        <span className={settlement.governingNoble ? 'font-semibold text-ink-100' : 'text-ink-400 italic'}>
+                          {settlement.governingNoble ? settlement.governingNoble.name : 'Unassigned'}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
                 {data ? (
                   <div className="grid grid-cols-3 gap-2 mb-4">
@@ -534,6 +539,7 @@ export default function SettlementsPage() {
                     <Badge>No building slots</Badge>
                     <Badge>No recruitment</Badge>
                     <Badge>No food production</Badge>
+                    {settlement.kind === 'watchtower' ? <Badge>No garrison</Badge> : null}
                     {role === 'gm' && settlement.kind === 'fort' ? (
                       <Button
                         variant="outline"

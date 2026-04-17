@@ -12,6 +12,8 @@ import { Select } from '@/components/ui/select';
 import { useRole } from '@/hooks/use-role';
 import type { SettlementKind } from '@/types/game';
 
+type PlaceableStrongholdKind = Exclude<SettlementKind, 'settlement'>;
+
 interface NobleOption {
   id: string;
   name: string;
@@ -29,7 +31,7 @@ export default function GameMapPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadingMap, setLoadingMap] = useState(true);
   const [selectedHex, setSelectedHex] = useState<MapHexData | null>(null);
-  const [strongholdKind, setStrongholdKind] = useState<Exclude<SettlementKind, 'settlement'>>('fort');
+  const [strongholdKind, setStrongholdKind] = useState<PlaceableStrongholdKind>('watchtower');
   const [strongholdName, setStrongholdName] = useState('');
   const [selectedRealmId, setSelectedRealmId] = useState('');
   const [selectedNobleId, setSelectedNobleId] = useState('');
@@ -117,6 +119,12 @@ export default function GameMapPage() {
     return () => controller.abort();
   }, [gameId, role, selectedRealmId]);
 
+  useEffect(() => {
+    if (strongholdKind === 'watchtower') {
+      setSelectedNobleId('');
+    }
+  }, [strongholdKind]);
+
   function handleHexSelect(hex: MapHexData) {
     setSelectedHex(hex);
     setPlacementError(null);
@@ -142,7 +150,7 @@ export default function GameMapPage() {
     }
 
     if (selectedHex.settlement) {
-      setPlacementError('That hex already has a settlement, fort, or castle.');
+      setPlacementError('That hex already has a settlement, fort, castle, or watchtower.');
       return;
     }
 
@@ -159,7 +167,7 @@ export default function GameMapPage() {
           realmId: selectedRealmId,
           name: trimmedName,
           kind: strongholdKind,
-          governingNobleId: selectedNobleId || null,
+          governingNobleId: strongholdKind === 'watchtower' ? null : selectedNobleId || null,
         }),
       });
 
@@ -195,6 +203,15 @@ export default function GameMapPage() {
       || (noble.officeAssignments.length === 0 && noble.isAlive !== false && !noble.isPrisoner)
     ))
     .map((noble) => ({ value: noble.id, label: noble.name }));
+  const canAssignNoble = strongholdKind !== 'watchtower';
+  const placementGridClass = canAssignNoble
+    ? 'grid gap-3 lg:grid-cols-[10rem_1fr_1fr_1fr_auto] lg:items-end'
+    : 'grid gap-3 lg:grid-cols-[10rem_1fr_1fr_auto] lg:items-end';
+  const namePlaceholder = strongholdKind === 'watchtower'
+    ? 'Beacon Tower'
+    : strongholdKind === 'fort'
+      ? 'Northwatch Fort'
+      : 'Castle Greykeep';
 
   if (loading || loadingMap) {
     return (
@@ -261,21 +278,22 @@ export default function GameMapPage() {
 
       {role === 'gm' ? (
         <section className="mb-4 rounded-lg border border-ink-200 bg-parchment-50/80 p-4">
-          <div className="grid gap-3 lg:grid-cols-[10rem_1fr_1fr_1fr_auto] lg:items-end">
+          <div className={placementGridClass}>
             <Select
               label="Type"
               options={[
+                { value: 'watchtower', label: 'Watchtower' },
                 { value: 'fort', label: 'Fort' },
                 { value: 'castle', label: 'Castle' },
               ]}
               value={strongholdKind}
-              onChange={(event) => setStrongholdKind(event.target.value as Exclude<SettlementKind, 'settlement'>)}
+              onChange={(event) => setStrongholdKind(event.target.value as PlaceableStrongholdKind)}
             />
             <Input
               label="Name"
               value={strongholdName}
               onChange={(event) => setStrongholdName(event.target.value)}
-              placeholder={strongholdKind === 'fort' ? 'Northwatch Fort' : 'Castle Greykeep'}
+              placeholder={namePlaceholder}
             />
             <Select
               label="Realm"
@@ -283,13 +301,15 @@ export default function GameMapPage() {
               value={selectedRealmId}
               onChange={(event) => setSelectedRealmId(event.target.value)}
             />
-            <Select
-              label="Noble"
-              placeholder="Unassigned"
-              options={eligibleNobleOptions}
-              value={selectedNobleId}
-              onChange={(event) => setSelectedNobleId(event.target.value)}
-            />
+            {canAssignNoble ? (
+              <Select
+                label="Noble"
+                placeholder="Unassigned"
+                options={eligibleNobleOptions}
+                value={selectedNobleId}
+                onChange={(event) => setSelectedNobleId(event.target.value)}
+              />
+            ) : null}
             <Button
               variant="accent"
               onClick={placeStronghold}

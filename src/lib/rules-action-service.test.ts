@@ -784,6 +784,37 @@ describe('createTroopRecruitment', () => {
     sqlite.close();
   });
 
+  it('rejects watchtowers as troop garrisons', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRecruitmentContext(db);
+
+    db.insert(schema.settlements).values({
+      id: 'watchtower-1',
+      territoryId: 'territory-1',
+      realmId: 'realm-1',
+      name: 'Beacon Tower',
+      kind: 'watchtower',
+      size: 'Village',
+    }).run();
+
+    const error = expectRuleError(() => createTroopRecruitment('game-1', {
+      realmId: 'realm-1',
+      type: 'Spearmen',
+      garrisonSettlementId: 'watchtower-1',
+      recruitmentSettlementId: 'settlement-1',
+    }, {
+      database: db,
+      idGenerator: () => 'troop-1',
+    }));
+
+    expect(error).toMatchObject({
+      code: 'watchtower_cannot_hold_garrison',
+      status: 409,
+    });
+
+    sqlite.close();
+  });
+
   it('rejects recruitment after a settlement reaches its seasonal cap', async () => {
     const { sqlite, db } = createTestDatabase();
     seedRecruitmentContext(db, { treasury: 5000 });

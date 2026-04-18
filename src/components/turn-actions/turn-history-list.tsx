@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
+import { TurnEventCard } from '@/components/turn-actions/turn-event-card';
 import type { TurnHistoryEntry } from '@/types/game';
 
 interface TurnHistoryListProps {
@@ -40,19 +41,33 @@ export function TurnHistoryList({ history, settlementOptions, realmOptions = [],
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {entry.actions.length === 0 ? (
-              <p className="text-sm text-ink-300">No actions were recorded for this turn.</p>
-            ) : (
-              entry.actions.map((action) => (
-                <TurnActionCard
-                  key={`${action.id}:${action.updatedAt ?? ''}`}
-                  action={action}
-                  settlementOptions={settlementOptions}
-                  realmOptions={realmOptions}
-                  nobleOptions={nobleOptions}
-                />
-              ))
-            )}
+            {entry.events.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Events</p>
+                {entry.events.map((event) => (
+                  <TurnEventCard key={event.id} event={event} />
+                ))}
+              </div>
+            ) : null}
+            {entry.actions.length > 0 ? (
+              <div className="space-y-2">
+                {entry.events.length > 0 ? (
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Actions</p>
+                ) : null}
+                {entry.actions.map((action) => (
+                  <TurnActionCard
+                    key={`${action.id}:${action.updatedAt ?? ''}`}
+                    action={action}
+                    settlementOptions={settlementOptions}
+                    realmOptions={realmOptions}
+                    nobleOptions={nobleOptions}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {entry.actions.length === 0 && entry.events.length === 0 ? (
+              <p className="text-sm text-ink-300">No actions or events were recorded for this turn.</p>
+            ) : null}
           </CardContent>
         </Card>
       ))}

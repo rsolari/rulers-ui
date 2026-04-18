@@ -2,19 +2,25 @@ import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { turnEvents } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { requireGM } from '@/lib/auth';
 import { normalizeEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 import type { Season, TurnEventKind, TurnEventStatus } from '@/types/game';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ gameId: string }> }
 ) {
   const { gameId } = await params;
+  const url = new URL(request.url);
+  const realmId = url.searchParams.get('realmId');
+  const conditions = [eq(turnEvents.gameId, gameId)];
+  if (realmId) {
+    conditions.push(eq(turnEvents.realmId, realmId));
+  }
   const list = await db.select().from(turnEvents)
-    .where(eq(turnEvents.gameId, gameId))
+    .where(and(...conditions))
     .orderBy(desc(turnEvents.year), desc(turnEvents.season));
   return NextResponse.json(list);
 }

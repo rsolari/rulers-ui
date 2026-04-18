@@ -1,4 +1,5 @@
 import { normalizeFinancialActions } from '@/lib/financial-actions';
+import { BUILDING_DEFS, BUILDING_SIZE_DATA } from '@/lib/game-logic/constants';
 import {
   RuleValidationError,
   prepareRealmBuildingCreation,
@@ -11,6 +12,7 @@ import {
 import type {
   BuildFinancialAction,
   ConstructShipFinancialAction,
+  DemolishFinancialAction,
   FinancialAction,
   RecruitFinancialAction,
 } from '@/types/game';
@@ -123,6 +125,19 @@ export function prepareTurnReportFinancialActions(
       }, { database });
       shipPreparations.set(index, prepared);
       actions.push(withPreparedShipFields(action, prepared));
+      continue;
+    }
+
+    if (action.type === 'demolish') {
+      const def = BUILDING_DEFS[action.buildingType];
+      const size = action.buildingSize ?? def.size;
+      const recovery = Math.floor(BUILDING_SIZE_DATA[size].buildCost * 0.5);
+      const prepared: DemolishFinancialAction = {
+        ...action,
+        buildingSize: size,
+        cost: -recovery,
+      };
+      actions.push(prepared);
       continue;
     }
 

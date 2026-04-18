@@ -16,6 +16,7 @@ import type {
   BuildingType,
   ConstructShipFinancialAction,
   CurrentTurnResponseDto,
+  DemolishFinancialAction,
   FinancialAction,
   FortificationMaterial,
   ReportStatus,
@@ -380,6 +381,18 @@ function mapTurnActionRowToFinancialAction(action: TurnActionRow): FinancialActi
     return {
       type,
       taxType: action.taxType as TaxChangeFinancialAction['taxType'],
+      description: action.description || undefined,
+      cost: action.cost,
+    };
+  }
+
+  if (type === 'demolish') {
+    return {
+      type,
+      buildingType: action.buildingType as DemolishFinancialAction['buildingType'],
+      settlementId: action.settlementId ?? undefined,
+      territoryId: action.territoryId ?? undefined,
+      buildingSize: (action.buildingSize as DemolishFinancialAction['buildingSize']) ?? undefined,
       description: action.description || undefined,
       cost: action.cost,
     };

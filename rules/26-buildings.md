@@ -188,6 +188,23 @@ If built inside a Settlement, a Watchtower does not take up a Building slot. A W
 
 ---
 
+## Demolishing Buildings
+
+A Ruler may choose to demolish a Building in their Realm. Demolishing a Building is a Financial Action and recovers **50% of the original construction cost** in salvaged materials and repurposed labour.
+
+| | Tiny | Small | Medium | Large | Colossal |
+|---|---|---|---|---|---|
+| Recovery | 187g | 375g | 750g | 1,500g | 3,000g |
+
+Demolition takes effect immediately — the Building is removed and the recovery is credited to the Treasury. The Building slot in the [Settlement](19-settlements.md) is freed.
+
+A Ruler **cannot** demolish a Building that:
+
+- Is owned by a [Guild, Order, or Society](18-guilds-orders-and-societies.md) (i.e. has a GOS owner).
+- Is controlled by a [Noble](16-nobles.md).
+
+---
+
 ## Creating Your Own Buildings
 
 Players or the N.O. may be interested in creating their own Buildings for their Rulers game. However, first check to see if there is a Building which already serves your purposes if it were just renamed.

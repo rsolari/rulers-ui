@@ -444,6 +444,7 @@ export default function RealmDashboard() {
                     key={option.value}
                     variant={form.traditions.includes(option.value as Tradition) ? 'gold' : 'default'}
                     className={canEditIdentity ? 'cursor-pointer' : ''}
+                    title={TRADITION_DEFS[option.value as Tradition].effect}
                     onClick={() => canEditIdentity && toggleTradition(option.value as Tradition)}
                   >
                     {option.label}

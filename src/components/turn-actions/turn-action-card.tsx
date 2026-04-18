@@ -27,6 +27,7 @@ const TROOP_OPTIONS = Object.keys(TROOP_DEFS).map((value) => ({ value, label: va
 const FINANCIAL_TYPE_OPTIONS = [
   { value: 'build', label: 'Build' },
   { value: 'recruit', label: 'Recruit' },
+  { value: 'demolish', label: 'Demolish' },
   { value: 'taxChange', label: 'Tax Change' },
   { value: 'spending', label: 'Spending' },
 ];
@@ -325,6 +326,8 @@ function ReadOnlySummary({
 
   if (action.financialType === 'build') {
     lines.push(`Build ${action.buildingType ?? 'building'}${settlement ? ` in ${settlement}` : ''}`);
+  } else if (action.financialType === 'demolish') {
+    lines.push(`Demolish ${action.buildingType ?? 'building'}${settlement ? ` in ${settlement}` : ''}`);
   } else if (action.financialType === 'recruit') {
     lines.push(`Recruit ${action.troopType ?? 'troops'}${settlement ? ` at ${settlement}` : ''}`);
   } else if (action.financialType === 'constructShip') {
@@ -341,6 +344,7 @@ function ReadOnlySummary({
         <Badge variant="default">{action.financialType ?? 'spending'}</Badge>
         <span className="text-ink-600">{lines[0]}</span>
         {action.cost > 0 && <Badge>Cost: {action.cost}</Badge>}
+        {action.cost < 0 && <Badge variant="green">Recovery: {Math.abs(action.cost)}gc</Badge>}
       </div>
       {action.financialType === 'taxChange' ? (
         <TaxImpactBadges taxType={action.taxType} context={taxProjectionContext} />
@@ -395,7 +399,7 @@ export function TurnActionCard({
     setDraft((current) => ({
       ...current,
       financialType: value as TurnActionUpdateDto['financialType'],
-      buildingType: value === 'build' ? current.buildingType : null,
+      buildingType: value === 'build' || value === 'demolish' ? current.buildingType : null,
       troopType: value === 'recruit' ? current.troopType : null,
       territoryId: value === 'build' ? current.territoryId : null,
       material: value === 'build' ? current.material : null,
@@ -550,6 +554,27 @@ export function TurnActionCard({
                     disabled={!editable}
                   />
                 ) : null}
+              </div>
+            ) : null}
+            {draft.financialType === 'demolish' ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <Select
+                  label="Building Type"
+                  options={BUILDING_OPTIONS}
+                  value={draft.buildingType ?? ''}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    buildingType: event.target.value as TurnActionUpdateDto['buildingType'],
+                  }))}
+                  disabled={!editable}
+                />
+                <Select
+                  label="Settlement"
+                  options={settlementOptions}
+                  value={draft.settlementId ?? ''}
+                  onChange={(event) => setDraft((current) => ({ ...current, settlementId: event.target.value }))}
+                  disabled={!editable}
+                />
               </div>
             ) : null}
             {draft.financialType === 'recruit' ? (

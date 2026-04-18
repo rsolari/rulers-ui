@@ -5,6 +5,7 @@ import type {
   BuildingSize,
   BuildingType,
   ConstructShipFinancialAction,
+  DemolishFinancialAction,
   FinancialAction,
   FortificationMaterial,
   RecruitFinancialAction,
@@ -126,6 +127,20 @@ function normalizeTaxChangeFinancialAction(record: Record<string, unknown>): Tax
   };
 }
 
+function normalizeDemolishFinancialAction(record: Record<string, unknown>): DemolishFinancialAction | null {
+  if (!isBuildingType(record.buildingType)) return null;
+
+  return {
+    type: 'demolish',
+    buildingType: record.buildingType,
+    settlementId: toOptionalString(record.settlementId),
+    territoryId: toOptionalString(record.territoryId),
+    buildingSize: isBuildingSize(record.buildingSize) ? record.buildingSize : undefined,
+    description: typeof record.description === 'string' ? record.description : '',
+    cost: toOptionalNumber(record.cost),
+  };
+}
+
 function normalizeSpendingFinancialAction(record: Record<string, unknown>): FinancialAction {
   return {
     type: 'spending',
@@ -146,6 +161,8 @@ export function normalizeFinancialAction(value: unknown): FinancialAction | null
       return normalizeConstructShipFinancialAction(value);
     case 'taxChange':
       return normalizeTaxChangeFinancialAction(value);
+    case 'demolish':
+      return normalizeDemolishFinancialAction(value);
     case 'spending':
       return normalizeSpendingFinancialAction(value);
     default:

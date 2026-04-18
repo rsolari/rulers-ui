@@ -266,6 +266,16 @@ export interface TaxChangeFinancialAction {
   cost?: number;
 }
 
+export interface DemolishFinancialAction {
+  type: 'demolish';
+  buildingType: BuildingType;
+  settlementId?: string | null;
+  territoryId?: string | null;
+  buildingSize?: BuildingSize;
+  description?: string;
+  cost?: number;
+}
+
 export interface SpendingFinancialAction {
   type: 'spending';
   description?: string;
@@ -277,6 +287,7 @@ export type FinancialAction =
   | RecruitFinancialAction
   | ConstructShipFinancialAction
   | TaxChangeFinancialAction
+  | DemolishFinancialAction
   | SpendingFinancialAction;
 
 export interface ActionCommentRecord {

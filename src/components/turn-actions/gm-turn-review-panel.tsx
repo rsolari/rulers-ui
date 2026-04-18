@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
+import { TurnEventCard } from '@/components/turn-actions/turn-event-card';
 import type { CurrentTurnResponseDto, TurnActionRecord, TurnActionUpdateDto } from '@/types/game';
 
 interface GmTurnReviewPanelProps {
@@ -236,6 +237,14 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
                 </CardHeader>
                 {!isCollapsed && (
                   <CardContent className="space-y-4">
+                    {realm.events.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Events</p>
+                        {realm.events.map((event) => (
+                          <TurnEventCard key={event.id} event={event} />
+                        ))}
+                      </div>
+                    ) : null}
                     {realm.actions.length === 0 ? (
                       <p className="text-sm text-ink-300">No actions submitted for this realm yet.</p>
                     ) : (

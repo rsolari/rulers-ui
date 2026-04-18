@@ -24,6 +24,7 @@ const currentTurn: CurrentTurnResponseDto = {
     realmName: 'Aster',
     report: null,
     actions: [],
+    events: [],
   },
 };
 
@@ -131,6 +132,7 @@ const history: { history: TurnHistoryEntry[] } = {
           comments: [],
         },
       ],
+      events: [],
     },
   ],
 };
@@ -178,8 +180,8 @@ describe('PlayerTurnReportPanel', () => {
   it('shows resolved construction and recruit orders in the compact financial ledger', async () => {
     render(<PlayerTurnReportPanel gameId="game-1" realmId="realm-1" compact />);
 
-    expect(await screen.findByText('Build Theatre in Aster Keep')).toBeInTheDocument();
-    expect(screen.getByText('Recruit Spearmen at Aster Keep')).toBeInTheDocument();
+    expect((await screen.findAllByText('Build Theatre in Aster Keep')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Recruit Spearmen at Aster Keep').length).toBeGreaterThanOrEqual(1);
     expect(fetch).toHaveBeenCalledWith('/api/game/game-1/turn?realmId=realm-1', { cache: 'no-store' });
     expect(fetch).toHaveBeenCalledWith('/api/game/game-1/turn/history?realmId=realm-1', { cache: 'no-store' });
   });

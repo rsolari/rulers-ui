@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
+import { TurnEventCard } from '@/components/turn-actions/turn-event-card';
 import { TurnHistoryList } from '@/components/turn-actions/turn-history-list';
 import { SEASONS } from '@/lib/game-logic/constants';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
@@ -224,6 +225,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
   const realm = currentTurn?.realm;
   const isEditable = realm?.report?.status !== 'submitted' && realm?.report?.status !== 'resolved';
   const actions = realm?.actions ?? [];
+  const currentEvents = realm?.events ?? [];
   const taxProjectionContext = currentTurn?.game && economyProjection
     ? {
       currentTaxType: economyProjection.realm.taxType as TaxType,
@@ -246,6 +248,9 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
       return left.sortOrder - right.sortOrder;
     });
 
+  const lastTurn = history.length > 0 ? history[0] : null;
+  const olderHistory = history.length > 1 ? history.slice(1) : [];
+
   if (loading) {
     return (
       <Card>
@@ -258,6 +263,19 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
 
   return (
     <div className="space-y-6">
+      {currentEvents.length > 0 ? (
+        <Card variant="gold">
+          <CardHeader>
+            <CardTitle>Current Events</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {currentEvents.map((event) => (
+              <TurnEventCard key={event.id} event={event} />
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -313,6 +331,48 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         </CardContent>
       </Card>
 
+      {lastTurn ? (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle>Last Turn Results</CardTitle>
+              <Badge variant="gold">
+                Year {lastTurn.report?.year}, {lastTurn.report?.season}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {lastTurn.events.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Events</p>
+                {lastTurn.events.map((event) => (
+                  <TurnEventCard key={event.id} event={event} />
+                ))}
+              </div>
+            ) : null}
+            {lastTurn.actions.length > 0 ? (
+              <div className="space-y-2">
+                {lastTurn.events.length > 0 ? (
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Action Results</p>
+                ) : null}
+                {lastTurn.actions.map((action) => (
+                  <TurnActionCard
+                    key={`last-${action.id}:${action.updatedAt ?? ''}`}
+                    action={action}
+                    settlementOptions={settlementOptions}
+                    realmOptions={realmOptions}
+                    nobleOptions={nobleOptions}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {lastTurn.actions.length === 0 && lastTurn.events.length === 0 ? (
+              <p className="text-sm text-ink-300">No actions or events were recorded.</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {compact ? (
         <Card>
           <CardHeader>
@@ -349,10 +409,10 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
         </Card>
       ) : null}
 
-      {!compact ? (
+      {!compact && olderHistory.length > 0 ? (
         <div className="space-y-4">
           <h2 className="font-heading text-2xl font-semibold text-ink-600">Past Turns</h2>
-          <TurnHistoryList history={history} settlementOptions={settlementOptions} realmOptions={realmOptions} nobleOptions={nobleOptions} />
+          <TurnHistoryList history={olderHistory} settlementOptions={settlementOptions} realmOptions={realmOptions} nobleOptions={nobleOptions} />
         </div>
       ) : null}
     </div>

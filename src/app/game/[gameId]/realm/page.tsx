@@ -306,23 +306,14 @@ export default function RealmDashboard() {
           <p className="text-ink-300">{game.name}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant="gold">{game.gamePhase}</Badge>
+          <Badge variant="gold">{game.turnPhase}</Badge>
           <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
-          <Badge>{game.turnPhase}</Badge>
+          <Badge>{game.gamePhase}</Badge>
           <Link href={`/game/${gameId}/map`}>
             <Button variant="outline" size="sm">Map</Button>
           </Link>
         </div>
       </div>
-
-      {claimCode && (
-        <Card className="mb-6">
-          <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Your Claim Code</p>
-            <p className="font-mono text-2xl">{claimCode}</p>
-          </CardContent>
-        </Card>
-      )}
 
       {setupChecklist && !isGmManaging && (
         <Card className="mb-6" variant="gold">
@@ -382,45 +373,10 @@ export default function RealmDashboard() {
         </Card>
       )}
 
-      {ruler ? (
-        <Card variant="gold" className="mb-6">
-          <CardHeader>
-            <CardTitle>Ruler</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-2xl font-heading font-bold">{ruler.name}</p>
-              <p className="text-ink-300">
-                of House {ruler.familyName}
-                {ruler.race ? ` • ${ruler.race}` : ''}
-              </p>
-            </div>
-            <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`}>
-              <Button variant="outline">View Nobles</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card variant="gold" className="mb-6">
-          <CardHeader>
-            <CardTitle>Your realm has no ruler</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <p className="max-w-2xl text-ink-300">
-              Create the noble who leads this realm before you continue building its politics,
-              alliances, and succession.
-            </p>
-            <Link href={`/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
-              <Button variant="accent">Create Ruler</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Realm Identity</CardTitle>
+            <CardTitle>{canEditIdentity ? 'Realm Identity' : 'Realm Profile'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
@@ -465,7 +421,7 @@ export default function RealmDashboard() {
 
         <Card variant="gold">
           <CardHeader>
-            <CardTitle>Realm Summary</CardTitle>
+            <CardTitle>Realm Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {/* Money group */}
@@ -578,9 +534,44 @@ export default function RealmDashboard() {
         </Card>
       </div>
 
+      {ruler ? (
+        <Card variant="gold" className="mt-6">
+          <CardHeader>
+            <CardTitle>Ruler</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-2xl font-heading font-bold">{ruler.name}</p>
+              <p className="text-ink-300">
+                of House {ruler.familyName}
+                {ruler.race ? ` • ${ruler.race}` : ''}
+              </p>
+            </div>
+            <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`}>
+              <Button variant="outline">View Nobles</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : !setupChecklist ? (
+        <Card variant="gold" className="mt-6">
+          <CardHeader>
+            <CardTitle>Your realm has no ruler</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <p className="max-w-2xl text-ink-300">
+              Create the noble who leads this realm before you continue building its politics,
+              alliances, and succession.
+            </p>
+            <Link href={`/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
+              <Button variant="accent">Create Ruler</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="mt-6">
         <TurmoilSummaryCard
-          title="Realm Turmoil"
+          title="Turmoil Breakdown"
           projectedTurmoil={economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0}
           buildingTurmoilReduction={economyProjection?.buildingTurmoilReduction ?? realm.buildingTurmoilReduction ?? 0}
           turmoilBreakdown={economyProjection?.turmoilBreakdown ?? []}
@@ -684,6 +675,16 @@ export default function RealmDashboard() {
           <PlayerTurnReportPanel gameId={gameId} realmId={realmId} compact />
         </div>
       ) : null}
+
+      {claimCode && (
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-ink-200/40 pt-4 text-xs text-ink-300">
+          <span>
+            <span className="font-medium">Claim code:</span>{' '}
+            <span className="font-mono">{claimCode}</span>
+          </span>
+          <span className="text-ink-400">Use this to rejoin your realm on another device.</span>
+        </div>
+      )}
     </main>
   );
 }

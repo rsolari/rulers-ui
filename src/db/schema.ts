@@ -813,6 +813,7 @@ export const turnActions = sqliteTable('turn_actions', {
   submittedBy: text('submitted_by'),
   executedAt: integer('executed_at', { mode: 'timestamp' }),
   executedBy: text('executed_by'),
+  spawnedEventId: text('spawned_event_id'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 }, (table) => ([

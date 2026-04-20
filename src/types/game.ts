@@ -47,6 +47,10 @@ export type ResourceType =
   | 'Spices' | 'Tea' | 'Coffee' | 'Tobacco' | 'Opium' | 'Salt' | 'Sugar';
 export type ResourceRarity = 'Common' | 'Luxury';
 
+// A Guild's monopoly can be a Resource, or the generic 'Food' category
+// (e.g. Brewers, Bakers — food is modelled as a single realm-level quantity).
+export type MonopolyProduct = ResourceType | 'Food';
+
 // Troop Types
 export type TroopType =
   | 'Spearmen' | 'Archers' | 'Shieldbearers' | 'Berserkers'
@@ -119,7 +123,7 @@ export type GOSType = 'Guild' | 'Order' | 'Society';
 export interface GOSMetadata {
   treasury: number;
   creationSource?: string | null;
-  monopolyProduct?: ResourceType | null;
+  monopolyProduct?: MonopolyProduct | null;
   alcoveNames?: string[] | null;
   centreNames?: string[] | null;
   firstBuildingId?: string | null;

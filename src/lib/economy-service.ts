@@ -49,6 +49,7 @@ import { resolveTradeNetwork } from '@/lib/game-logic/trade';
 import { prepareTurnReportFinancialActions } from '@/lib/turn-report-financial-actions';
 import type {
   FinancialAction,
+  MonopolyProduct,
   ProtectedProduct,
   ResourceType,
   Season,
@@ -62,6 +63,7 @@ import type {
   TurmoilSource,
   WinterUnrestLocationOption,
 } from '@/types/game';
+import { computeGuildIncomeMap, creditGosTurnIncome } from '@/lib/gos-income';
 
 
 function getRealmOpenTurmoilEvent(eventRows: Array<typeof turnEvents.$inferSelect>, realmId: string) {
@@ -612,6 +614,8 @@ function loadGameEconomyState(
     modifiersByRealm.set(realm.id, [...globalModifiers, ...realmModifiers]);
   }
 
+  const guildIncomeByGos = computeGuildIncomeMap(database, gameId);
+
   const economyRealms: EconomyRealmInput[] = realmRows.map((realm) => {
     const realmSettlements = settlementsByRealm.get(realm.id) ?? [];
     const paidEstateByNobleId = getPaidEstateLevelsForRealm({
@@ -754,11 +758,13 @@ function loadGameEconomyState(
       type: gos.type as EconomyRealmInput['guildsOrdersSocieties'][number]['type'],
       treasury: gos.treasury,
       creationSource: gos.creationSource,
-      monopolyProduct: gos.monopolyProduct as ResourceType | null,
+      monopolyProduct: gos.monopolyProduct as MonopolyProduct | null,
       alcoveNames: parseJson<string[]>(gos.alcoveNames, []),
       centreNames: parseJson<string[]>(gos.centreNames, []),
       firstBuildingId: gos.firstBuildingId,
-      income: 0,
+      // Attribute per-GOS income to the home realm only so the ledger entry
+      // shows once even when a GOS operates across multiple realms.
+      income: gos.realmId === realm.id ? (guildIncomeByGos.get(gos.id) ?? 0) : 0,
     })),
     seasonalModifiers: modifiersByRealm.get(realm.id) ?? [],
     report: reportsByRealm.has(realm.id)
@@ -1451,6 +1457,8 @@ export function createEconomyService(database: DB = defaultDb) {
           .where(eq(turnReports.id, report.id))
           .run();
       }
+
+      creditGosTurnIncome(tx, gameId);
 
       tx.update(games)
         .set({

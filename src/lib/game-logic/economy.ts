@@ -5,6 +5,7 @@ import type {
   BuildingType,
   EstateLevel,
   FinancialAction,
+  MonopolyProduct,
   ProtectedProduct,
   ResourceRarity,
   ResourceType,
@@ -155,7 +156,7 @@ export interface EconomyGOSInput {
   type: 'Guild' | 'Order' | 'Society';
   treasury: number;
   creationSource?: string | null;
-  monopolyProduct?: ResourceType | null;
+  monopolyProduct?: MonopolyProduct | null;
   alcoveNames?: string[] | null;
   centreNames?: string[] | null;
   firstBuildingId?: string | null;

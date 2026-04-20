@@ -651,7 +651,7 @@ export function TurnActionCard({
               onChange={(event) => setDraft((current) => ({ ...current, resolutionSummary: event.target.value }))}
             />
             {action.spawnedEventId ? (
-              <Badge variant="gold">Event already spawned</Badge>
+              <Badge variant="gold">Event Spawned</Badge>
             ) : (
               <>
                 <Button
@@ -685,8 +685,9 @@ export function TurnActionCard({
                       <Input
                         label="Turmoil Amount"
                         type="number"
+                        min={0}
                         value={eventDraft.turmoilAmount}
-                        onChange={(e) => setEventDraft((c) => ({ ...c, turmoilAmount: Number(e.target.value) || 0 }))}
+                        onChange={(e) => setEventDraft((c) => ({ ...c, turmoilAmount: Math.max(0, Number(e.target.value) || 0) }))}
                       />
                     </div>
                   </div>

@@ -1073,7 +1073,7 @@ export function createTurnActionService(database: DB = defaultDb) {
 
         let spawnedEventId: string | null = action.spawnedEventId ?? null;
 
-        if (input.event?.title && !action.spawnedEventId) {
+        if (input.event?.title?.trim() && input.event.description?.trim() && !action.spawnedEventId) {
           const eventId = uuid();
           spawnedEventId = eventId;
 

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getRuleChapters } from '@/lib/rules';
 import { RulesSidebar } from './sidebar';
+import { RulesChat } from '@/components/rules-chat';
 
 export default function RulesLayout({ children }: { children: React.ReactNode }) {
   const chapters = getRuleChapters();
@@ -29,6 +30,8 @@ export default function RulesLayout({ children }: { children: React.ReactNode })
           {children}
         </main>
       </div>
+
+      <RulesChat />
     </div>
   );
 }

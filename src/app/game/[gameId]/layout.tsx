@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
+import { RulesChat } from '@/components/rules-chat';
 
 interface GameInfo {
   id: string;
@@ -66,6 +67,7 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
         </nav>
       )}
       {children}
+      <RulesChat />
     </>
   );
 }

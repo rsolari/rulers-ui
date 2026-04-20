@@ -148,3 +148,13 @@ h1, h2, h3, h4, h5, h6 {
 .rules-content hr { border: none; border-top: 2px solid var(--ink-200); margin: 2rem 0; }
 .rules-content sup { font-size: 0.75em; }
 .rules-content section.footnotes { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--ink-200); font-size: 0.9rem; color: var(--ink-400); }
+
+/* Compact overrides for rules chat bubbles */
+.rules-chat-content h1 { font-size: 1rem; margin-bottom: 0.5rem; }
+.rules-chat-content h2 { font-size: 0.95rem; margin-top: 1rem; margin-bottom: 0.5rem; border-bottom: none; }
+.rules-chat-content h3 { font-size: 0.9rem; margin-top: 0.75rem; margin-bottom: 0.25rem; }
+.rules-chat-content p { margin-bottom: 0.5rem; line-height: 1.5; }
+.rules-chat-content p:last-child { margin-bottom: 0; }
+.rules-chat-content ul, .rules-chat-content ol { margin-bottom: 0.5rem; }
+.rules-chat-content table { font-size: 0.85rem; }
+.rules-chat-content blockquote { margin: 0.5rem 0; }

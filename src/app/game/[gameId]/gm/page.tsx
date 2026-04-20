@@ -677,11 +677,12 @@ export default function GMDashboard() {
   }
 
   const isActive = game.initState === 'active' || game.initState === 'completed';
-  const npcCount = realms.filter((realm) => realm.isNPC).length;
-  const playerCount = realms.filter((realm) => !realm.isNPC).length;
   const allPlayersReady = playerSlots.length > 0 && playerSlots.every((slot) => slot.setupState === 'ready');
   const canStartGame = game.initState === 'ready_to_start' || (game.gmSetupState === 'ready' && allPlayersReady);
   const claimedPlayerSlots = playerSlots.filter((slot) => slot.status === 'claimed');
+  const readyPlayerCount = playerSlots.filter((slot) => slot.setupState === 'ready').length;
+  const unclaimedSlotCount = playerSlots.length - claimedPlayerSlots.length;
+  const gmSetupReady = game.gmSetupState === 'ready';
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
@@ -706,58 +707,89 @@ export default function GMDashboard() {
       {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
 
       {!isActive && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
           <Card>
             <CardContent>
               <p className="text-sm text-ink-300 pt-4">GM Code</p>
               <p className="font-mono text-2xl">{game.gmCode || '—'}</p>
+              <p className="text-sm text-ink-300">Share with co-GMs</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent>
-              <p className="text-sm text-ink-300 pt-4">Player Slots</p>
-              <p className="text-3xl font-heading font-bold">{playerSlots.length}</p>
-              <p className="text-sm text-ink-300">{playerSlots.filter((slot) => slot.status === 'claimed').length} claimed</p>
+              <p className="text-sm text-ink-300 pt-4">Player Readiness</p>
+              <p className="text-3xl font-heading font-bold">
+                {readyPlayerCount}<span className="text-ink-300">/{playerSlots.length}</span>
+              </p>
+              <p className="text-sm text-ink-300">
+                {playerSlots.length === 0
+                  ? 'No player slots yet'
+                  : `${claimedPlayerSlots.length} claimed · ${unclaimedSlotCount} unclaimed`}
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent>
-              <p className="text-sm text-ink-300 pt-4">Realms</p>
-              <p className="text-3xl font-heading font-bold">{realms.length}</p>
-              <p className="text-sm text-ink-300">{npcCount} NPC / {playerCount} player</p>
+              <p className="text-sm text-ink-300 pt-4">Next Step</p>
+              {canStartGame ? (
+                <>
+                  <p className="text-xl font-heading font-bold text-green-700">Ready to start</p>
+                  <p className="text-sm text-ink-300">Press Start Game above.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-heading font-bold">Waiting on</p>
+                  <p className="text-sm text-ink-300">
+                    {[
+                      !gmSetupReady ? 'GM setup' : null,
+                      playerSlots.length === 0
+                        ? 'player slots'
+                        : !allPlayersReady
+                          ? `${playerSlots.length - readyPlayerCount} player${playerSlots.length - readyPlayerCount === 1 ? '' : 's'}`
+                          : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || '—'}
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
       )}
 
-      <div className="flex gap-3 mb-6">
-        {!isActive && game.gmSetupState !== 'ready' && (
-          <Button variant="outline" onClick={() => void markGMReady()} disabled={markingReady}>
-            {markingReady ? 'Saving...' : 'Mark GM Setup Ready'}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          {!isActive && game.gmSetupState !== 'ready' && (
+            <Button variant="outline" onClick={() => void markGMReady()} disabled={markingReady}>
+              {markingReady ? 'Saving...' : 'Mark GM Setup Ready'}
+            </Button>
+          )}
+          {canStartGame && !isActive && (
+            <Button variant="accent" onClick={() => void startGame()} disabled={starting}>
+              {starting ? 'Starting...' : 'Start Game'}
+            </Button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="ghost" onClick={() => void loadDashboard()} disabled={loadingDashboard}>
+            {loadingDashboard ? 'Refreshing...' : 'Refresh'}
           </Button>
-        )}
-        {canStartGame && !isActive && (
-          <Button variant="accent" onClick={() => void startGame()} disabled={starting}>
-            {starting ? 'Starting...' : 'Start Game'}
+          <Link href={`/game/${gameId}/map`}>
+            <Button variant="outline">Map</Button>
+          </Link>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const a = document.createElement('a');
+              a.href = `/api/game/${gameId}/export`;
+              a.download = '';
+              a.click();
+            }}
+          >
+            Export Database
           </Button>
-        )}
-        <Button variant="ghost" onClick={() => void loadDashboard()} disabled={loadingDashboard}>
-          {loadingDashboard ? 'Refreshing...' : 'Refresh'}
-        </Button>
-        <Link href={`/game/${gameId}/map`}>
-          <Button variant="outline">Map</Button>
-        </Link>
-        <Button
-          variant="outline"
-          onClick={() => {
-            const a = document.createElement('a');
-            a.href = `/api/game/${gameId}/export`;
-            a.download = '';
-            a.click();
-          }}
-        >
-          Export Database
-        </Button>
+        </div>
       </div>
 
       {!isActive && (
@@ -765,7 +797,7 @@ export default function GMDashboard() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Player Slots</CardTitle>
+                <CardTitle>Player Slots &amp; Claim Codes</CardTitle>
                 <Link href={`/game/${gameId}/gm/realm-slots`}>
                   <Button variant="outline" size="sm">Manage Realm Slots</Button>
                 </Link>
@@ -793,7 +825,7 @@ export default function GMDashboard() {
 
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>Claimed Player Progress</CardTitle>
+              <CardTitle>Player Setup Progress</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -848,7 +880,7 @@ export default function GMDashboard() {
 
       <Card className="mt-6">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>{isActive ? 'Realms' : 'All Realms'}</CardTitle>
+          <CardTitle>Realms</CardTitle>
           {!showRealmForm && (
             <Button variant="outline" onClick={() => openRealmForm()}>
               + Add NPC Realm
@@ -1260,10 +1292,11 @@ export default function GMDashboard() {
         </CardContent>
       </Card>
 
-      {/* World Management */}
+      {isActive && <GlobalGOSPanel gameId={gameId} />}
+
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Territories</CardTitle>
+          <CardTitle>World Management</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -1616,8 +1649,6 @@ export default function GMDashboard() {
           </div>
         </CardContent>
       </Card>
-
-      {isActive && <GlobalGOSPanel gameId={gameId} />}
 
     </main>
   );

@@ -37,6 +37,7 @@ const RESOURCE_TYPE_OPTIONS = [
   { value: 'Opium', label: 'Opium' },
   { value: 'Salt', label: 'Salt' },
   { value: 'Sugar', label: 'Sugar' },
+  { value: 'Food', label: 'Food (e.g. Brewers, Bakers)' },
 ];
 
 interface RealmOption {
@@ -137,6 +138,14 @@ interface GOSAssets {
     name: string;
     realmId: string;
   }>;
+  income?: {
+    membershipFees: number;
+    ownership: number;
+    food: number;
+    total: number;
+    monopolySiteIds: string[];
+    monopolyIndustryIds: string[];
+  };
 }
 
 interface EditForm {
@@ -508,12 +517,29 @@ export default function GOSPage() {
                 value={String(editForm.treasury)}
                 onChange={(e) => setEditForm((f) => f ? { ...f, treasury: Number(e.target.value) || 0 } : f)}
               />
-              <Select
-                label="Monopoly Product"
-                options={RESOURCE_TYPE_OPTIONS}
-                value={editForm.monopolyProduct}
-                onChange={(e) => setEditForm((f) => f ? { ...f, monopolyProduct: e.target.value } : f)}
-              />
+              <div>
+                <Select
+                  label="Monopoly Product"
+                  options={RESOURCE_TYPE_OPTIONS}
+                  value={editForm.monopolyProduct}
+                  onChange={(e) => setEditForm((f) => f ? { ...f, monopolyProduct: e.target.value } : f)}
+                />
+                {editForm.monopolyProduct && (() => {
+                  const sharedRealmIds = new Set(editForm.realmIds);
+                  const conflicts = gosList.filter((other) => (
+                    other.id !== editGosId
+                    && other.type === 'Guild'
+                    && other.monopolyProduct === editForm.monopolyProduct
+                    && other.realmIds.some((id) => sharedRealmIds.has(id))
+                  ));
+                  if (conflicts.length === 0) return null;
+                  return (
+                    <p className="mt-2 text-xs text-amber-600">
+                      Warning: {conflicts.map((c) => c.name).join(', ')} already claim this monopoly in a shared realm.
+                    </p>
+                  );
+                })()}
+              </div>
               <Input
                 label="Alcove Names (comma-separated)"
                 value={editForm.alcoveNames}
@@ -593,16 +619,30 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
   const readyTroops = assets.troops.filter((t) => t.recruitmentTurnsRemaining === 0).length;
   const readyShips = assets.ships.filter((s) => s.constructionTurnsRemaining === 0).length;
 
-  if (!hasAny) {
+  const monopolySiteIds = new Set(assets.income?.monopolySiteIds ?? []);
+  const monopolyIndustryIds = new Set(assets.income?.monopolyIndustryIds ?? []);
+
+  if (!hasAny && !(assets.income && assets.income.total > 0)) {
     return <p className="text-sm text-ink-300">This GOS has no owned assets.</p>;
   }
 
   return (
     <div className="space-y-4 text-sm">
+      {assets.income && (assets.income.total > 0 || assets.income.membershipFees > 0 || assets.income.ownership > 0 || assets.income.food > 0) && (
+        <div className="flex flex-wrap gap-x-6 gap-y-2 p-3 rounded medieval-border bg-parchment-800/30">
+          <div><span className="text-ink-300">Membership Fees:</span> <span className="text-green-700">{assets.income.membershipFees}gc</span></div>
+          <div><span className="text-ink-300">Ownership:</span> <span className="text-green-700">{assets.income.ownership}gc</span></div>
+          {assets.income.food > 0 && (
+            <div><span className="text-ink-300">Food Income:</span> <span className="text-green-700">{assets.income.food}gc</span></div>
+          )}
+          <div><span className="text-ink-300">Total Guild Income:</span> <span className="text-green-700">{assets.income.total}gc</span></div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="flex flex-wrap gap-x-6 gap-y-2 p-3 rounded medieval-border bg-parchment-800/30">
         {industryIncome > 0 && (
-          <div><span className="text-ink-300">Industry Income:</span> <span className="text-green-700">{industryIncome}gc</span></div>
+          <div><span className="text-ink-300">Industry Wealth Generated:</span> <span className="text-green-700">{industryIncome}gc</span></div>
         )}
         {readyTroops > 0 && (
           <div><span className="text-ink-300">Active Troops:</span> {readyTroops}</div>
@@ -668,6 +708,8 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{rs.resourceType}</span>
                   <Badge>{rs.rarity}</Badge>
+                  <Badge variant="green">Owned</Badge>
+                  {monopolySiteIds.has(rs.id) && <Badge variant="gold">Monopoly</Badge>}
                   {rs.settlementName && <span className="text-ink-300">in {rs.settlementName}</span>}
                   {!rs.settlementName && rs.territoryName && <span className="text-ink-300">in {rs.territoryName}</span>}
                 </div>
@@ -695,6 +737,8 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{ind.outputProduct}</span>
                   <Badge>{ind.quality}</Badge>
+                  <Badge variant="green">Owned</Badge>
+                  {monopolyIndustryIds.has(ind.id) && <Badge variant="gold">Monopoly</Badge>}
                 </div>
                 <div className="flex items-center gap-2">
                   {ind.wealthGenerated > 0 && <span className="text-green-700">{ind.wealthGenerated}gc</span>}

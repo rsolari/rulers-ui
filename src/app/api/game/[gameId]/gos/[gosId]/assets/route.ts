@@ -15,6 +15,7 @@ import {
 } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { requireOwnedRealmAccess } from '@/lib/auth';
+import { loadGuildIncomeDetailForGos } from '@/lib/gos-income';
 
 export async function GET(
   _request: Request,
@@ -139,6 +140,8 @@ export async function GET(
       .from(industries)
       .where(eq(industries.ownerGosId, gosId));
 
+    const income = loadGuildIncomeDetailForGos(db, gameId, gosId);
+
     return NextResponse.json({
       ownedBuildings,
       allottedBuildings,
@@ -148,6 +151,7 @@ export async function GET(
       armies: gosArmies,
       ships: gosShips,
       fleets: gosFleets,
+      income,
     });
   } catch (error) {
     const errorResponse = apiErrorResponse(error);

@@ -143,11 +143,8 @@ interface GOSAssets {
     ownership: number;
     food: number;
     total: number;
-    qualifiedSiteIds: string[];
-    qualifiedIndustryIds: string[];
     monopolySiteIds: string[];
     monopolyIndustryIds: string[];
-    gosRealmIds: string[];
   };
 }
 
@@ -631,7 +628,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
 
   return (
     <div className="space-y-4 text-sm">
-      {/* Guild income breakdown (per-turn membership fees + ownership + food) */}
       {assets.income && (assets.income.total > 0 || assets.income.membershipFees > 0 || assets.income.ownership > 0 || assets.income.food > 0) && (
         <div className="flex flex-wrap gap-x-6 gap-y-2 p-3 rounded medieval-border bg-parchment-800/30">
           <div><span className="text-ink-300">Membership Fees:</span> <span className="text-green-700">{assets.income.membershipFees}gc</span></div>

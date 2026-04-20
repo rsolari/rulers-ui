@@ -233,7 +233,7 @@ describe('creditGosTurnIncome', () => {
       resourceType: 'Timber', rarity: 'Common',
     }).run();
 
-    creditGosTurnIncome(db, 'g1');
+    creditGosTurnIncome(db, computeGuildIncomeMap(db, 'g1'));
     const after = db.select().from(schema.guildsOrdersSocieties)
       .where(eq(schema.guildsOrdersSocieties.id, 'brewers')).get();
 

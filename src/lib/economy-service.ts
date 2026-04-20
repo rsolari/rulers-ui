@@ -108,6 +108,7 @@ interface LoadedEconomyState {
   tradeRouteRows: Array<typeof tradeRoutes.$inferSelect>;
   economyRealms: EconomyRealmInput[];
   invalidModifierEvents: InvalidModifierEvent[];
+  guildIncomeByGos: Map<string, number>;
 }
 
 interface EconomyValidationIssue {
@@ -790,6 +791,7 @@ function loadGameEconomyState(
     eventRows,
     economyRealms,
     invalidModifierEvents,
+    guildIncomeByGos,
   };
 }
 
@@ -1458,7 +1460,7 @@ export function createEconomyService(database: DB = defaultDb) {
           .run();
       }
 
-      creditGosTurnIncome(tx, gameId);
+      creditGosTurnIncome(tx, preparedState.guildIncomeByGos);
 
       tx.update(games)
         .set({

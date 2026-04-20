@@ -1,4 +1,4 @@
-import { eq, inArray, or } from 'drizzle-orm';
+import { eq, inArray, or, sql } from 'drizzle-orm';
 import type { DatabaseExecutor } from '@/db';
 import {
   buildings,
@@ -383,11 +383,8 @@ export interface GuildIncomeDetail {
   ownership: number;
   food: number;
   total: number;
-  qualifiedSiteIds: string[];
-  qualifiedIndustryIds: string[];
   monopolySiteIds: string[];
   monopolyIndustryIds: string[];
-  gosRealmIds: string[];
 }
 
 export function loadGuildIncomeDetailForGos(
@@ -405,11 +402,8 @@ export function loadGuildIncomeDetailForGos(
       ownership: 0,
       food: 0,
       total: 0,
-      qualifiedSiteIds: [],
-      qualifiedIndustryIds: [],
       monopolySiteIds: [],
       monopolyIndustryIds: [],
-      gosRealmIds: [...gosRealmIds],
     };
   }
 
@@ -434,10 +428,12 @@ export function loadGuildIncomeDetailForGos(
     : [];
 
   return {
-    ...breakdown,
+    membershipFees: breakdown.membershipFees,
+    ownership: breakdown.ownership,
+    food: breakdown.food,
+    total: breakdown.total,
     monopolySiteIds,
     monopolyIndustryIds,
-    gosRealmIds: [...gosRealmIds],
   };
 }
 
@@ -468,18 +464,15 @@ export function seedGosStartingTreasuries(database: DatabaseExecutor, gameId: st
   return seeded;
 }
 
-export function creditGosTurnIncome(database: DatabaseExecutor, gameId: string) {
-  const incomeByGos = computeGuildIncomeMap(database, gameId);
+export function creditGosTurnIncome(
+  database: DatabaseExecutor,
+  incomeByGos: Map<string, number>,
+) {
   let credited = 0;
   for (const [gosId, income] of incomeByGos) {
     if (income <= 0) continue;
-    const existing = database.select({ treasury: guildsOrdersSocieties.treasury })
-      .from(guildsOrdersSocieties)
-      .where(eq(guildsOrdersSocieties.id, gosId))
-      .get();
-    if (!existing) continue;
     database.update(guildsOrdersSocieties)
-      .set({ treasury: existing.treasury + income })
+      .set({ treasury: sql`${guildsOrdersSocieties.treasury} + ${income}` })
       .where(eq(guildsOrdersSocieties.id, gosId))
       .run();
     credited += 1;

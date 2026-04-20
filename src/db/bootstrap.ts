@@ -809,6 +809,8 @@ function ensureGovernanceSchema(database: Database.Database) {
   addColumnIfMissing(database, 'nobles', 'released_season text', 'released_season');
   addColumnIfMissing(database, 'nobles', 'gm_status_text text', 'gm_status_text');
 
+  addColumnIfMissing(database, 'turn_actions', 'spawned_event_id text', 'spawned_event_id');
+
   database.exec(`
     UPDATE nobles
     SET origin_realm_id = COALESCE(origin_realm_id, realm_id)

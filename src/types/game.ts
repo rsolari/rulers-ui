@@ -337,6 +337,7 @@ export interface TurnActionRecord {
   taxType: TaxType | null;
   technicalKnowledgeKey: TechnicalKnowledgeKey | null;
   cost: number;
+  spawnedEventId: string | null;
   resolutionSummary: string | null;
   resolutionRolls: TurnActionResolutionRoll[];
   submittedAt: string | null;
@@ -450,6 +451,12 @@ export interface TurnActionUpdateDto {
   resolutionSummary?: string | null;
   resolutionRolls?: TurnActionResolutionRoll[];
   status?: TurnActionStatus;
+  event?: {
+    title: string;
+    description: string;
+    treasuryDelta?: number;
+    turmoilAmount?: number;
+  } | null;
 }
 
 export interface TurnSubmitResponseDto {

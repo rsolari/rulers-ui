@@ -306,23 +306,14 @@ export default function RealmDashboard() {
           <p className="text-ink-300">{game.name}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant="gold">{game.gamePhase}</Badge>
+          <Badge variant="gold">{game.turnPhase}</Badge>
           <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
-          <Badge>{game.turnPhase}</Badge>
+          <Badge>{game.gamePhase}</Badge>
           <Link href={`/game/${gameId}/map`}>
             <Button variant="outline" size="sm">Map</Button>
           </Link>
         </div>
       </div>
-
-      {claimCode && (
-        <Card className="mb-6">
-          <CardContent>
-            <p className="text-sm text-ink-300 pt-4">Your Claim Code</p>
-            <p className="font-mono text-2xl">{claimCode}</p>
-          </CardContent>
-        </Card>
-      )}
 
       {setupChecklist && !isGmManaging && (
         <Card className="mb-6" variant="gold">
@@ -406,7 +397,7 @@ export default function RealmDashboard() {
             </Link>
           </CardContent>
         </Card>
-      ) : (
+      ) : !setupChecklist ? (
         <Card variant="gold" className="mb-6">
           <CardHeader>
             <CardTitle>Your realm has no ruler</CardTitle>
@@ -421,7 +412,7 @@ export default function RealmDashboard() {
             </Link>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       <div className={canEditIdentity ? 'grid gap-6 lg:grid-cols-[1fr_0.9fr]' : ''}>
         {canEditIdentity && (
@@ -469,7 +460,7 @@ export default function RealmDashboard() {
 
         <Card variant="gold">
           <CardHeader>
-            <CardTitle>Realm at a Glance</CardTitle>
+            <CardTitle>Realm Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {/* Money group */}
@@ -584,7 +575,7 @@ export default function RealmDashboard() {
 
       <div className="mt-6">
         <TurmoilSummaryCard
-          title="Realm Turmoil"
+          title="Turmoil Breakdown"
           projectedTurmoil={economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0}
           buildingTurmoilReduction={economyProjection?.buildingTurmoilReduction ?? realm.buildingTurmoilReduction ?? 0}
           turmoilBreakdown={economyProjection?.turmoilBreakdown ?? []}
@@ -709,6 +700,16 @@ export default function RealmDashboard() {
             <p className="text-xs italic">Identity is locked once the game enters the Active phase.</p>
           </div>
         </details>
+      )}
+
+      {claimCode && (
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-ink-200/40 pt-4 text-xs text-ink-300">
+          <span>
+            <span className="font-medium">Claim code:</span>{' '}
+            <span className="font-mono">{claimCode}</span>
+          </span>
+          <span className="text-ink-400">Use this to rejoin your realm on another device.</span>
+        </div>
       )}
     </main>
   );

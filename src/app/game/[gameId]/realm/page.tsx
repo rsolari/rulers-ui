@@ -373,51 +373,90 @@ export default function RealmDashboard() {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>{canEditIdentity ? 'Realm Identity' : 'Realm Profile'}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Input
-              label="Realm Name"
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              disabled={!canEditIdentity}
-            />
-            <Select
-              label="Government"
-              options={GOVERNMENT_OPTIONS}
-              value={form.governmentType}
-              onChange={(event) => setForm((current) => ({ ...current, governmentType: event.target.value as GovernmentType }))}
-              disabled={!canEditIdentity}
-            />
-            <div>
-              <p className="font-heading text-sm font-medium text-ink-500 mb-2">Traditions ({form.traditions.length}/3)</p>
-              <div className="flex flex-wrap gap-2">
-                {TRADITION_OPTIONS.map((option) => (
-                  <Badge
-                    key={option.value}
-                    variant={form.traditions.includes(option.value as Tradition) ? 'gold' : 'default'}
-                    className={canEditIdentity ? 'cursor-pointer' : ''}
-                    title={TRADITION_DEFS[option.value as Tradition].effect}
-                    onClick={() => canEditIdentity && toggleTradition(option.value as Tradition)}
-                  >
-                    {option.label}
-                  </Badge>
-                ))}
-              </div>
-            </div>
+      {realmId && game.gamePhase === 'Active' ? (
+        <div className="mb-6">
+          <PlayerTurnReportPanel gameId={gameId} realmId={realmId} compact />
+        </div>
+      ) : null}
 
-            {canEditIdentity ? (
+      {ruler ? (
+        <Card variant="gold" className="mb-6">
+          <CardHeader>
+            <CardTitle>Ruler</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-2xl font-heading font-bold">{ruler.name}</p>
+              <p className="text-ink-300">
+                of House {ruler.familyName}
+                {ruler.race ? ` • ${ruler.race}` : ''}
+              </p>
+            </div>
+            <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`}>
+              <Button variant="outline">View Nobles</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : !setupChecklist ? (
+        <Card variant="gold" className="mb-6">
+          <CardHeader>
+            <CardTitle>Your realm has no ruler</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <p className="max-w-2xl text-ink-300">
+              Create the noble who leads this realm before you continue building its politics,
+              alliances, and succession.
+            </p>
+            <Link href={`/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
+              <Button variant="accent">Create Ruler</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className={canEditIdentity ? 'grid gap-6 lg:grid-cols-[1fr_0.9fr]' : ''}>
+        {canEditIdentity && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Realm Identity</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                label="Realm Name"
+                value={form.name}
+                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                disabled={!canEditIdentity}
+              />
+              <Select
+                label="Government"
+                options={GOVERNMENT_OPTIONS}
+                value={form.governmentType}
+                onChange={(event) => setForm((current) => ({ ...current, governmentType: event.target.value as GovernmentType }))}
+                disabled={!canEditIdentity}
+              />
+              <div>
+                <p className="font-heading text-sm font-medium text-ink-500 mb-2">Traditions ({form.traditions.length}/3)</p>
+                <div className="flex flex-wrap gap-2">
+                  {TRADITION_OPTIONS.map((option) => (
+                    <Badge
+                      key={option.value}
+                      variant={form.traditions.includes(option.value as Tradition) ? 'gold' : 'default'}
+                      className={canEditIdentity ? 'cursor-pointer' : ''}
+                      title={TRADITION_DEFS[option.value as Tradition].effect}
+                      onClick={() => canEditIdentity && toggleTradition(option.value as Tradition)}
+                    >
+                      {option.label}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
               <Button variant="accent" onClick={() => void saveIdentity()} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Identity'}
               </Button>
-            ) : (
-              <p className="text-sm text-ink-300">Identity is locked once the game enters the Active phase.</p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         <Card variant="gold">
           <CardHeader>
@@ -534,41 +573,6 @@ export default function RealmDashboard() {
         </Card>
       </div>
 
-      {ruler ? (
-        <Card variant="gold" className="mt-6">
-          <CardHeader>
-            <CardTitle>Ruler</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-2xl font-heading font-bold">{ruler.name}</p>
-              <p className="text-ink-300">
-                of House {ruler.familyName}
-                {ruler.race ? ` • ${ruler.race}` : ''}
-              </p>
-            </div>
-            <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`}>
-              <Button variant="outline">View Nobles</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : !setupChecklist ? (
-        <Card variant="gold" className="mt-6">
-          <CardHeader>
-            <CardTitle>Your realm has no ruler</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <p className="max-w-2xl text-ink-300">
-              Create the noble who leads this realm before you continue building its politics,
-              alliances, and succession.
-            </p>
-            <Link href={`/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
-              <Button variant="accent">Create Ruler</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : null}
-
       <div className="mt-6">
         <TurmoilSummaryCard
           title="Turmoil Breakdown"
@@ -580,9 +584,47 @@ export default function RealmDashboard() {
         />
       </div>
 
+      {/* Navigation */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-6">
+        <Link href={ruler ? `/game/${gameId}/realm/nobles${realmLinkSuffix}` : `/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent>
+              <p className="font-heading font-bold pt-4">
+                {ruler ? 'Ruler & Nobles' : 'Create Ruler'}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/gos${realmLinkSuffix}`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Guilds, Orders & Societies</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/settlements${realmLinkSuffix}`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Settlements & Buildings</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/army${realmLinkSuffix}`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Armies & Troops</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/treasury${realmLinkSuffix}`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Treasury</p></CardContent>
+          </Card>
+        </Link>
+        <Link href={`/game/${gameId}/realm/trade${realmLinkSuffix}`}>
+          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
+            <CardContent><p className="font-heading font-bold pt-4">Trade & Resources</p></CardContent>
+          </Card>
+        </Link>
+      </div>
+
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Territories</CardTitle>
+          <CardTitle>Territories & Settlements</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -632,49 +674,33 @@ export default function RealmDashboard() {
         </CardContent>
       </Card>
 
-      {/* Navigation */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-6">
-        <Link href={ruler ? `/game/${gameId}/realm/nobles${realmLinkSuffix}` : `/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent>
-              <p className="font-heading font-bold pt-4">
-                {ruler ? 'Ruler & Nobles' : 'Create Ruler'}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/gos${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Guilds, Orders & Societies</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/settlements${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Settlements & Buildings</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/army${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Armies & Troops</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/treasury${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Treasury</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/trade${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Trade & Resources</p></CardContent>
-          </Card>
-        </Link>
-      </div>
-
-      {realmId && game.gamePhase === 'Active' ? (
-        <div className="mt-6">
-          <PlayerTurnReportPanel gameId={gameId} realmId={realmId} compact />
-        </div>
-      ) : null}
+      {!canEditIdentity && (
+        <details className="mt-6 text-sm text-ink-300">
+          <summary className="cursor-pointer hover:text-ink-500 font-heading">Realm Profile</summary>
+          <div className="mt-3 space-y-2 pl-4">
+            <p><span className="text-ink-500">Government:</span> {form.governmentType}</p>
+            <div>
+              <span className="text-ink-500">Traditions:</span>{' '}
+              {form.traditions.length > 0 ? (
+                <span className="inline-flex flex-wrap gap-1 align-middle">
+                  {form.traditions.map((tradition) => (
+                    <Badge
+                      key={tradition}
+                      variant="gold"
+                      title={TRADITION_DEFS[tradition].effect}
+                    >
+                      {TRADITION_DEFS[tradition].displayName}
+                    </Badge>
+                  ))}
+                </span>
+              ) : (
+                'None'
+              )}
+            </div>
+            <p className="text-xs italic">Identity is locked once the game enters the Active phase.</p>
+          </div>
+        </details>
+      )}
 
       {claimCode && (
         <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-ink-200/40 pt-4 text-xs text-ink-300">

@@ -1,16 +1,27 @@
 import { forwardRef, type HTMLAttributes } from 'react';
 
+type CardVariant = 'default' | 'gold' | 'hero' | 'hero-gold';
+
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'gold';
+  variant?: CardVariant;
 }
+
+const variantClasses: Record<CardVariant, string> = {
+  default: 'bg-card rulers-border',
+  gold: 'bg-card rulers-border--gold',
+  // Hero card: parchment chrome floating over the dark hero image.
+  hero:
+    'bg-[rgba(245,234,214,0.97)] backdrop-blur-[6px] border-2 border-ink-200 shadow-[inset_0_0_0_1px_var(--parchment-200),0_18px_48px_rgba(0,0,0,0.35)]',
+  'hero-gold':
+    'bg-[rgba(245,234,214,0.97)] backdrop-blur-[6px] border-2 border-gold-400 shadow-[inset_0_0_0_1px_var(--gold-300),0_18px_48px_rgba(0,0,0,0.35)]',
+};
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ className = '', variant = 'default', ...props }, ref) => {
-    const borderClass = variant === 'gold' ? 'medieval-border-gold' : 'medieval-border';
     return (
       <div
         ref={ref}
-        className={`bg-card rounded-lg p-0 ${borderClass} ${className}`}
+        className={`rounded p-0 ${variantClasses[variant]} ${className}`}
         {...props}
       />
     );
@@ -27,7 +38,11 @@ CardHeader.displayName = 'CardHeader';
 
 const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
   ({ className = '', ...props }, ref) => (
-    <h3 ref={ref} className={`font-heading text-xl font-semibold text-ink-600 ${className}`} {...props} />
+    <h3
+      ref={ref}
+      className={`font-serif text-[1.375rem] leading-snug font-semibold text-ink-700 m-0 ${className}`}
+      {...props}
+    />
   )
 );
 CardTitle.displayName = 'CardTitle';

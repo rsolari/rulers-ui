@@ -22,9 +22,9 @@ function Dialog({ open, onClose, children }: DialogProps) {
     <dialog
       ref={dialogRef}
       onClose={onClose}
-      className="backdrop:bg-ink-900/50 bg-transparent p-0 max-w-lg w-full rounded-lg"
+      className="backdrop:bg-ink-900/50 bg-transparent p-0 max-w-lg w-full rounded"
     >
-      <div className="bg-card medieval-border rounded-lg">
+      <div className="bg-card rulers-border rounded">
         {children}
       </div>
     </dialog>
@@ -33,7 +33,10 @@ function Dialog({ open, onClose, children }: DialogProps) {
 
 function DialogTitle({ className = '', ...props }: HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h2 className={`font-heading text-xl font-semibold text-ink-600 px-6 pt-5 pb-2 ${className}`} {...props} />
+    <h2
+      className={`font-serif text-[1.5rem] leading-snug font-semibold text-ink-700 px-6 pt-5 pb-2 m-0 ${className}`}
+      {...props}
+    />
   );
 }
 

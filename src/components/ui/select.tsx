@@ -10,16 +10,19 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className = '', label, id, options, placeholder, ...props }, ref) => {
     const selectId = id || label?.toLowerCase().replace(/\s+/g, '-');
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {label && (
-          <label htmlFor={selectId} className="font-heading text-sm font-medium text-ink-500">
+          <label
+            htmlFor={selectId}
+            className="font-display text-[11px] font-medium uppercase tracking-[0.16em] text-ink-400"
+          >
             {label}
           </label>
         )}
         <select
           ref={ref}
           id={selectId}
-          className={`w-full px-4 py-2.5 bg-input-bg border-2 border-input-border rounded text-foreground focus:outline-none focus:border-accent transition-colors cursor-pointer ${className}`}
+          className={`w-full px-4 py-2.5 bg-input-bg border-2 border-input-border rounded text-foreground font-body focus:outline-none focus:border-accent transition-colors cursor-pointer ${className}`}
           {...props}
         >
           {placeholder && <option value="">{placeholder}</option>}

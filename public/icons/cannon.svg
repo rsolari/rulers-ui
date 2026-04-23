@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round" stroke-linecap="round">
+  
+
+  
+  <path d="M 2 11.5&#xA;           L 2 17&#xA;           L 16.5 10.8&#xA;           L 20 9.2&#xA;           L 20 6.2&#xA;           L 16.5 7.8&#xA;           Z" fill="currentColor" stroke-linejoin="miter"></path>
+
+  
+  <path d="M 16.5 7.8&#xA;           L 20 6.2&#xA;           L 20.5 6&#xA;           L 20.5 9.4&#xA;           L 20 9.2&#xA;           L 16.5 10.8&#xA;           Z" fill="currentColor" stroke-linejoin="miter"></path>
+
+  
+  <path d="M 2 11.5&#xA;           Q 0.5 14.25, 2 17 Z" fill="currentColor"></path>
+
+  
+  <line x1="5.5" y1="10.6" x2="6.3" y2="17.1" stroke="#f5ead6" stroke-width="1.4"></line>
+  <line x1="9.5" y1="8.8" x2="10.3" y2="15.3" stroke="#f5ead6" stroke-width="1.4"></line>
+  <line x1="13.5" y1="7" x2="14.3" y2="13.5" stroke="#f5ead6" stroke-width="1.4"></line>
+
+  
+  <path d="M 4 16.8&#xA;           L 11 15&#xA;           L 11 18.5&#xA;           L 4 18.5&#xA;           Z" fill="currentColor" fill-opacity="0.55" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"></path>
+
+  
+  <circle cx="7.5" cy="20" r="1.8" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
+  <circle cx="7.5" cy="20" r="0.5" fill="currentColor"></circle>
+  <line x1="7.5" y1="18.2" x2="7.5" y2="21.8" stroke="currentColor" stroke-width="0.9"></line>
+  <line x1="5.7" y1="20" x2="9.3" y2="20" stroke="currentColor" stroke-width="0.9"></line>
+</svg>

@@ -1,7 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+/* Fonts are loaded via next/font in src/app/layout.tsx. They expose
+   --font-display (Cinzel), --font-serif (Cormorant Garamond), and
+   --font-body (EB Garamond) on the <html> element. */
 @import "tailwindcss";
 
 :root {
+  /* ---------- PARCHMENT SCALE ---------- */
   --parchment-50: #fdf8f0;
   --parchment-100: #f5ead6;
   --parchment-200: #ecdcb8;
@@ -9,6 +12,7 @@
   --parchment-400: #d4b483;
   --parchment-500: #c9a066;
 
+  /* ---------- INK SCALE ---------- */
   --ink-50: #f5f0eb;
   --ink-100: #e0d5c8;
   --ink-200: #b8a48e;
@@ -20,29 +24,116 @@
   --ink-800: #1e140e;
   --ink-900: #140d09;
 
+  /* ---------- GOLD SCALE ---------- */
   --gold-300: #f0d080;
   --gold-400: #daa520;
   --gold-500: #c49000;
   --gold-600: #a07000;
 
+  /* ---------- HERALDIC ---------- */
   --red-500: #8b2020;
   --red-600: #6b1515;
   --green-500: #2d5a27;
   --green-600: #1e4a1a;
   --blue-500: #2a4a7a;
+  --blue-600: #1f2f56;
 
+  /* ---------- SEMANTIC ---------- */
   --background: var(--parchment-50);
   --foreground: var(--ink-700);
+  --surface: var(--parchment-100);
+  --surface-raised: var(--parchment-200);
   --card-bg: var(--parchment-100);
   --card-border: var(--ink-200);
   --input-bg: var(--parchment-50);
   --input-border: var(--ink-200);
+
+  --fg-1: var(--ink-700);
+  --fg-2: var(--ink-500);
+  --fg-3: var(--ink-300);
+  --fg-inverse: var(--parchment-50);
+
+  --border: var(--ink-200);
+  --border-strong: var(--ink-400);
+  --border-gold: var(--gold-400);
+
   --primary: var(--ink-500);
   --primary-hover: var(--ink-600);
+  --primary-fg: var(--parchment-50);
   --accent: var(--gold-400);
   --accent-hover: var(--gold-500);
+  --accent-fg: var(--ink-700);
   --muted: var(--ink-200);
   --muted-foreground: var(--ink-300);
+
+  --danger: var(--red-500);
+  --success: var(--green-500);
+  --info: var(--blue-500);
+
+  /* ---------- FONT STACKS ----------
+     Three-voice stack: display (Roman capitals), serif (editorial), body.
+     --font-display, --font-serif, --font-body are set on <html> by
+     next/font. --font-heading aliases --font-display. */
+  --font-heading: var(--font-display, 'Cinzel', serif);
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+
+  /* ---------- TYPE SCALE (1.25 modular) ---------- */
+  --fs-00: 0.75rem;
+  --fs-0: 0.875rem;
+  --fs-1: 1rem;
+  --fs-2: 1.125rem;
+  --fs-3: 1.375rem;
+  --fs-4: 1.75rem;
+  --fs-5: 2.25rem;
+  --fs-6: 3rem;
+  --fs-7: 4.5rem;
+
+  --lh-tight: 1.1;
+  --lh-snug: 1.3;
+  --lh-body: 1.6;
+  --lh-loose: 1.75;
+
+  --tracking-wide: 0.06em;
+  --tracking-wider: 0.12em;
+  --tracking-widest: 0.22em;
+
+  /* ---------- SPACING (8pt base) ---------- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 128px;
+
+  /* ---------- RADII ---------- */
+  --radius-0: 0;
+  --radius-1: 2px;
+  --radius-2: 4px;
+  --radius-3: 8px;
+  --radius-4: 12px;
+  --radius-pill: 999px;
+
+  /* ---------- SHADOWS (warm, never blue) ---------- */
+  --shadow-inset-parchment: inset 0 0 0 1px var(--parchment-200);
+  --shadow-inset-gold: inset 0 0 0 1px var(--gold-300);
+  --shadow-1: 0 1px 2px rgba(74, 55, 40, 0.08);
+  --shadow-2: 0 2px 8px rgba(74, 55, 40, 0.1);
+  --shadow-3: 0 8px 24px rgba(74, 55, 40, 0.14);
+  --shadow-gold: 0 2px 8px rgba(218, 165, 32, 0.18);
+
+  /* ---------- MOTION (slow, deliberate, ceremonial) ---------- */
+  --ease-quill: cubic-bezier(.2, .7, .2, 1);
+  --ease-seal: cubic-bezier(.3, 0, .2, 1);
+  --dur-1: 120ms;
+  --dur-2: 220ms;
+  --dur-3: 360ms;
+  --dur-4: 560ms;
+  --dur-long: 900ms;
 }
 
 @theme inline {
@@ -61,6 +152,7 @@
   --color-gold-300: var(--gold-300);
   --color-gold-400: var(--gold-400);
   --color-gold-500: var(--gold-500);
+  --color-gold-600: var(--gold-600);
   --color-ink-100: var(--ink-100);
   --color-ink-200: var(--ink-200);
   --color-ink-300: var(--ink-300);
@@ -77,16 +169,55 @@
   --color-green-500: var(--green-500);
   --color-green-600: var(--green-600);
   --color-blue-500: var(--blue-500);
-  --font-heading: 'Cinzel', serif;
-  --font-body: 'Crimson Text', serif;
+  --color-blue-600: var(--blue-600);
+  --color-ink-50: var(--ink-50);
+  --color-ink-800: var(--ink-800);
+  --color-ink-900: var(--ink-900);
+  --color-parchment-400: var(--parchment-400);
+  --color-parchment-500: var(--parchment-500);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-gold: var(--border-gold);
+  --color-fg-1: var(--fg-1);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-inverse: var(--fg-inverse);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-info: var(--info);
+
+  /* Fonts resolve via next/font vars set on <html>. */
+  --font-display: var(--font-display, 'Cinzel', serif);
+  --font-heading: var(--font-heading, 'Cinzel', serif);
+  --font-serif: var(--font-serif, 'Cormorant Garamond', serif);
+  --font-body: var(--font-body, 'EB Garamond', serif);
+  --font-mono: var(--font-mono, ui-monospace, monospace);
+
+  /* Motion — ceremonial easings (no Tailwind defaults with these names). */
+  --ease-quill: cubic-bezier(.2, .7, .2, 1);
+  --ease-seal: cubic-bezier(.3, 0, .2, 1);
+
+  /* Warm shadows — parchment-lit, never blue. */
+  --shadow-warm-1: var(--shadow-1);
+  --shadow-warm-2: var(--shadow-2);
+  --shadow-warm-3: var(--shadow-3);
+  --shadow-gold: var(--shadow-gold);
+
+  /* Tracking — tuned for Cinzel (overrides Tailwind defaults). */
+  --tracking-wide: var(--tracking-wide);
+  --tracking-wider: var(--tracking-wider);
+  --tracking-widest: var(--tracking-widest);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body);
-  font-size: 1.05rem;
-  line-height: 1.6;
+  font-size: 1.125rem;
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
 }
 
 body::before {
@@ -110,16 +241,143 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.02em;
 }
 
-.medieval-border {
-  border: 2px solid var(--ink-200);
-  box-shadow: inset 0 0 0 1px var(--parchment-200), 0 2px 8px rgba(74,55,40,0.1);
+/* ---------- SEMANTIC TYPOGRAPHY CLASSES ---------- */
+.t-wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-7);
+  letter-spacing: var(--tracking-widest);
+  color: var(--ink-700);
+  line-height: var(--lh-tight);
+}
+.t-eyebrow {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--fs-00);
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+.t-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-7);
+  letter-spacing: var(--tracking-wide);
+  line-height: var(--lh-tight);
+  color: var(--ink-700);
+}
+.t-h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-6);
+  letter-spacing: var(--tracking-wide);
+  line-height: var(--lh-tight);
+  color: var(--ink-700);
+}
+.t-h2 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: var(--fs-5);
+  line-height: var(--lh-snug);
+  color: var(--ink-600);
+}
+.t-h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: var(--fs-4);
+  line-height: var(--lh-snug);
+  color: var(--ink-600);
+}
+.t-h4 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: var(--fs-3);
+  line-height: var(--lh-snug);
+  color: var(--ink-600);
+}
+.t-lede {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: var(--fs-3);
+  line-height: var(--lh-body);
+  color: var(--ink-400);
+}
+.t-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-2);
+  line-height: var(--lh-loose);
+  color: var(--ink-700);
+}
+.t-body-sm {
+  font-family: var(--font-body);
+  font-size: var(--fs-1);
+  line-height: var(--lh-body);
+  color: var(--ink-700);
+}
+.t-caption {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: var(--fs-0);
+  line-height: var(--lh-body);
+  color: var(--ink-300);
+}
+.t-quote {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: var(--fs-4);
+  line-height: var(--lh-body);
+  color: var(--ink-500);
+  border-left: 3px solid var(--gold-400);
+  padding-left: var(--space-5);
+}
+.t-label {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--fs-00);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+.t-mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-1);
+  letter-spacing: var(--tracking-wide);
+  color: var(--ink-600);
 }
 
+/* ---------- ILLUMINATED BORDER (brand ornament) ---------- */
+.rulers-border,
+.medieval-border {
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow-inset-parchment), var(--shadow-2);
+}
+.rulers-border--gold,
 .medieval-border-gold {
   border: 2px solid var(--gold-400);
-  box-shadow: inset 0 0 0 1px var(--gold-300), 0 2px 8px rgba(218,165,32,0.15);
+  box-shadow: var(--shadow-inset-gold), var(--shadow-gold);
 }
 
+/* ---------- FLEUR DIVIDER ---------- */
+.fleur-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--gold-500);
+}
+.fleur-divider::before,
+.fleur-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--ink-200);
+}
+.fleur-divider--light::before,
+.fleur-divider--light::after {
+  background: rgba(245, 234, 214, 0.3);
+}
+
+/* ---------- SCROLLBAR ---------- */
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-track { background: var(--parchment-100); }
 ::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 4px; }

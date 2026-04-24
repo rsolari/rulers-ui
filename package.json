@@ -39,6 +39,7 @@
     "jsdom": "^28.1.0",
     "oxlint": "^1.59.0",
     "postcss": "^8.5.9",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "5.9.3",
     "vitest": "^4.0.18"

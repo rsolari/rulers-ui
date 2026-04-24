@@ -1,7 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getRuleChapters } from '@/lib/rules';
 import { RulesSidebar } from './sidebar';
 import { RulesChat } from '@/components/rules-chat';
+
+export const metadata: Metadata = { title: "Rulebook" };
 
 export default function RulesLayout({ children }: { children: React.ReactNode }) {
   const chapters = getRuleChapters();

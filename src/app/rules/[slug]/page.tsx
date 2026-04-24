@@ -1,9 +1,20 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getRuleChapters, getRuleContent } from '@/lib/rules';
 import { MarkdownContent } from './markdown-content';
 
 export function generateStaticParams() {
   return getRuleChapters().map((ch) => ({ slug: ch.slug }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const chapter = getRuleChapters().find((ch) => ch.slug === slug);
+  return { title: chapter?.title ?? "Rules" };
 }
 
 export default async function RuleChapterPage({ params }: { params: Promise<{ slug: string }> }) {

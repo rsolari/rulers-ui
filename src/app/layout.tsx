@@ -27,8 +27,43 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Rulers - Game Tracker",
-  description: "Track your game of Rulers: conquest, politics, and civilization-building",
+  title: {
+    default: "Rulers",
+    template: "%s | Rulers",
+  },
+  description:
+    "Track your game of Rulers: conquest, politics, and civilization-building",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://rulers.tally.xyz"
+  ),
+  openGraph: {
+    title: "Rulers",
+    description:
+      "Track your game of Rulers: conquest, politics, and civilization-building",
+    siteName: "Rulers",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Rulers — Conquest. Politics. Civilization.",
+      },
+    ],
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Rulers",
+    description:
+      "Track your game of Rulers: conquest, politics, and civilization-building",
+    images: ["/og-image.png"],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Rulers",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({

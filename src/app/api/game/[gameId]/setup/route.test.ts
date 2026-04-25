@@ -70,9 +70,9 @@ const mapMocks = vi.hoisted(() => ({
       description: 'Map Description',
     }],
     hexes: [
-      { q: 0, r: 0, kind: 'land', terrainType: 'plains', territoryKey: 'kingdom-1' },
-      { q: 1, r: 0, kind: 'land', terrainType: 'plains', territoryKey: 'kingdom-1' },
-      { q: 2, r: 0, kind: 'land', terrainType: 'plains', territoryKey: 'kingdom-1' },
+      { q: 0, r: 0, kind: 'land', terrainType: 'flat_farmland', territoryKey: 'kingdom-1' },
+      { q: 1, r: 0, kind: 'land', terrainType: 'flat_farmland', territoryKey: 'kingdom-1' },
+      { q: 2, r: 0, kind: 'land', terrainType: 'flat_farmland', territoryKey: 'kingdom-1' },
     ],
   })),
   getActiveCuratedMapTerritories: vi.fn(() => [{

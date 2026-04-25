@@ -18,7 +18,7 @@ describe('validateCuratedMapDefinition', () => {
         q: 0,
         r: 0,
         kind: 'land',
-        terrainType: 'plains',
+        terrainType: 'flat_farmland',
         territoryKey: 'missing-territory',
       }],
     })).toThrow(/unknown territory/);

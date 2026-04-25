@@ -14,25 +14,35 @@ interface MapLegendProps {
 }
 
 const LEGEND_ORDER = [
-  'plains',
-  'forest',
+  'flat_grassland',
+  'flat_farmland',
+  'flat_forest_deciduous',
+  'flat_forest_deciduous_heavy',
+  'flat_forest_jungle',
+  'flat_swamp',
+  'flat_desert_sandy',
+  'flat_desert_rocky',
   'hills',
+  'hills_grassy',
+  'hills_forest_deciduous',
+  'hills_forest_jungle',
   'mountains',
-  'desert',
-  'swamp',
-  'jungle',
-  'tundra',
+  'mountains_forest_deciduous',
+  'mountains_forest_jungle',
+  'badlands',
   'sea',
   'lake',
 ];
 
 function labelFor(key: string) {
-  return key.charAt(0).toUpperCase() + key.slice(1);
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export function MapLegend({ terrainColors, realms = [] }: MapLegendProps) {
   return (
-    <Card className="absolute left-4 top-4 z-10 w-64 bg-parchment-50/90 backdrop-blur-sm">
+    <Card className="absolute left-4 top-4 z-10 w-80 bg-parchment-50/90 backdrop-blur-sm">
       <CardHeader>
         <CardTitle>Map Legend</CardTitle>
       </CardHeader>

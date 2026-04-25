@@ -99,7 +99,13 @@ export default function LandingPage() {
       </div>
 
       <main className="relative z-10 min-h-screen flex items-center justify-center p-6">
-        <nav className="fixed top-0 right-0 p-6 z-20">
+        <nav className="fixed top-0 right-0 p-6 z-20 flex items-center gap-6">
+          <Link
+            href="/maps"
+            className="font-display text-[11px] uppercase tracking-[0.22em] text-[rgba(245,234,214,0.72)] hover:text-parchment-50 transition-colors"
+          >
+            Maps
+          </Link>
           <Link
             href="/rules"
             className="font-display text-[11px] uppercase tracking-[0.22em] text-[rgba(245,234,214,0.72)] hover:text-parchment-50 transition-colors"

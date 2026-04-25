@@ -67,7 +67,7 @@ export const WORLD_V1_MAP_DEFINITION = {
       "description": "Imported from World 3 Draft. Dominant terrain: flat farmland, hills, mountains."
     }
   ],
-  // @ts-ignore - hexes array is too large for TS union inference; type is enforced by the CuratedMapDefinition annotation.
+  // @ts-expect-error - hexes array is too large for TS union inference; type is enforced by the CuratedMapDefinition annotation.
   "hexes": [
     {
       "q": 48,

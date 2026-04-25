@@ -680,7 +680,7 @@ export function serializeCuratedMapDefinition(definition, metadata = {}) {
   const serializedDefinition = JSON.stringify(definition, null, 2)
     .replace(
       '\n  "hexes": [',
-      '\n  // @ts-ignore - hexes array is too large for TS union inference; type is enforced by the CuratedMapDefinition annotation.\n  "hexes": [',
+      '\n  // @ts-expect-error - hexes array is too large for TS union inference; type is enforced by the CuratedMapDefinition annotation.\n  "hexes": [',
     );
 
   return [

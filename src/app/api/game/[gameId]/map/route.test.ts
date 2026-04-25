@@ -51,7 +51,7 @@ describe('GET /api/game/[gameId]/map', () => {
   it('returns the imported map payload joined by hex', async () => {
     dbMocks.getQueue.push({ id: 'map-1', gameId: 'game-1', mapKey: 'world-v1', name: 'World Map v1', version: 1 });
     dbMocks.listQueue.push(
-      [{ id: 'hex-1', gameMapId: 'map-1', q: 0, r: 0, hexKind: 'land', terrainType: 'plains', territoryId: 'territory-1' }],
+      [{ id: 'hex-1', gameMapId: 'map-1', q: 0, r: 0, hexKind: 'land', terrainType: 'flat_farmland', territoryId: 'territory-1' }],
       [{ id: 'territory-1', gameId: 'game-1', name: 'Northreach', realmId: 'realm-1' }],
       [{ id: 'realm-1', gameId: 'game-1', name: 'Aurelian March' }],
       [{ id: 'landmark-1', gameId: 'game-1', hexId: 'hex-1', name: 'Old Tower', kind: 'ruin', description: null }],
@@ -76,7 +76,7 @@ describe('GET /api/game/[gameId]/map', () => {
         r: 0,
         hexKind: 'land',
         waterKind: null,
-        terrainType: 'plains',
+        terrainType: 'flat_farmland',
         territoryId: 'territory-1',
         features: [{ featureType: 'river', name: 'Kingsrun', riverIndex: null }],
         landmarks: [{ name: 'Old Tower', kind: 'ruin', description: null }],

@@ -1,14 +1,22 @@
 export type MapHexKind = 'land' | 'water';
 export type WaterHexKind = 'sea' | 'lake';
 export type MapTerrainType =
-  | 'plains'
-  | 'forest'
+  | 'flat_grassland'
+  | 'flat_forest_deciduous_heavy'
   | 'hills'
+  | 'hills_forest_deciduous'
+  | 'mountains_forest_deciduous'
+  | 'flat_farmland'
+  | 'flat_swamp'
+  | 'flat_desert_rocky'
+  | 'flat_forest_deciduous'
   | 'mountains'
-  | 'desert'
-  | 'swamp'
-  | 'jungle'
-  | 'tundra';
+  | 'mountains_forest_jungle'
+  | 'flat_desert_sandy'
+  | 'hills_grassy'
+  | 'hills_forest_jungle'
+  | 'flat_forest_jungle'
+  | 'badlands';
 export type MapFeatureType = 'river' | 'volcano' | 'coast' | 'reef' | 'ford';
 
 export interface HexCoordinate {

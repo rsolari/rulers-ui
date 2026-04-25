@@ -78,6 +78,49 @@ describe('parseWorldographerWxxBuffer', () => {
 });
 
 describe('buildCuratedMapDefinition', () => {
+  it('snaps border shapes to nearby hex edges before assigning territories', () => {
+    const borderMidpoint = {
+      x: (getWorldographerHexCenter(0, 0).x + getWorldographerHexCenter(1, 0).x) / 2,
+      y: (getWorldographerHexCenter(0, 0).y + getWorldographerHexCenter(1, 0).y) / 2,
+    };
+    const parsed = {
+      width: 3,
+      height: 1,
+      orientation: 'COLUMNS',
+      projection: 'FLAT',
+      terrainMap: new Map([[1, 'Classic/Flat Farmland']]),
+      columns: [
+        [{ column: 0, row: 0, terrainCode: 1, elevation: 1000 }],
+        [{ column: 1, row: 0, terrainCode: 1, elevation: 1000 }],
+        [{ column: 2, row: 0, terrainCode: 1, elevation: 1000 }],
+      ],
+      labels: [
+        { name: 'Kingdom 1', ...getWorldographerHexCenter(0, 0) },
+        { name: 'Kingdom 2', ...getWorldographerHexCenter(2, 0) },
+      ],
+      features: [],
+      shapes: [
+        {
+          tags: '',
+          points: [
+            { x: borderMidpoint.x, y: borderMidpoint.y - 85 },
+            { x: borderMidpoint.x, y: borderMidpoint.y - 65 },
+          ],
+        },
+      ],
+      informations: [],
+    };
+
+    const definition = buildCuratedMapDefinition(parsed, {
+      key: 'fixture-world',
+      name: 'Fixture World',
+      version: 7,
+    });
+
+    expect(definition.hexes.find((hex) => hex.kind === 'land' && hex.q === 0 && hex.r === 0))
+      .toMatchObject({ territoryKey: 'kingdom-2' });
+  });
+
   it('derives territories, water kinds, suggested starts, and features', () => {
     const parsed = {
       width: 3,
@@ -138,6 +181,7 @@ describe('buildCuratedMapDefinition', () => {
     const volcanoHex = definition.hexes.find((hex) => hex.kind === 'land' && hex.features?.some((feature: { type: string }) => feature.type === 'volcano'));
     const coastHexes = definition.hexes.filter((hex) => hex.kind === 'land' && hex.features?.some((feature: { type: string }) => feature.type === 'coast'));
     const riverHexes = definition.hexes.filter((hex) => hex.kind === 'land' && hex.features?.some((feature: { type: string }) => feature.type === 'river'));
+    const terrainTypes = new Set(definition.hexes.filter((hex) => hex.kind === 'land').map((hex) => hex.terrainType));
 
     expect(definition.key).toBe('fixture-world');
     expect(definition.name).toBe('Fixture World');
@@ -145,6 +189,7 @@ describe('buildCuratedMapDefinition', () => {
     expect(definition.territories).toHaveLength(2);
     expect(definition.suggestedStarts).toHaveLength(2);
     expect(lakeHex).toMatchObject({ kind: 'water', waterKind: 'lake' });
+    expect(terrainTypes).toEqual(new Set(['flat_farmland', 'flat_forest_deciduous', 'mountains', 'flat_forest_jungle']));
     expect(volcanoHex?.features).toContainEqual({ type: 'volcano', metadata: { state: 'dormant' } });
     expect(coastHexes.length).toBeGreaterThan(0);
     expect(riverHexes.length).toBeGreaterThan(0);

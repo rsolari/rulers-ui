@@ -17,16 +17,46 @@ import {
   type TurnActionResolutionRoll,
   type TurnActionStatus,
 } from '@/types/game';
-import { BUILDING_DEFS, LEVY_DURATION_SEASONS, SEASONS, TAX_RATES, TAX_TURMOIL, TROOP_DEFS } from '@/lib/game-logic/constants';
+import { BUILDING_DEFS, BUILDING_SIZE_DATA, LEVY_DURATION_SEASONS, SEASONS, SHIP_DEFS, TAX_RATES, TAX_TURMOIL, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { ActionComments } from '@/components/turn-actions/action-comments';
 import { ActionKindBadge, ActionOutcomeBadge, ActionStatusBadge } from '@/components/turn-actions/action-status-badge';
 import { Badge } from '@/components/ui/badge';
 
-const BUILDING_OPTIONS = Object.keys(BUILDING_DEFS).map((value) => ({ value, label: value }));
-const TROOP_OPTIONS = Object.keys(TROOP_DEFS).map((value) => ({ value, label: value }));
+const BUILDING_OPTIONS = Object.entries(BUILDING_DEFS).map(([value, def]) => {
+  const sizeData = BUILDING_SIZE_DATA[def.size];
+  const prerequisiteLabel = def.prerequisites.length > 0
+    ? `, requires ${def.prerequisites.join(', ')}`
+    : '';
+
+  return {
+    value,
+    label: `${value} (${def.size}, ${sizeData.buildCost.toLocaleString()}gc, ${sizeData.buildTime} turn${sizeData.buildTime === 1 ? '' : 's'}${prerequisiteLabel})`,
+  };
+});
+const TROOP_OPTIONS = Object.entries(TROOP_DEFS).map(([value, def]) => {
+  const prerequisiteLabel = def.requires.length > 0
+    ? `, requires ${def.requires.join(', ')}`
+    : '';
+
+  return {
+    value,
+    label: `${value} (${def.class}, ${def.upkeep.toLocaleString()}gc/season${prerequisiteLabel})`,
+  };
+});
+const SHIP_OPTIONS = Object.entries(SHIP_DEFS).map(([value, def]) => {
+  const prerequisiteLabel = def.requires.length > 0
+    ? `, requires ${def.requires.join(', ')}`
+    : '';
+
+  return {
+    value,
+    label: `${value} (${def.class}, ${def.buildCost.toLocaleString()}gc, ${def.buildTime} turn${def.buildTime === 1 ? '' : 's'}${prerequisiteLabel})`,
+  };
+});
 const FINANCIAL_TYPE_OPTIONS = [
   { value: 'build', label: 'Build' },
   { value: 'recruit', label: 'Recruit' },
+  { value: 'constructShip', label: 'Construct Ship' },
   { value: 'demolish', label: 'Demolish' },
   { value: 'taxChange', label: 'Tax Change' },
   { value: 'spending', label: 'Spending' },
@@ -87,6 +117,8 @@ function createDraftState(action: TurnActionRecord): TurnActionUpdateDto {
     financialType: action.financialType ?? undefined,
     buildingType: action.buildingType,
     troopType: action.troopType,
+    shipType: action.shipType,
+    fleetId: action.fleetId,
     settlementId: action.settlementId,
     territoryId: action.territoryId,
     material: action.material,
@@ -161,6 +193,22 @@ function getTaxImpact(taxType: TaxType | null | undefined, context: TaxProjectio
     turmoilDelta,
     expiresAt,
   };
+}
+
+function getBuildingBaseCost(buildingType: string | null | undefined) {
+  if (!buildingType || !(buildingType in BUILDING_DEFS)) return 0;
+  const def = BUILDING_DEFS[buildingType as keyof typeof BUILDING_DEFS];
+  return BUILDING_SIZE_DATA[def.size].buildCost;
+}
+
+function getTroopBaseCost(troopType: string | null | undefined) {
+  if (!troopType || !(troopType in TROOP_DEFS)) return 0;
+  return TROOP_DEFS[troopType as keyof typeof TROOP_DEFS].upkeep;
+}
+
+function getShipBaseCost(shipType: string | null | undefined) {
+  if (!shipType || !(shipType in SHIP_DEFS)) return 0;
+  return SHIP_DEFS[shipType as keyof typeof SHIP_DEFS].buildCost;
 }
 
 function TaxImpactBadges({
@@ -405,6 +453,8 @@ export function TurnActionCard({
       financialType: value as TurnActionUpdateDto['financialType'],
       buildingType: value === 'build' || value === 'demolish' ? current.buildingType : null,
       troopType: value === 'recruit' ? current.troopType : null,
+      shipType: value === 'constructShip' ? current.shipType : null,
+      fleetId: value === 'constructShip' ? current.fleetId : null,
       territoryId: value === 'build' ? current.territoryId : null,
       material: value === 'build' ? current.material : null,
       wallSize: value === 'build' ? current.wallSize : null,
@@ -415,6 +465,15 @@ export function TurnActionCard({
       takesBuildingSlot: value === 'build' ? current.takesBuildingSlot : null,
       constructionTurns: value === 'build' ? current.constructionTurns : null,
       taxType: value === 'taxChange' ? current.taxType : null,
+      cost: value === 'build'
+        ? getBuildingBaseCost(current.buildingType)
+        : value === 'recruit'
+          ? getTroopBaseCost(current.troopType)
+          : value === 'constructShip'
+            ? getShipBaseCost(current.shipType)
+            : value === 'taxChange'
+              ? 0
+              : current.cost,
     }));
   }
 
@@ -429,6 +488,7 @@ export function TurnActionCard({
       ...current,
       buildingType: buildingType as TurnActionUpdateDto['buildingType'],
       allottedGosId: getDefaultAllottedGosId(buildingType),
+      cost: getBuildingBaseCost(buildingType),
     }));
   }
 
@@ -590,6 +650,29 @@ export function TurnActionCard({
                   onChange={(event) => setDraft((current) => ({
                     ...current,
                     troopType: event.target.value as TurnActionUpdateDto['troopType'],
+                    cost: getTroopBaseCost(event.target.value),
+                  }))}
+                  disabled={!editable}
+                />
+                <Select
+                  label="Settlement"
+                  options={settlementOptions}
+                  value={draft.settlementId ?? ''}
+                  onChange={(event) => setDraft((current) => ({ ...current, settlementId: event.target.value }))}
+                  disabled={!editable}
+                />
+              </div>
+            ) : null}
+            {draft.financialType === 'constructShip' ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <Select
+                  label="Ship Type"
+                  options={SHIP_OPTIONS}
+                  value={draft.shipType ?? ''}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    shipType: event.target.value as TurnActionUpdateDto['shipType'],
+                    cost: getShipBaseCost(event.target.value),
                   }))}
                   disabled={!editable}
                 />

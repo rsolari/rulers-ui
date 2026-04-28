@@ -3,7 +3,6 @@ import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB, type DatabaseExecutor } from '@/db';
 import { actionComments, buildings, games, realms, settlements, troops, territories, turnActions, turnEvents, turnReports } from '@/db/schema';
 import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
-import { normalizeEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 import { parseJson } from '@/lib/json';
 import { createBuilding, createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
 import { createTurnEventService, getPendingFinancialActionsForRealm } from '@/lib/turn-event-service';

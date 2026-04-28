@@ -166,6 +166,30 @@ describe('POST /api/game/[gameId]/gos', () => {
     vi.clearAllMocks();
   });
 
+  it('rejects monopolyProduct when type is not Guild', async () => {
+    authMocks.requireRealmOwner.mockResolvedValue({ id: 'realm-1' });
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/gos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-1',
+        realmIds: ['realm-1'],
+        name: 'Order of Cogs',
+        type: 'Order',
+        monopolyProduct: 'Iron',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Only Guilds can be assigned a monopoly product',
+    });
+    expect(dbMocks.transaction).not.toHaveBeenCalled();
+  });
+
   it('creates a GOS row plus its realm memberships', async () => {
     authMocks.requireRealmOwner.mockResolvedValue({ id: 'realm-1' });
 

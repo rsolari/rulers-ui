@@ -54,17 +54,10 @@ export function computeGuildIncomeBreakdown(args: {
   gosRealmIds: Set<string>;
   foodByRealm: Map<string, number>;
 }): GuildIncomeBreakdown {
-  const empty: GuildIncomeBreakdown = {
-    membershipFees: 0,
-    ownership: 0,
-    food: 0,
-    total: 0,
-    qualifiedSiteIds: [],
-    qualifiedIndustryIds: [],
-  };
-  if (args.gos.type !== 'Guild') return empty;
-
-  const monopoly = args.gos.monopolyProduct as MonopolyProduct | null | undefined;
+  // Monopoly + food are Guild-only; ownership income applies to any GOS that
+  // owns sites/industries directly or via settlement cascade.
+  const isGuild = args.gos.type === 'Guild';
+  const monopoly = isGuild ? (args.gos.monopolyProduct as MonopolyProduct | null | undefined) : null;
   const gosId = args.gos.id;
 
   const siteBreakdown = new Map<string, { rate: number; matchedMonopoly: boolean; owned: boolean }>();
@@ -208,9 +201,11 @@ function loadGameGuildData(database: DatabaseExecutor, gameId: string): LoadedGa
   const settlementIds = settlementRows.map((settlement) => settlement.id);
   const settlementToRealm = new Map<string, string>();
   const settlementToTerritory = new Map<string, string>();
+  const settlementOwnerGosBySettlementId = new Map<string, string>();
   for (const settlement of settlementRows) {
     if (settlement.realmId) settlementToRealm.set(settlement.id, settlement.realmId);
     if (settlement.territoryId) settlementToTerritory.set(settlement.id, settlement.territoryId);
+    if (settlement.ownerGosId) settlementOwnerGosBySettlementId.set(settlement.id, settlement.ownerGosId);
   }
 
   const buildingRows: ExtendedBuildingRow[] = settlementIds.length > 0 || territoryIds.length > 0
@@ -251,7 +246,8 @@ function loadGameGuildData(database: DatabaseExecutor, gameId: string): LoadedGa
     resourceType: site.resourceType as ResourceType,
     rarity: site.rarity as ResourceRarity,
     realmId: resolveSiteRealm(site, settlementToRealm, territoryToRealm),
-    ownerGosId: site.ownerGosId ?? null,
+    ownerGosId: site.ownerGosId
+      ?? (site.settlementId ? settlementOwnerGosBySettlementId.get(site.settlementId) ?? null : null),
   }));
 
   const siteIds = siteRows.map((site) => site.id);
@@ -263,12 +259,15 @@ function loadGameGuildData(database: DatabaseExecutor, gameId: string): LoadedGa
     : [];
   const industryInputs: GuildIncomeIndustryInput[] = industryRows.map((industry) => {
     const site = siteById.get(industry.resourceSiteId);
+    const cascadedOwner = site?.settlementId
+      ? settlementOwnerGosBySettlementId.get(site.settlementId) ?? null
+      : null;
     return {
       id: industry.id,
       outputProduct: industry.outputProduct as ResourceType,
       rarity: (site?.rarity as ResourceRarity | undefined) ?? 'Common',
       realmId: site ? resolveSiteRealm(site, settlementToRealm, territoryToRealm) : null,
-      ownerGosId: industry.ownerGosId ?? null,
+      ownerGosId: industry.ownerGosId ?? cascadedOwner,
     };
   });
 

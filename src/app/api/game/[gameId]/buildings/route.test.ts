@@ -108,7 +108,7 @@ describe('POST /api/game/[gameId]/buildings', () => {
     expect(actionMocks.createBuilding).toHaveBeenCalledWith('game-1', {
       settlementId: 'settlement-1',
       type: 'Fort',
-    });
+    }, { chargeGosId: null });
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({
       id: 'building-1',

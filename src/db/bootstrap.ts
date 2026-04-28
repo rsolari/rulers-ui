@@ -269,10 +269,12 @@ function createBaseSchema(database: Database.Database) {
       size text NOT NULL,
       is_capital integer NOT NULL DEFAULT false,
       governing_noble_id text,
+      owner_gos_id text,
       FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (governing_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (governing_noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (owner_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS resource_sites (
@@ -918,6 +920,12 @@ function backfillInitStateFromLegacyGamePhase(database: Database.Database) {
 function ensureSettlementKindColumn(database: Database.Database) {
   if (tableExists(database, 'settlements') && !columnExists(database, 'settlements', 'kind')) {
     database.exec("ALTER TABLE settlements ADD COLUMN kind text NOT NULL DEFAULT 'settlement';");
+  }
+}
+
+function ensureSettlementOwnerGosColumn(database: Database.Database) {
+  if (tableExists(database, 'settlements') && !columnExists(database, 'settlements', 'owner_gos_id')) {
+    database.exec('ALTER TABLE settlements ADD COLUMN owner_gos_id text REFERENCES guilds_orders_societies(id);');
   }
 }
 
@@ -1652,6 +1660,7 @@ export function initializeDatabaseSchema(database: Database.Database) {
   }
 
   ensureSettlementKindColumn(database);
+  ensureSettlementOwnerGosColumn(database);
 
   ensureEconomySchema(database);
   ensureGovernanceSchema(database);

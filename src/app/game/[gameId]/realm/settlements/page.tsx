@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
 import { useRole } from '@/hooks/use-role';
@@ -143,6 +144,10 @@ export default function SettlementsPage() {
   const [selectedBuildingType, setSelectedBuildingType] = useState<string>('');
   const [selectedMaterial, setSelectedMaterial] = useState<string>('Timber');
   const [selectedAllottedGosId, setSelectedAllottedGosId] = useState<string>('');
+  const [showCreateGosForm, setShowCreateGosForm] = useState(false);
+  const [newGosName, setNewGosName] = useState('');
+  const [creatingGos, setCreatingGos] = useState(false);
+  const [createGosError, setCreateGosError] = useState<string | null>(null);
   const [buildingLoading, setBuildingLoading] = useState(false);
   const [cancellingBuildingId, setCancellingBuildingId] = useState<string | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
@@ -247,6 +252,48 @@ export default function SettlementsPage() {
   function selectBuildingType(buildingType: string) {
     setSelectedBuildingType(buildingType);
     setSelectedAllottedGosId(getDefaultAllottedGosId(buildingType));
+    setShowCreateGosForm(false);
+    setNewGosName('');
+    setCreateGosError(null);
+  }
+
+  async function createGosInline(requiredType: string) {
+    const trimmedName = newGosName.trim();
+    if (!trimmedName || !realmId) return;
+
+    setCreatingGos(true);
+    setCreateGosError(null);
+    try {
+      const res = await fetch(`/api/game/${gameId}/gos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trimmedName,
+          type: requiredType,
+          realmId,
+          realmIds: [realmId],
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setCreateGosError(data.error ?? 'Failed to create GOS');
+        return;
+      }
+
+      const created = await res.json();
+      const newOption: GOSOption = {
+        id: created.id,
+        name: trimmedName,
+        type: requiredType,
+      };
+      setGosOptions((prev) => [...prev, newOption]);
+      setSelectedAllottedGosId(created.id);
+      setShowCreateGosForm(false);
+      setNewGosName('');
+    } finally {
+      setCreatingGos(false);
+    }
   }
 
   async function constructBuilding() {
@@ -640,7 +687,12 @@ export default function SettlementsPage() {
       </div>
 
       {buildSettlementId ? (
-        <Dialog open onClose={() => setBuildSettlementId(null)}>
+        <Dialog open onClose={() => {
+          setBuildSettlementId(null);
+          setShowCreateGosForm(false);
+          setNewGosName('');
+          setCreateGosError(null);
+        }}>
           <DialogTitle>Construct Building</DialogTitle>
           <DialogContent>
             {buildingLoading && buildingOptions.length === 0 ? (
@@ -653,13 +705,63 @@ export default function SettlementsPage() {
                   value={selectedBuildingType}
                   onChange={(e) => selectBuildingType(e.target.value)}
                 />
-                {requiredAllotmentType && allotmentOptions.length > 0 && (
-                  <Select
-                    label={`Allotted ${requiredAllotmentType}`}
-                    options={allotmentOptions.map((gos) => ({ value: gos.id, label: gos.name }))}
-                    value={selectedAllottedGosId}
-                    onChange={(e) => setSelectedAllottedGosId(e.target.value)}
-                  />
+                {requiredAllotmentType && (
+                  <div className="space-y-2">
+                    {allotmentOptions.length > 0 && !showCreateGosForm && (
+                      <Select
+                        label={`Allotted ${requiredAllotmentType}`}
+                        options={allotmentOptions.map((gos) => ({ value: gos.id, label: gos.name }))}
+                        value={selectedAllottedGosId}
+                        onChange={(e) => setSelectedAllottedGosId(e.target.value)}
+                      />
+                    )}
+                    {!showCreateGosForm && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setShowCreateGosForm(true);
+                          setNewGosName('');
+                          setCreateGosError(null);
+                        }}
+                      >
+                        {allotmentOptions.length > 0
+                          ? `+ Create new ${requiredAllotmentType}`
+                          : `Create ${requiredAllotmentType} for this building`}
+                      </Button>
+                    )}
+                    {showCreateGosForm && (
+                      <div className="space-y-2 rounded p-3 medieval-border">
+                        <Input
+                          label={`New ${requiredAllotmentType} name`}
+                          value={newGosName}
+                          onChange={(e) => setNewGosName(e.target.value)}
+                          placeholder={`e.g. ${requiredAllotmentType === 'Order' ? 'Order of Saint Cuthbert' : requiredAllotmentType === 'Society' ? 'Society of Natural Philosophy' : 'Mercers Guild'}`}
+                        />
+                        {createGosError && (
+                          <p className="text-sm text-red-700">{createGosError}</p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="accent"
+                            onClick={() => createGosInline(requiredAllotmentType)}
+                            disabled={!newGosName.trim() || creatingGos}
+                          >
+                            {creatingGos ? 'Creating…' : 'Create'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              setShowCreateGosForm(false);
+                              setNewGosName('');
+                              setCreateGosError(null);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {FORTIFICATION_MATERIAL_TYPES.has(selectedBuildingType) && (
                   <Select
@@ -721,7 +823,7 @@ export default function SettlementsPage() {
             <Button
               variant="accent"
               onClick={constructBuilding}
-              disabled={!selectedOption?.canBuild || Boolean(requiredAllotmentType && !selectedAllottedGosId) || buildingLoading}
+              disabled={!selectedOption?.canBuild || Boolean(requiredAllotmentType && !selectedAllottedGosId) || showCreateGosForm || buildingLoading}
             >
               Build
             </Button>

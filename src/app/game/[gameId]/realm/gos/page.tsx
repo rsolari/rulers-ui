@@ -289,7 +289,7 @@ export default function GOSPage() {
         type: editForm.type,
         focus: editForm.focus.trim() || null,
         treasury: editForm.treasury,
-        monopolyProduct: editForm.monopolyProduct || null,
+        monopolyProduct: editForm.type === 'Guild' ? (editForm.monopolyProduct || null) : null,
         alcoveNames: alcoveNames.length > 0 ? alcoveNames : null,
         centreNames: centreNames.length > 0 ? centreNames : null,
         firstBuildingId: editForm.firstBuildingId || null,
@@ -517,29 +517,31 @@ export default function GOSPage() {
                 value={String(editForm.treasury)}
                 onChange={(e) => setEditForm((f) => f ? { ...f, treasury: Number(e.target.value) || 0 } : f)}
               />
-              <div>
-                <Select
-                  label="Monopoly Product"
-                  options={RESOURCE_TYPE_OPTIONS}
-                  value={editForm.monopolyProduct}
-                  onChange={(e) => setEditForm((f) => f ? { ...f, monopolyProduct: e.target.value } : f)}
-                />
-                {editForm.monopolyProduct && (() => {
-                  const sharedRealmIds = new Set(editForm.realmIds);
-                  const conflicts = gosList.filter((other) => (
-                    other.id !== editGosId
-                    && other.type === 'Guild'
-                    && other.monopolyProduct === editForm.monopolyProduct
-                    && other.realmIds.some((id) => sharedRealmIds.has(id))
-                  ));
-                  if (conflicts.length === 0) return null;
-                  return (
-                    <p className="mt-2 text-xs text-amber-600">
-                      Warning: {conflicts.map((c) => c.name).join(', ')} already claim this monopoly in a shared realm.
-                    </p>
-                  );
-                })()}
-              </div>
+              {editForm.type === 'Guild' && (
+                <div>
+                  <Select
+                    label="Monopoly Product"
+                    options={RESOURCE_TYPE_OPTIONS}
+                    value={editForm.monopolyProduct}
+                    onChange={(e) => setEditForm((f) => f ? { ...f, monopolyProduct: e.target.value } : f)}
+                  />
+                  {editForm.monopolyProduct && (() => {
+                    const sharedRealmIds = new Set(editForm.realmIds);
+                    const conflicts = gosList.filter((other) => (
+                      other.id !== editGosId
+                      && other.type === 'Guild'
+                      && other.monopolyProduct === editForm.monopolyProduct
+                      && other.realmIds.some((id) => sharedRealmIds.has(id))
+                    ));
+                    if (conflicts.length === 0) return null;
+                    return (
+                      <p className="mt-2 text-xs text-amber-600">
+                        Warning: {conflicts.map((c) => c.name).join(', ')} already claim this monopoly in a shared realm.
+                      </p>
+                    );
+                  })()}
+                </div>
+              )}
               <Input
                 label="Alcove Names (comma-separated)"
                 value={editForm.alcoveNames}

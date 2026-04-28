@@ -259,6 +259,7 @@ export const settlements = sqliteTable('settlements', {
   size: text('size').$type<SettlementSize>().notNull(),
   isCapital: integer('is_capital', { mode: 'boolean' }).default(false).notNull(),
   governingNobleId: text('governing_noble_id').references(() => nobles.id),
+  ownerGosId: text('owner_gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
 });
 
 export const settlementsRelations = relations(settlements, ({ one, many }) => ({
@@ -269,6 +270,11 @@ export const settlementsRelations = relations(settlements, ({ one, many }) => ({
     fields: [settlements.governingNobleId],
     references: [nobles.id],
     relationName: 'settlement_governor',
+  }),
+  ownerGos: one(guildsOrdersSocieties, {
+    fields: [settlements.ownerGosId],
+    references: [guildsOrdersSocieties.id],
+    relationName: 'gos_owner_settlements',
   }),
   buildings: many(buildings),
   resourceSites: many(resourceSites),
@@ -668,6 +674,7 @@ export const guildsOrdersSocietiesRelations = relations(guildsOrdersSocieties, (
   }),
   ownedBuildings: many(buildings, { relationName: 'gos_owner_buildings' }),
   allottedBuildings: many(buildings, { relationName: 'gos_allotted_buildings' }),
+  ownedSettlements: many(settlements, { relationName: 'gos_owner_settlements' }),
   ownedResourceSites: many(resourceSites, { relationName: 'gos_owner_resource_sites' }),
   ownedIndustries: many(industries, { relationName: 'gos_owner_industries' }),
   troops: many(troops, { relationName: 'gos_troops' }),

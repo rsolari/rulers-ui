@@ -60,6 +60,22 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDef> = {
   Weaponsmith:   { type: 'Weaponsmith',   category: 'Military',      size: 'Medium', prerequisites: ['Ore'],                              description: 'Allows recruitment of certain Troops.' },
 };
 
+// Buildings that require an associated GOS to construct. The mapped GOS type
+// must match the type of the GOS the building is allotted to or owned by.
+export const GOS_REQUIRED_BUILDINGS: Partial<Record<BuildingType, GOSType>> = {
+  Chapel: 'Order',
+  Church: 'Order',
+  Cathedral: 'Order',
+  Academy: 'Society',
+  College: 'Society',
+  University: 'Society',
+  Bank: 'Guild',
+};
+
+export function buildingRequiresGosType(buildingType: BuildingType): GOSType | null {
+  return GOS_REQUIRED_BUILDINGS[buildingType] ?? null;
+}
+
 const BUILDING_SIZE_ORDER: BuildingSize[] = ['Tiny', 'Small', 'Medium', 'Large', 'Colossal'];
 
 export const BUILDING_UPGRADE_PATHS: Partial<Record<BuildingType, BuildingType[]>> = {

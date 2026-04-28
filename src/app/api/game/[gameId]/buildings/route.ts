@@ -103,7 +103,10 @@ export async function POST(
     const { gameId } = await params;
     await requireGM(gameId);
     const body = await request.json();
-    const created = await createBuilding(gameId, body);
+    const chargeGosId = typeof body.chargeGosId === 'string' && body.chargeGosId.trim()
+      ? body.chargeGosId.trim()
+      : null;
+    const created = await createBuilding(gameId, body, { chargeGosId });
 
     return NextResponse.json({
       id: created.row.id,

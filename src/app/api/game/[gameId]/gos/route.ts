@@ -140,6 +140,13 @@ export async function POST(
       ? body.leaderId.trim()
       : null;
 
+    if (body.monopolyProduct && body.type !== 'Guild') {
+      return NextResponse.json(
+        { error: 'Only Guilds can be assigned a monopoly product' },
+        { status: 400 },
+      );
+    }
+
     if (leaderId) {
       const leader = await db.select().from(nobles)
         .where(eq(nobles.id, leaderId))
@@ -214,12 +221,26 @@ export async function PATCH(
       return NextResponse.json({ error: 'GOS not found' }, { status: 404 });
     }
 
+    const nextType = body.type !== undefined ? body.type : gos.type;
+    const nextMonopolyRequested = body.monopolyProduct !== undefined ? body.monopolyProduct : gos.monopolyProduct;
+
+    if (nextMonopolyRequested && nextType !== 'Guild') {
+      return NextResponse.json(
+        { error: 'Only Guilds can be assigned a monopoly product' },
+        { status: 400 },
+      );
+    }
+
     const updates: Record<string, unknown> = {};
     if (body.name !== undefined) updates.name = body.name;
     if (body.type !== undefined) updates.type = body.type;
     if (body.focus !== undefined) updates.focus = body.focus || null;
     if (body.treasury !== undefined) updates.treasury = Number(body.treasury) || 0;
     if (body.monopolyProduct !== undefined) updates.monopolyProduct = body.monopolyProduct || null;
+    // If a Guild is being changed to another type, drop any existing monopoly.
+    if (body.type !== undefined && body.type !== 'Guild' && gos.monopolyProduct) {
+      updates.monopolyProduct = null;
+    }
     if (body.alcoveNames !== undefined) updates.alcoveNames = Array.isArray(body.alcoveNames) ? JSON.stringify(body.alcoveNames) : null;
     if (body.centreNames !== undefined) updates.centreNames = Array.isArray(body.centreNames) ? JSON.stringify(body.centreNames) : null;
     if (body.firstBuildingId !== undefined) updates.firstBuildingId = body.firstBuildingId || null;

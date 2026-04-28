@@ -221,6 +221,51 @@ describe('computeGuildIncomeMap', () => {
     // 6 food per town × 2 towns × 200 = 2400
     expect(income.get('bakers')).toBe(2400);
   });
+
+  it('cascades settlement ownership: a Guild that owns a settlement earns ownership fees on its sites', () => {
+    const db = createTestDatabase();
+    seedGame(db);
+    createGuild(db, 'brewers', 'r1', 'Timber');
+    db.update(schema.settlements)
+      .set({ ownerGosId: 'brewers' })
+      .where(eq(schema.settlements.id, 's1'))
+      .run();
+    db.insert(schema.resourceSites).values({
+      id: 'rs1', territoryId: 't1', settlementId: 's1',
+      resourceType: 'Marble', rarity: 'Luxury',
+    }).run();
+
+    const income = computeGuildIncomeMap(db, 'g1');
+
+    // Marble doesn't match the Timber monopoly, but cascaded ownership grants 1500g
+    expect(income.get('brewers')).toBe(1500);
+  });
+
+  it('cascades settlement ownership: an Order that owns a settlement earns ownership fees on its sites', () => {
+    const db = createTestDatabase();
+    seedGame(db);
+    db.insert(schema.guildsOrdersSocieties).values({
+      id: 'order-1',
+      realmId: 'r1',
+      name: 'Order of Stone',
+      type: 'Order',
+      treasury: 0,
+    }).run();
+    db.insert(schema.gosRealms).values({ gosId: 'order-1', realmId: 'r1' }).run();
+    db.update(schema.settlements)
+      .set({ ownerGosId: 'order-1' })
+      .where(eq(schema.settlements.id, 's1'))
+      .run();
+    db.insert(schema.resourceSites).values({
+      id: 'rs1', territoryId: 't1', settlementId: 's1',
+      resourceType: 'Stone', rarity: 'Common',
+    }).run();
+
+    const income = computeGuildIncomeMap(db, 'g1');
+
+    // Common resource → 1200g ownership income for the Order via settlement cascade
+    expect(income.get('order-1')).toBe(1200);
+  });
 });
 
 describe('creditGosTurnIncome', () => {

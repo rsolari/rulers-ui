@@ -20,6 +20,12 @@ Each Turn, Players submit a report to the N.O. detailing what actions they perfo
 
 A Ruler may still Recruit and Construct as much as they can afford to do so. For Political Actions, players may choose from the list of Action Words. However, they are still limited to 6 Action Words to use in each report for their Political Actions.[^3] Action Words can still be combined to define a Political Action.
 
+## Action Resolution
+
+Every action produces an Event when it resolves. The Event records who can see it, the outcome, any dice rolled, and any Reason or Cunning modifier used by the acting Noble. This makes the Event Log the shared record of what happened in the turn.
+
+Some actions take more than one turn. These actions remain `pending` until they are complete or until the N.O. resolves them. Pending actions do not count against the next turn's 6 Action Word limit; that limit applies only to new Political Actions submitted in the current turn.
+
 Messages are still restricted by use of an appropriate Action Word and must still be dated with the in-game date. If the recipient of a message is in the same Realm as the sender, they may still talk freely. It is important for an N.O. to be clear that Rulers may not chat freely unless they are in the same Realm and should not over-abuse the powers of the inter-connected internet age.
 
 For Events, at the start of the new year (every 4 turns) the N.O. will roll on a table to determine which event randomly happens to each player Realm. In the Report system, players no longer have Events they can play, or have control over.[^4]

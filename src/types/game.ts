@@ -132,11 +132,20 @@ export interface GOSMetadata {
 // Turn Report Status
 export type ReportStatus = 'draft' | 'submitted' | 'resolved';
 export type ActionKind = 'political' | 'financial';
-export type TurnActionStatus = 'draft' | 'submitted' | 'executed';
-export type TurnActionOutcome = 'pending' | 'success' | 'failure' | 'partial' | 'void';
+export type TurnActionStatus = 'draft' | 'submitted' | 'pending' | 'resolved';
+export type TurnActionOutcome = 'pending' | 'success' | 'failure' | 'partial' | 'void' | 'informational';
 export type ActionAuthorRole = 'player' | 'gm';
-export type TurnEventKind = 'gm_event' | 'turmoil_review' | 'winter_unrest';
+export type TurnEventKind =
+  | 'gm_event'
+  | 'turmoil_review'
+  | 'winter_unrest'
+  | 'action_resolution'
+  | 'construction_complete'
+  | 'recruit_complete'
+  | 'ship_complete'
+  | 'cross_realm_effect';
 export type TurnEventStatus = 'open' | 'resolved' | 'dismissed';
+export type ResolutionAbility = 'Reason' | 'Cunning';
 
 export interface TurnActionResolutionRoll {
   dice: number[];
@@ -337,7 +346,6 @@ export interface TurnActionRecord {
   taxType: TaxType | null;
   technicalKnowledgeKey: TechnicalKnowledgeKey | null;
   cost: number;
-  spawnedEventId: string | null;
   resolutionSummary: string | null;
   resolutionRolls: TurnActionResolutionRoll[];
   submittedAt: string | null;
@@ -365,8 +373,16 @@ export interface TurnEventRecord {
   year: number;
   season: Season;
   realmId: string | null;
+  audienceRealmIds: string[];
+  actionId: string | null;
+  causedByRealmId: string | null;
   kind: TurnEventKind;
   status: TurnEventStatus;
+  outcome: TurnActionOutcome | null;
+  rolls: TurnActionResolutionRoll[];
+  abilityUsed: ResolutionAbility | null;
+  abilityModifier: number | null;
+  nobleId: string | null;
   title: string | null;
   description: string;
   resolution: string | null;
@@ -394,6 +410,37 @@ export interface CurrentTurnResponseDto {
   };
   realm?: TurnReportBundle;
   realms?: TurnReportBundle[];
+  pendingFinancial?: PendingFinancialAction[];
+}
+
+export interface PendingFinancialAction {
+  action: TurnActionRecord;
+  entityId: string;
+  entityType: 'building' | 'troop' | 'ship';
+  entityLabel: string;
+  targetLabel: string | null;
+  turnsRemaining: number;
+  originatingTurn: {
+    year: number;
+    season: Season;
+    submittedAt: string | null;
+  };
+}
+
+export interface ResolutionQueueItem {
+  id: string;
+  type: 'action' | 'event';
+  action: TurnActionRecord | null;
+  event: TurnEventRecord | null;
+  realmId: string | null;
+  realmName: string | null;
+  assignedNoble: {
+    id: string;
+    name: string;
+    reasonSkill: number;
+    cunningSkill: number;
+  } | null;
+  audienceRealmIds: string[];
 }
 
 export interface TurnActionCreateDto {
@@ -451,6 +498,13 @@ export interface TurnActionUpdateDto {
   resolutionSummary?: string | null;
   resolutionRolls?: TurnActionResolutionRoll[];
   status?: TurnActionStatus;
+  abilityUsed?: ResolutionAbility | null;
+  abilityModifier?: number | null;
+  nobleId?: string | null;
+  audienceRealmIds?: string[];
+  eventTitle?: string | null;
+  eventDescription?: string | null;
+  eventKind?: TurnEventKind;
   event?: {
     title: string;
     description: string;

@@ -226,6 +226,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
   const isEditable = realm?.report?.status !== 'submitted' && realm?.report?.status !== 'resolved';
   const actions = realm?.actions ?? [];
   const currentEvents = realm?.events ?? [];
+  const pendingFinancial = currentTurn?.pendingFinancial ?? [];
   const taxProjectionContext = currentTurn?.game && economyProjection
     ? {
       currentTaxType: economyProjection.realm.taxType as TaxType,
@@ -240,7 +241,7 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
   ]
     .filter((action) =>
       action.kind === 'financial'
-      && (action.status === 'submitted' || action.status === 'executed'),
+      && (action.status === 'submitted' || action.status === 'pending' || action.status === 'resolved'),
     )
     .sort((left, right) => {
       if (left.year !== right.year) return right.year - left.year;
@@ -330,6 +331,40 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
           )}
         </CardContent>
       </Card>
+
+      {pendingFinancial.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending Financial Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendingFinancial.map((pending) => (
+              <div key={`${pending.entityType}-${pending.entityId}`} className="rounded border border-ink-100 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="gold">
+                        Y{pending.originatingTurn.year} {pending.originatingTurn.season}
+                      </Badge>
+                      <Badge>{pending.entityType}</Badge>
+                      <Badge>{pending.turnsRemaining} turn{pending.turnsRemaining === 1 ? '' : 's'} remaining</Badge>
+                    </div>
+                    <p className="text-sm font-medium text-ink-600">
+                      {formatFinancialActionSummary(pending.action, settlementOptions)}
+                    </p>
+                    <p className="text-sm text-ink-400">
+                      {pending.entityLabel}{pending.targetLabel ? ` at ${pending.targetLabel}` : ''}
+                    </p>
+                  </div>
+                  {pending.action.cost > 0 ? (
+                    <Badge>Cost {pending.action.cost.toLocaleString()}gc</Badge>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {lastTurn ? (
         <Card>

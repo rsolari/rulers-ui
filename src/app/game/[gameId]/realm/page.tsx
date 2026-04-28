@@ -37,6 +37,24 @@ const TRADITION_OPTIONS = Object.entries(TRADITION_DEFS).map(([key, def]) => ({
   label: `${def.displayName} (${def.category})`,
 }));
 
+function TraditionTooltipBadge({ tradition }: { tradition: Tradition }) {
+  const def = TRADITION_DEFS[tradition];
+
+  return (
+    <button type="button" className="group relative inline-flex cursor-help">
+      <Badge variant="gold" title={def.effect}>
+        {def.displayName}
+      </Badge>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-gold-500/40 bg-ink-700 px-3 py-2 text-center text-xs normal-case leading-snug tracking-normal text-parchment-50 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100"
+      >
+        {def.effect}
+      </span>
+    </button>
+  );
+}
+
 interface Game {
   id: string;
   name: string;
@@ -538,6 +556,21 @@ export default function RealmDashboard() {
                 variant="gold"
               />
             </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span>Realm Traditions</span>
+                <strong>{form.traditions.length}</strong>
+              </div>
+              {form.traditions.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {form.traditions.map((tradition) => (
+                    <TraditionTooltipBadge key={tradition} tradition={tradition} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-ink-300">No traditions selected.</p>
+              )}
+            </div>
             <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
               <span>Nobles</span>
               <strong>{nobles.length}</strong>
@@ -684,13 +717,7 @@ export default function RealmDashboard() {
               {form.traditions.length > 0 ? (
                 <span className="inline-flex flex-wrap gap-1 align-middle">
                   {form.traditions.map((tradition) => (
-                    <Badge
-                      key={tradition}
-                      variant="gold"
-                      title={TRADITION_DEFS[tradition].effect}
-                    >
-                      {TRADITION_DEFS[tradition].displayName}
-                    </Badge>
+                    <TraditionTooltipBadge key={tradition} tradition={tradition} />
                   ))}
                 </span>
               ) : (

@@ -1,10 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB, type DatabaseExecutor } from '@/db';
-import { actionComments, buildings, games, realms, settlements, troops, territories, turnActions, turnEvents, turnReports } from '@/db/schema';
+import { actionComments, buildings, games, realms, settlements, ships, troops, territories, turnActions, turnEventAudiences, turnEvents, turnReports } from '@/db/schema';
 import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { parseJson } from '@/lib/json';
-import { createBuilding, createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
+import { createBuilding, createShipConstruction, createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
 import { createTurnEventService, getPendingFinancialActionsForRealm } from '@/lib/turn-event-service';
 import type {
   ActionCommentCreateDto,
@@ -562,7 +562,7 @@ function assertCurrentPoliticalAction(action: TurnActionRow, game: typeof games.
     throw new TurnActionError('Only political actions can be executed by the GM.', 409, 'invalid_action_kind');
   }
 
-  if (action.year !== game.currentYear || action.season !== game.currentSeason) {
+  if (action.status !== 'pending' && (action.year !== game.currentYear || action.season !== game.currentSeason)) {
     throw new TurnActionError('Only current-turn political actions can be executed.', 409, 'stale_turn_action');
   }
 
@@ -694,7 +694,10 @@ function resolveAutomatedFinancialAction(
   actor: TurnActor,
 ) {
   const financialType = getFinancialActionType(action.financialType);
-  if (action.kind !== 'financial' || (financialType !== 'build' && financialType !== 'recruit')) {
+  if (
+    action.kind !== 'financial'
+    || (financialType !== 'build' && financialType !== 'recruit' && financialType !== 'constructShip')
+  ) {
     return false;
   }
 
@@ -767,38 +770,97 @@ function resolveAutomatedFinancialAction(
       return true;
     }
 
-    const created = createTroopRecruitment(gameId, {
-      realmId: action.realmId,
-      type: action.troopType as string,
-      recruitmentSettlementId: action.settlementId,
-      garrisonSettlementId: action.settlementId,
-    }, {
-      database,
-    });
+    if (financialType === 'recruit') {
+      const created = createTroopRecruitment(gameId, {
+        realmId: action.realmId,
+        type: action.troopType as string,
+        recruitmentSettlementId: action.settlementId,
+        garrisonSettlementId: action.settlementId,
+      }, {
+        database,
+      });
 
-    const recruitmentTurnsRemaining = created.row.recruitmentTurnsRemaining ?? 0;
+      const recruitmentTurnsRemaining = created.row.recruitmentTurnsRemaining ?? 0;
 
-    database.update(turnActions)
-      .set({
-        status: recruitmentTurnsRemaining > 0 ? 'pending' : 'resolved',
-        outcome: 'success',
-        cost: created.cost.total,
-        resolutionSummary: action.resolutionSummary ?? 'Recruitment began automatically on submission.',
-        submittedAt: action.submittedAt ?? now,
-        submittedBy: action.submittedBy ?? actor.label,
-        executedAt: recruitmentTurnsRemaining > 0 ? null : now,
-        executedBy: recruitmentTurnsRemaining > 0 ? null : actor.label,
-        updatedAt: now,
-      })
-      .where(eq(turnActions.id, action.id))
-      .run();
+      database.update(turnActions)
+        .set({
+          status: recruitmentTurnsRemaining > 0 ? 'pending' : 'resolved',
+          outcome: 'success',
+          cost: created.cost.total,
+          resolutionSummary: action.resolutionSummary ?? 'Recruitment began automatically on submission.',
+          submittedAt: action.submittedAt ?? now,
+          submittedBy: action.submittedBy ?? actor.label,
+          executedAt: recruitmentTurnsRemaining > 0 ? null : now,
+          executedBy: recruitmentTurnsRemaining > 0 ? null : actor.label,
+          updatedAt: now,
+        })
+        .where(eq(turnActions.id, action.id))
+        .run();
 
-    database.update(troops)
-      .set({ originatingActionId: action.id })
-      .where(eq(troops.id, created.row.id))
-      .run();
+      database.update(troops)
+        .set({ originatingActionId: action.id })
+        .where(eq(troops.id, created.row.id))
+        .run();
 
-    return true;
+      return true;
+    }
+
+    if (financialType === 'constructShip') {
+      const created = createShipConstruction(gameId, {
+        realmId: action.realmId,
+        type: action.shipType as string,
+        settlementId: action.settlementId,
+        fleetId: action.fleetId,
+        technicalKnowledgeKey: action.technicalKnowledgeKey,
+      }, {
+        database,
+      });
+
+      const constructionTurnsRemaining = created.row.constructionTurnsRemaining ?? 0;
+
+      database.update(turnActions)
+        .set({
+          status: constructionTurnsRemaining > 0 ? 'pending' : 'resolved',
+          outcome: 'success',
+          cost: created.cost.total,
+          resolutionSummary: action.resolutionSummary ?? (constructionTurnsRemaining > 0
+            ? 'Ship construction began automatically on submission.'
+            : 'Ship construction completed automatically on submission.'),
+          submittedAt: action.submittedAt ?? now,
+          submittedBy: action.submittedBy ?? actor.label,
+          executedAt: constructionTurnsRemaining > 0 ? null : now,
+          executedBy: constructionTurnsRemaining > 0 ? null : actor.label,
+          updatedAt: now,
+        })
+        .where(eq(turnActions.id, action.id))
+        .run();
+
+      database.update(ships)
+        .set({ originatingActionId: action.id })
+        .where(eq(ships.id, created.row.id))
+        .run();
+
+      if (constructionTurnsRemaining <= 0) {
+        createTurnEventService().createEventInTransaction(database, {
+          gameId,
+          year: action.year,
+          season: action.season as Season,
+          kind: 'ship_complete',
+          actionId: action.id,
+          causedByRealmId: action.realmId,
+          audienceRealmIds: [action.realmId],
+          outcome: 'success',
+          title: `${created.row.type} construction complete`,
+          description: `${created.row.type} construction is complete.`,
+          autoGenerated: true,
+          resolvedBy: actor.label,
+        });
+      }
+
+      return true;
+    }
+
+    return false;
   } catch (error) {
     throw toTurnActionError(error) ?? error;
   }
@@ -862,14 +924,24 @@ function getActionOrThrow(database: DatabaseExecutor, gameId: string, actionId: 
 
 type TurnEventRow = typeof turnEvents.$inferSelect;
 
-function serializeEvent(row: TurnEventRow): TurnEventRecord {
+function mapEventAudiences(audienceRows: Array<typeof turnEventAudiences.$inferSelect>) {
+  const byEvent = new Map<string, string[]>();
+  for (const row of audienceRows) {
+    const existing = byEvent.get(row.eventId) ?? [];
+    existing.push(row.realmId);
+    byEvent.set(row.eventId, existing);
+  }
+  return byEvent;
+}
+
+function serializeEvent(row: TurnEventRow, audienceRealmIds: string[] = row.realmId ? [row.realmId] : []): TurnEventRecord {
   return {
     id: row.id,
     gameId: row.gameId,
     year: row.year,
     season: row.season as Season,
     realmId: row.realmId,
-    audienceRealmIds: row.realmId ? [row.realmId] : [],
+    audienceRealmIds,
     actionId: row.actionId ?? null,
     causedByRealmId: row.causedByRealmId ?? null,
     kind: row.kind,
@@ -894,6 +966,7 @@ function loadBundlesForReports(
   actionRows: TurnActionRow[],
   commentRows: ActionCommentRow[],
   eventRows: TurnEventRow[] = [],
+  audienceRows: Array<typeof turnEventAudiences.$inferSelect> = [],
 ): TurnReportBundle[] {
   const reportByRealm = new Map<string, TurnReportRow>();
   for (const report of reportRows) {
@@ -912,12 +985,15 @@ function loadBundlesForReports(
     actions.sort((left, right) => left.sortOrder - right.sortOrder || left.createdAt!.localeCompare(right.createdAt!));
   }
 
+  const audiencesByEvent = mapEventAudiences(audienceRows);
   const eventsByRealm = new Map<string, TurnEventRecord[]>();
   for (const event of eventRows) {
-    if (event.realmId) {
-      const existing = eventsByRealm.get(event.realmId) ?? [];
-      existing.push(serializeEvent(event));
-      eventsByRealm.set(event.realmId, existing);
+    const audienceRealmIds = audiencesByEvent.get(event.id) ?? (event.realmId ? [event.realmId] : []);
+    const serialized = serializeEvent(event, audienceRealmIds);
+    for (const audienceRealmId of audienceRealmIds) {
+      const existing = eventsByRealm.get(audienceRealmId) ?? [];
+      existing.push(serialized);
+      eventsByRealm.set(audienceRealmId, existing);
     }
   }
 
@@ -975,12 +1051,13 @@ function loadTurnBundles(
     eq(turnEvents.year, year),
     eq(turnEvents.season, season),
   ];
-  if (realmId) {
-    eventConditions.push(eq(turnEvents.realmId, realmId));
-  }
   const eventRows = database.select().from(turnEvents).where(and(...eventConditions)).all();
+  const eventIds = eventRows.map((event) => event.id);
+  const audienceRows = eventIds.length > 0
+    ? database.select().from(turnEventAudiences).where(inArray(turnEventAudiences.eventId, eventIds)).all()
+    : [];
 
-  return loadBundlesForReports(realmRows, reportRows, actionRows, commentRows, eventRows);
+  return loadBundlesForReports(realmRows, reportRows, actionRows, commentRows, eventRows, audienceRows);
 }
 
 export function createTurnActionService(database: DB = defaultDb) {
@@ -1143,8 +1220,8 @@ export function createTurnActionService(database: DB = defaultDb) {
         if (nextStatus === 'resolved' && action.status !== 'resolved') {
           createTurnEventService().createEventInTransaction(tx, {
             gameId,
-            year: action.year,
-            season: action.season as Season,
+            year: game.currentYear,
+            season: game.currentSeason as Season,
             kind: input.eventKind ?? 'action_resolution',
             actionId: action.id,
             causedByRealmId: action.realmId,
@@ -1300,12 +1377,12 @@ export function createTurnActionService(database: DB = defaultDb) {
       ? database.select().from(actionComments).where(inArray(actionComments.actionId, actionIds)).all()
       : [];
 
-    const eventConditions = [eq(turnEvents.gameId, gameId)];
-    if (realmId) {
-      eventConditions.push(eq(turnEvents.realmId, realmId));
-    }
-    const allEventRows = database.select().from(turnEvents).where(and(...eventConditions)).all()
+    const allEventRows = database.select().from(turnEvents).where(eq(turnEvents.gameId, gameId)).all()
       .filter((event) => event.year !== game.currentYear || event.season !== game.currentSeason);
+    const eventIds = allEventRows.map((event) => event.id);
+    const audiencesByEvent = eventIds.length > 0
+      ? mapEventAudiences(database.select().from(turnEventAudiences).where(inArray(turnEventAudiences.eventId, eventIds)).all())
+      : new Map<string, string[]>();
 
     const realmById = new Map(realmRows.map((realm) => [realm.id, realm]));
     const commentsByAction = mapCommentsByAction(commentRows);
@@ -1318,10 +1395,14 @@ export function createTurnActionService(database: DB = defaultDb) {
 
     const eventsByRealmTurn = new Map<string, TurnEventRecord[]>();
     for (const event of allEventRows) {
-      const key = `${event.realmId ?? ''}:${event.year}:${event.season}`;
-      const existing = eventsByRealmTurn.get(key) ?? [];
-      existing.push(serializeEvent(event));
-      eventsByRealmTurn.set(key, existing);
+      const audienceRealmIds = audiencesByEvent.get(event.id) ?? (event.realmId ? [event.realmId] : []);
+      const serialized = serializeEvent(event, audienceRealmIds);
+      for (const audienceRealmId of audienceRealmIds) {
+        const key = `${audienceRealmId}:${event.year}:${event.season}`;
+        const existing = eventsByRealmTurn.get(key) ?? [];
+        existing.push(serialized);
+        eventsByRealmTurn.set(key, existing);
+      }
     }
 
     const history = reportRows

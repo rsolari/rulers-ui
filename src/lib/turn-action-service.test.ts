@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { initializeDatabaseSchema } from '@/db/bootstrap';
 import * as schema from '@/db/schema';
+import { createEconomyService } from '@/lib/economy-service';
 import { createTurnActionService, TurnActionError } from '@/lib/turn-action-service';
 
 function createTestDatabase() {
@@ -406,6 +407,193 @@ describe('turn action service', () => {
       status: 'resolved',
     });
     expect(event!.mechanicalEffect).toBeNull();
+
+    sqlite.close();
+  });
+
+  it('does not replay pending financial work during turn advancement', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRealm(db);
+    const service = createTurnActionService(db);
+    const economy = createEconomyService(db);
+
+    service.createAction('game-1', 'realm-1', {
+      kind: 'financial',
+      financialType: 'build',
+      buildingType: 'Theatre',
+      settlementId: 'settlement-1',
+      description: 'Raise a public theatre.',
+      cost: 0,
+    });
+
+    const submitted = service.submitTurn('game-1', 'realm-1', {
+      role: 'player',
+      label: 'Aster Player',
+    });
+
+    expect(submitted.actions[0]).toMatchObject({
+      financialType: 'build',
+      status: 'pending',
+    });
+
+    economy.advanceGameTurn('game-1', {
+      expectedYear: 2,
+      expectedSeason: 'Spring',
+    });
+
+    const theatres = db.select().from(schema.buildings)
+      .where(eq(schema.buildings.type, 'Theatre'))
+      .all();
+    expect(theatres).toHaveLength(1);
+    expect(theatres[0]).toMatchObject({
+      originatingActionId: submitted.actions[0].id,
+      constructionTurnsRemaining: 2,
+    });
+
+    sqlite.close();
+  });
+
+  it('starts ship construction as a pending action on submit', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRealm(db);
+    const service = createTurnActionService(db);
+
+    db.update(schema.territories)
+      .set({ hasSeaAccess: true })
+      .where(eq(schema.territories.id, 'territory-1'))
+      .run();
+    db.insert(schema.buildings).values({
+      id: 'port-1',
+      settlementId: 'settlement-1',
+      territoryId: 'territory-1',
+      type: 'Port',
+      category: 'Civic',
+      size: 'Medium',
+      constructionTurnsRemaining: 0,
+    }).run();
+
+    service.createAction('game-1', 'realm-1', {
+      kind: 'financial',
+      financialType: 'constructShip',
+      shipType: 'Galley',
+      settlementId: 'settlement-1',
+      description: 'Lay down a galley.',
+      cost: 0,
+    });
+
+    const submitted = service.submitTurn('game-1', 'realm-1', {
+      role: 'player',
+      label: 'Aster Player',
+    });
+
+    expect(submitted.actions[0]).toMatchObject({
+      financialType: 'constructShip',
+      status: 'pending',
+      outcome: 'success',
+      cost: 250,
+    });
+
+    const ship = db.select().from(schema.ships).where(eq(schema.ships.realmId, 'realm-1')).get();
+    expect(ship).toMatchObject({
+      type: 'Galley',
+      constructionSettlementId: 'settlement-1',
+      constructionTurnsRemaining: 1,
+      originatingActionId: submitted.actions[0].id,
+    });
+
+    sqlite.close();
+  });
+
+  it('shows action resolution events to every audience realm', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRealm(db);
+    const service = createTurnActionService(db);
+
+    const action = service.createAction('game-1', 'realm-1', {
+      kind: 'political',
+      actionWords: ['Negotiate'],
+      targetRealmId: 'realm-2',
+      description: 'Negotiate a trade pact with Bastion.',
+    });
+
+    service.submitTurn('game-1', 'realm-1', {
+      role: 'player',
+      label: 'Aster Player',
+    });
+
+    service.updateAction('game-1', action.id, 'realm-1', {
+      role: 'gm',
+      label: 'GM',
+    }, {
+      status: 'resolved',
+      outcome: 'success',
+      resolutionSummary: 'A trade pact was signed.',
+    });
+
+    const storedEvent = db.select().from(schema.turnEvents)
+      .where(eq(schema.turnEvents.actionId, action.id))
+      .get();
+    expect(storedEvent?.realmId).toBeNull();
+
+    const realmOneTurn = service.getCurrentTurn('game-1', 'realm-1');
+    const realmTwoTurn = service.getCurrentTurn('game-1', 'realm-2');
+
+    expect(realmOneTurn.realm?.events).toHaveLength(1);
+    expect(realmTwoTurn.realm?.events).toHaveLength(1);
+    expect(realmTwoTurn.realm?.events[0].audienceRealmIds).toEqual(['realm-1', 'realm-2']);
+
+    sqlite.close();
+  });
+
+  it('lets the GM resolve pending political actions in a later turn', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRealm(db);
+    const service = createTurnActionService(db);
+    const economy = createEconomyService(db);
+
+    const action = service.createAction('game-1', 'realm-1', {
+      kind: 'political',
+      actionWords: ['Search'],
+      description: 'Search the borderlands for raiders.',
+    });
+
+    service.submitTurn('game-1', 'realm-1', {
+      role: 'player',
+      label: 'Aster Player',
+    });
+
+    service.updateAction('game-1', action.id, 'realm-1', {
+      role: 'gm',
+      label: 'GM',
+    }, {
+      status: 'pending',
+      outcome: 'pending',
+    });
+
+    economy.advanceGameTurn('game-1', {
+      expectedYear: 2,
+      expectedSeason: 'Spring',
+    });
+
+    const resolved = service.updateAction('game-1', action.id, 'realm-1', {
+      role: 'gm',
+      label: 'GM',
+    }, {
+      status: 'resolved',
+      outcome: 'success',
+      resolutionSummary: 'The raiders were found.',
+    });
+
+    expect(resolved.status).toBe('resolved');
+
+    const event = db.select().from(schema.turnEvents)
+      .where(eq(schema.turnEvents.actionId, action.id))
+      .get();
+    expect(event).toMatchObject({
+      year: 2,
+      season: 'Summer',
+      kind: 'action_resolution',
+    });
 
     sqlite.close();
   });

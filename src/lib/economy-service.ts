@@ -22,6 +22,7 @@ import {
   tradeRoutes,
   troops,
   turnActions,
+  turnEventAudiences,
   turnEvents,
   turnReports,
   turnResolutions,
@@ -85,6 +86,16 @@ function deriveReportStatus(actions: Array<typeof turnActions.$inferSelect>) {
   if (actions.every((action) => action.status === 'resolved')) return 'resolved';
   if (actions.some((action) => action.status === 'submitted' || action.status === 'pending' || action.status === 'resolved')) return 'submitted';
   return 'draft';
+}
+
+function mapEventAudiences(audienceRows: Array<typeof turnEventAudiences.$inferSelect>) {
+  const byEvent = new Map<string, string[]>();
+  for (const row of audienceRows) {
+    const existing = byEvent.get(row.eventId) ?? [];
+    existing.push(row.realmId);
+    byEvent.set(row.eventId, existing);
+  }
+  return byEvent;
 }
 
 const SETTLEMENT_GROWTH_ORDER: SettlementSize[] = ['Village', 'Town', 'City'];
@@ -409,6 +420,10 @@ function loadGameEconomyState(
     eq(turnEvents.year, game.currentYear),
     eq(turnEvents.season, currentSeason),
   )).all();
+  const eventIds = eventRows.map((event) => event.id);
+  const audiencesByEvent = eventIds.length > 0
+    ? mapEventAudiences(database.select().from(turnEventAudiences).where(inArray(turnEventAudiences.eventId, eventIds)).all())
+    : new Map<string, string[]>();
 
   const buildingsBySettlement = new Map<string, Array<typeof buildings.$inferSelect>>();
   const standaloneBuildingsByRealm = new Map<string, Array<typeof buildings.$inferSelect>>();
@@ -505,8 +520,12 @@ function loadGameEconomyState(
     if (action.kind !== 'financial') continue;
     if (!financialActionStatuses.includes(action.status)) continue;
     if (
-      action.status === 'resolved'
-      && (action.financialType === 'build' || action.financialType === 'recruit')
+      (action.status === 'pending' || action.status === 'resolved')
+      && (
+        action.financialType === 'build'
+        || action.financialType === 'recruit'
+        || action.financialType === 'constructShip'
+      )
     ) {
       continue;
     }
@@ -521,7 +540,12 @@ function loadGameEconomyState(
   const gosSourcesByRealm = new Map<string, TurmoilSource[]>();
   const invalidModifierEvents: InvalidModifierEvent[] = [];
   const globalModifiers = eventRows
-    .filter((event) => !event.realmId && event.kind === 'gm_event' && event.status !== 'dismissed')
+    .filter((event) =>
+      !event.realmId
+      && (audiencesByEvent.get(event.id)?.length ?? 0) === 0
+      && event.kind === 'gm_event'
+      && event.status !== 'dismissed'
+    )
     .flatMap((event) => {
       const rawEffect = event.mechanicalEffect?.trim();
       const modifiers = parseStoredEconomicModifiers(rawEffect, {
@@ -589,7 +613,14 @@ function loadGameEconomyState(
     nobleSourcesByRealm.set(realm.id, grievanceSources);
     gosSourcesByRealm.set(realm.id, gosUnrestSources);
     const realmModifiers = eventRows
-      .filter((event) => event.realmId === realm.id && event.kind === 'gm_event' && event.status !== 'dismissed')
+      .filter((event) => (
+        event.kind === 'gm_event'
+        && event.status !== 'dismissed'
+        && (
+          event.realmId === realm.id
+          || (audiencesByEvent.get(event.id) ?? []).includes(realm.id)
+        )
+      ))
       .flatMap((event) => {
         const rawEffect = event.mechanicalEffect?.trim();
         const modifiers = parseStoredEconomicModifiers(rawEffect, {

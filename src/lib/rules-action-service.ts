@@ -2070,7 +2070,7 @@ export function prepareRealmTroopRecruitment(
   }, options.idGenerator);
 }
 
-export async function createShipConstruction(
+export function createShipConstruction(
   gameId: string,
   input: CreateShipInput,
   options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},

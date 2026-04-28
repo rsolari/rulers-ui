@@ -176,6 +176,14 @@ function formatSetupStateLabel(setupState: string) {
     .join(' ');
 }
 
+interface GMDashboardGOS {
+  id: string;
+  name: string;
+  type: string;
+  treasury: number;
+  realmIds: string[];
+}
+
 function getSetupStateBadgeVariant(setupState: string): 'default' | 'gold' | 'green' {
   if (setupState === 'ready') {
     return 'green';
@@ -226,10 +234,11 @@ export default function GMDashboard() {
   const [savingTurmoil, setSavingTurmoil] = useState(false);
   const [capitalPlacement, setCapitalPlacement] = useState<{ realmId: string; territoryId: string; name: string; size: string; hexId: string | null } | null>(null);
   const [savingCapital, setSavingCapital] = useState(false);
-  const [addingBuilding, setAddingBuilding] = useState<{ settlementId: string; type: string } | null>(null);
+  const [addingBuilding, setAddingBuilding] = useState<{ settlementId: string; type: string; chargeGosId: string } | null>(null);
   const [savingBuilding, setSavingBuilding] = useState(false);
-  const [addingTroop, setAddingTroop] = useState<{ realmId: string; settlementId: string; type: string } | null>(null);
+  const [addingTroop, setAddingTroop] = useState<{ realmId: string; settlementId: string; type: string; chargeGosId: string } | null>(null);
   const [savingTroop, setSavingTroop] = useState(false);
+  const [gmGosList, setGmGosList] = useState<GMDashboardGOS[]>([]);
   const realmFormRef = useRef<HTMLDivElement>(null);
 
   const loadDashboard = useCallback(async () => {
@@ -237,7 +246,7 @@ export default function GMDashboard() {
       setLoadingDashboard(true);
       setError('');
 
-      const [gameResponse, realmsResponse, territoriesResponse, slotsResponse, overviewResponse, settlementsResponse, mapResponse] = await Promise.all([
+      const [gameResponse, realmsResponse, territoriesResponse, slotsResponse, overviewResponse, settlementsResponse, mapResponse, gosResponse] = await Promise.all([
         fetch(`/api/game/${gameId}`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/territories`, { cache: 'no-store' }),
@@ -245,6 +254,7 @@ export default function GMDashboard() {
         fetch(`/api/game/${gameId}/economy/overview`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/settlements`, { cache: 'no-store' }),
         fetch(`/api/game/${gameId}/map`, { cache: 'no-store' }),
+        fetch(`/api/game/${gameId}/gos?all=true`, { cache: 'no-store' }),
       ]);
 
       if (!gameResponse.ok) {
@@ -269,6 +279,11 @@ export default function GMDashboard() {
       }
       if (mapResponse.ok) {
         setGameMapData(await mapResponse.json());
+      }
+      if (gosResponse.ok) {
+        setGmGosList(await gosResponse.json());
+      } else {
+        setGmGosList([]);
       }
       if (overviewResponse.ok) {
         const overviewData = await overviewResponse.json();
@@ -607,14 +622,20 @@ export default function GMDashboard() {
     }
   }
 
-  async function addBuildingGM(settlementId: string, type: string) {
+  async function addBuildingGM(settlementId: string, type: string, chargeGosId: string | null) {
     setSavingBuilding(true);
     setError('');
     try {
       const response = await fetch(`/api/game/${gameId}/buildings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settlementId, type, instant: true, gmOverride: true }),
+        body: JSON.stringify({
+          settlementId,
+          type,
+          instant: true,
+          gmOverride: true,
+          ...(chargeGosId ? { chargeGosId } : {}),
+        }),
       });
       if (!response.ok) {
         setError(await readErrorMessage(response, 'Failed to add building'));
@@ -627,7 +648,7 @@ export default function GMDashboard() {
     }
   }
 
-  async function addTroopGM(realmId: string, settlementId: string, type: string) {
+  async function addTroopGM(realmId: string, settlementId: string, type: string, chargeGosId: string | null) {
     setSavingTroop(true);
     setError('');
     try {
@@ -641,6 +662,7 @@ export default function GMDashboard() {
           garrisonSettlementId: settlementId,
           instant: true,
           gmOverride: true,
+          ...(chargeGosId ? { chargeGosId } : {}),
         }),
       });
       if (!response.ok) {
@@ -1528,7 +1550,7 @@ export default function GMDashboard() {
 
                                 {/* GM Override: Add Building */}
                                 {addingBuilding?.settlementId === settlement.id ? (
-                                  <div className="ml-4 mt-1 flex items-end gap-2">
+                                  <div className="ml-4 mt-1 flex items-end gap-2 flex-wrap">
                                     <Select
                                       label="Building Type"
                                       placeholder="Select..."
@@ -1536,11 +1558,30 @@ export default function GMDashboard() {
                                       value={addingBuilding.type}
                                       onChange={(e) => setAddingBuilding((prev) => prev ? { ...prev, type: e.target.value } : prev)}
                                     />
+                                    {territory.realmId && (() => {
+                                      const eligibleGos = gmGosList.filter((gos) => gos.realmIds.includes(territory.realmId!));
+                                      if (eligibleGos.length === 0) return null;
+                                      return (
+                                        <Select
+                                          label="Pay from"
+                                          placeholder="Realm treasury"
+                                          options={[
+                                            { value: '', label: 'Realm treasury' },
+                                            ...eligibleGos.map((gos) => ({
+                                              value: gos.id,
+                                              label: `${gos.name} (${gos.treasury.toLocaleString()}gc)`,
+                                            })),
+                                          ]}
+                                          value={addingBuilding.chargeGosId}
+                                          onChange={(e) => setAddingBuilding((prev) => prev ? { ...prev, chargeGosId: e.target.value } : prev)}
+                                        />
+                                      );
+                                    })()}
                                     <Button
                                       variant="accent"
                                       size="sm"
                                       disabled={savingBuilding || !addingBuilding.type}
-                                      onClick={() => void addBuildingGM(settlement.id, addingBuilding.type)}
+                                      onClick={() => void addBuildingGM(settlement.id, addingBuilding.type, addingBuilding.chargeGosId || null)}
                                     >
                                       {savingBuilding ? 'Adding...' : 'Add'}
                                     </Button>
@@ -1548,12 +1589,12 @@ export default function GMDashboard() {
                                   </div>
                                 ) : (
                                   <div className="ml-4 mt-1 flex gap-2">
-                                    <Button variant="ghost" size="sm" onClick={() => setAddingBuilding({ settlementId: settlement.id, type: '' })}>
+                                    <Button variant="ghost" size="sm" onClick={() => setAddingBuilding({ settlementId: settlement.id, type: '', chargeGosId: '' })}>
                                       + Add Building
                                     </Button>
                                     {territory.realmId && (
                                       addingTroop?.settlementId === settlement.id ? (
-                                        <div className="flex items-end gap-2">
+                                        <div className="flex items-end gap-2 flex-wrap">
                                           <Select
                                             label="Troop Type"
                                             placeholder="Select..."
@@ -1561,18 +1602,37 @@ export default function GMDashboard() {
                                             value={addingTroop.type}
                                             onChange={(e) => setAddingTroop((prev) => prev ? { ...prev, type: e.target.value } : prev)}
                                           />
+                                          {(() => {
+                                            const eligibleGos = gmGosList.filter((gos) => gos.realmIds.includes(addingTroop.realmId));
+                                            if (eligibleGos.length === 0) return null;
+                                            return (
+                                              <Select
+                                                label="Pay from"
+                                                placeholder="Realm treasury"
+                                                options={[
+                                                  { value: '', label: 'Realm treasury' },
+                                                  ...eligibleGos.map((gos) => ({
+                                                    value: gos.id,
+                                                    label: `${gos.name} (${gos.treasury.toLocaleString()}gc)`,
+                                                  })),
+                                                ]}
+                                                value={addingTroop.chargeGosId}
+                                                onChange={(e) => setAddingTroop((prev) => prev ? { ...prev, chargeGosId: e.target.value } : prev)}
+                                              />
+                                            );
+                                          })()}
                                           <Button
                                             variant="accent"
                                             size="sm"
                                             disabled={savingTroop || !addingTroop.type}
-                                            onClick={() => void addTroopGM(addingTroop.realmId, settlement.id, addingTroop.type)}
+                                            onClick={() => void addTroopGM(addingTroop.realmId, settlement.id, addingTroop.type, addingTroop.chargeGosId || null)}
                                           >
                                             {savingTroop ? 'Recruiting...' : 'Recruit'}
                                           </Button>
                                           <Button variant="outline" size="sm" onClick={() => setAddingTroop(null)}>Cancel</Button>
                                         </div>
                                       ) : (
-                                        <Button variant="ghost" size="sm" onClick={() => setAddingTroop({ realmId: territory.realmId!, settlementId: settlement.id, type: '' })}>
+                                        <Button variant="ghost" size="sm" onClick={() => setAddingTroop({ realmId: territory.realmId!, settlementId: settlement.id, type: '', chargeGosId: '' })}>
                                           + Recruit Troop
                                         </Button>
                                       )

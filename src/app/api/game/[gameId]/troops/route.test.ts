@@ -68,7 +68,8 @@ describe('POST /api/game/[gameId]/troops', () => {
       realmId: 'realm-player',
       type: 'Spearmen',
       recruitmentSettlementId: 'settlement-1',
-    });
+      gmOverride: undefined,
+    }, { chargeGosId: null });
     expect(recomputeGameInitStateMock).toHaveBeenCalledWith('game-1');
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({

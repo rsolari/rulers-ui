@@ -1409,7 +1409,12 @@ function loadTradeProductsForRealm(database: DatabaseExecutor, realmId: string) 
 export function createBuilding(
   gameId: string,
   input: CreateBuildingInput,
-  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator; chargeTreasury?: boolean } = {},
+  options: {
+    database?: DatabaseExecutor;
+    idGenerator?: IdGenerator;
+    chargeTreasury?: boolean;
+    chargeGosId?: string | null;
+  } = {},
 ) {
   const database = resolveDatabase(options.database);
   return database.transaction((tx) => {
@@ -1468,11 +1473,12 @@ export function createBuilding(
         .all()
       : [];
 
-    const prepared = prepareBuildingCreation({
-      ...input,
-      type: buildingType,
-      territoryId: derivedTerritoryId,
-    }, {
+    // When charging a GOS treasury, the resulting building is owned by that GOS.
+    const inputForPrep: CreateBuildingInput = options.chargeGosId
+      ? { ...input, type: buildingType, territoryId: derivedTerritoryId, ownerGosId: options.chargeGosId }
+      : { ...input, type: buildingType, territoryId: derivedTerritoryId };
+
+    const prepared = prepareBuildingCreation(inputForPrep, {
       gameId,
       settlement,
       territory,
@@ -1480,7 +1486,40 @@ export function createBuilding(
       ...ruleAccess,
     }, options.idGenerator);
 
-    if (options.chargeTreasury) {
+    if (options.chargeGosId && input.gmOverride) {
+      const actualCost = getBuildingCost(buildingType, false, prepared.effectiveSize);
+      prepared.cost = {
+        base: actualCost,
+        surcharge: 0,
+        total: actualCost,
+        usesTradeAccess: false,
+      };
+    }
+
+    if (options.chargeGosId) {
+      const gos = tx.select({ id: guildsOrdersSocieties.id, treasury: guildsOrdersSocieties.treasury })
+        .from(guildsOrdersSocieties)
+        .where(eq(guildsOrdersSocieties.id, options.chargeGosId))
+        .get();
+
+      if (!gos) {
+        throw new RuleValidationError('G.O.S. not found', 404, 'gos_not_found', { gosId: options.chargeGosId });
+      }
+
+      if (gos.treasury < prepared.cost.total) {
+        throw new RuleValidationError(
+          'G.O.S. treasury cannot afford this construction',
+          409,
+          'insufficient_gos_treasury',
+          { gosId: options.chargeGosId, treasury: gos.treasury, buildingCost: prepared.cost.total },
+        );
+      }
+
+      tx.update(guildsOrdersSocieties)
+        .set({ treasury: gos.treasury - prepared.cost.total })
+        .where(eq(guildsOrdersSocieties.id, options.chargeGosId))
+        .run();
+    } else if (options.chargeTreasury) {
       if (!realmId) {
         throw new RuleValidationError(
           'Building placement must belong to a realm before treasury can be charged',
@@ -1766,7 +1805,11 @@ export async function createResourceSite(
 export function createTroopRecruitment(
   gameId: string,
   input: CreateTroopInput,
-  options: { database?: DatabaseExecutor; idGenerator?: IdGenerator } = {},
+  options: {
+    database?: DatabaseExecutor;
+    idGenerator?: IdGenerator;
+    chargeGosId?: string | null;
+  } = {},
 ) {
   const database = resolveDatabase(options.database);
   const realmId = input.realmId ?? null;
@@ -1941,8 +1984,69 @@ export function createTroopRecruitment(
       garrisonSettlementId,
     }, options.idGenerator);
 
+    if (options.chargeGosId && input.gmOverride) {
+      const actualCost = getRecruitmentUpkeep(prepared.row.type as TroopType, false);
+      prepared.cost = {
+        base: actualCost,
+        surcharge: 0,
+        total: actualCost,
+        usesTradeAccess: false,
+      };
+    }
+
     const troopCost = prepared.cost.total;
-    if (realm.treasury < troopCost) {
+
+    let chargingGos: { id: string; treasury: number } | null = null;
+    if (options.chargeGosId) {
+      const settlementWithOwner = tx.select({
+        id: settlements.id,
+        ownerGosId: settlements.ownerGosId,
+      })
+        .from(settlements)
+        .where(eq(settlements.id, recruitmentSettlement.id))
+        .get();
+
+      const settlementOwnedByGos = settlementWithOwner?.ownerGosId === options.chargeGosId;
+      const buildingPresence = !settlementOwnedByGos
+        ? tx.select({ id: buildings.id })
+          .from(buildings)
+          .where(and(
+            eq(buildings.settlementId, recruitmentSettlement.id),
+            or(
+              eq(buildings.ownerGosId, options.chargeGosId),
+              eq(buildings.allottedGosId, options.chargeGosId),
+            ),
+          ))
+          .get()
+        : null;
+
+      if (!settlementOwnedByGos && !buildingPresence) {
+        throw new RuleValidationError(
+          'G.O.S. has no presence (owned settlement or building) in the recruitment settlement',
+          409,
+          'gos_no_settlement_presence',
+          { gosId: options.chargeGosId, settlementId: recruitmentSettlement.id },
+        );
+      }
+
+      chargingGos = tx.select({ id: guildsOrdersSocieties.id, treasury: guildsOrdersSocieties.treasury })
+        .from(guildsOrdersSocieties)
+        .where(eq(guildsOrdersSocieties.id, options.chargeGosId))
+        .get() ?? null;
+
+      if (!chargingGos) {
+        throw new RuleValidationError('G.O.S. not found', 404, 'gos_not_found', { gosId: options.chargeGosId });
+      }
+
+      if (chargingGos.treasury < troopCost) {
+        throw new RuleValidationError(
+          'G.O.S. treasury cannot afford this recruitment',
+          409,
+          'insufficient_gos_treasury',
+          { gosId: options.chargeGosId, treasury: chargingGos.treasury, troopCost },
+        );
+      }
+    } else if (realm.treasury < troopCost) {
       throw new RuleValidationError(
         'Realm treasury cannot afford this recruitment',
         409,
@@ -1956,12 +2060,20 @@ export function createTroopRecruitment(
       recruitmentSettlementId: recruitmentSettlement.id,
       recruitmentYear: game.currentYear,
       recruitmentSeason: game.currentSeason,
+      gosId: chargingGos ? chargingGos.id : null,
     };
 
-    tx.update(realms)
-      .set({ treasury: realm.treasury - troopCost })
-      .where(eq(realms.id, realmId))
-      .run();
+    if (chargingGos) {
+      tx.update(guildsOrdersSocieties)
+        .set({ treasury: chargingGos.treasury - troopCost })
+        .where(eq(guildsOrdersSocieties.id, chargingGos.id))
+        .run();
+    } else {
+      tx.update(realms)
+        .set({ treasury: realm.treasury - troopCost })
+        .where(eq(realms.id, realmId))
+        .run();
+    }
 
     tx.insert(troops).values(row).run();
 

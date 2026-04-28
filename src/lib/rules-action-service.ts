@@ -1486,6 +1486,16 @@ export function createBuilding(
       ...ruleAccess,
     }, options.idGenerator);
 
+    if (options.chargeGosId && input.gmOverride) {
+      const actualCost = getBuildingCost(buildingType, false, prepared.effectiveSize);
+      prepared.cost = {
+        base: actualCost,
+        surcharge: 0,
+        total: actualCost,
+        usesTradeAccess: false,
+      };
+    }
+
     if (options.chargeGosId) {
       const gos = tx.select({ id: guildsOrdersSocieties.id, treasury: guildsOrdersSocieties.treasury })
         .from(guildsOrdersSocieties)
@@ -1973,6 +1983,16 @@ export function createTroopRecruitment(
       armyId,
       garrisonSettlementId,
     }, options.idGenerator);
+
+    if (options.chargeGosId && input.gmOverride) {
+      const actualCost = getRecruitmentUpkeep(prepared.row.type as TroopType, false);
+      prepared.cost = {
+        base: actualCost,
+        surcharge: 0,
+        total: actualCost,
+        usesTradeAccess: false,
+      };
+    }
 
     const troopCost = prepared.cost.total;
 

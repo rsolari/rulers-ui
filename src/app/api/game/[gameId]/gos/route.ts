@@ -222,7 +222,11 @@ export async function PATCH(
     }
 
     const nextType = body.type !== undefined ? body.type : gos.type;
-    const nextMonopolyRequested = body.monopolyProduct !== undefined ? body.monopolyProduct : gos.monopolyProduct;
+    const nextMonopolyRequested = body.monopolyProduct !== undefined
+      ? body.monopolyProduct
+      : nextType === 'Guild'
+        ? gos.monopolyProduct
+        : null;
 
     if (nextMonopolyRequested && nextType !== 'Guild') {
       return NextResponse.json(

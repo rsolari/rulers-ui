@@ -289,6 +289,12 @@ export default function SettlementsPage() {
       };
       setGosOptions((prev) => [...prev, newOption]);
       setSelectedAllottedGosId(created.id);
+      if (buildSettlementId) {
+        const optionsRes = await fetch(`/api/game/${gameId}/settlements/${buildSettlementId}/buildings`);
+        if (optionsRes.ok) {
+          setBuildingOptions(await optionsRes.json());
+        }
+      }
       setShowCreateGosForm(false);
       setNewGosName('');
     } finally {
@@ -441,7 +447,7 @@ export default function SettlementsPage() {
     return {
       value: option.type,
       label: `${option.type} [${option.category}]${statusLabel}`,
-      disabled: !option.canBuild,
+      disabled: !option.canBuild && option.reason !== 'allotted_gos_required',
     };
   });
 

@@ -31,7 +31,7 @@ vi.mock('@/db', () => ({
   },
 }));
 
-import { GET, POST } from './route';
+import { GET, PATCH, POST } from './route';
 
 function mockSelectInnerJoinWhereOnce(result: unknown) {
   const where = vi.fn().mockResolvedValue(result);
@@ -252,5 +252,54 @@ describe('POST /api/game/[gameId]/gos', () => {
       alcoveNames: [],
       centreNames: [],
     });
+  });
+});
+
+describe('PATCH /api/game/[gameId]/gos', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('clears an existing monopoly when changing a Guild to another type', async () => {
+    dbMocks.select.mockReset();
+    dbMocks.transaction.mockReset();
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+
+    const get = vi.fn(() => ({
+      id: 'gos-1',
+      realmId: 'realm-1',
+      name: 'Mercers Guild',
+      type: 'Guild',
+      monopolyProduct: 'Silk',
+    }));
+    const whereSelect = vi.fn(() => ({ get }));
+    const from = vi.fn(() => ({ where: whereSelect }));
+    dbMocks.select.mockReturnValueOnce({ from });
+
+    const updateRun = vi.fn();
+    const updateWhere = vi.fn(() => ({ run: updateRun }));
+    const updateSet = vi.fn(() => ({ where: updateWhere }));
+    const tx = {
+      update: vi.fn(() => ({ set: updateSet })),
+    };
+    dbMocks.transaction.mockImplementation((callback: (transaction: typeof tx) => unknown) => callback(tx));
+
+    const response = await PATCH(new Request('http://localhost/api/game/game-1/gos', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        gosId: 'gos-1',
+        type: 'Order',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(updateSet).toHaveBeenCalledWith({
+      type: 'Order',
+      monopolyProduct: null,
+    });
+    await expect(response.json()).resolves.toEqual({ updated: true });
   });
 });

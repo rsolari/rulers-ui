@@ -632,6 +632,41 @@ describe('createBuilding', () => {
     sqlite.close();
   });
 
+  it('charges actual building cost when a GM override uses a GOS treasury', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedBuildingConstructionContext(db, { treasury: 0, settlementSize: 'Town' });
+
+    db.insert(schema.guildsOrdersSocieties).values({
+      id: 'gos-1',
+      realmId: 'realm-1',
+      name: 'Order of Stoneworkers',
+      type: 'Order',
+      treasury: 5000,
+    }).run();
+    db.insert(schema.gosRealms).values({ gosId: 'gos-1', realmId: 'realm-1' }).run();
+
+    const created = createBuilding('game-1', {
+      settlementId: 'settlement-1',
+      type: 'Theatre',
+      gmOverride: true,
+      instant: true,
+    }, {
+      database: db,
+      idGenerator: () => 'building-gos-override',
+      chargeGosId: 'gos-1',
+    });
+
+    const gos = db.select().from(schema.guildsOrdersSocieties).where(eq(schema.guildsOrdersSocieties.id, 'gos-1')).get();
+    const building = db.select().from(schema.buildings).where(eq(schema.buildings.id, 'building-gos-override')).get();
+
+    expect(created.cost.total).toBeGreaterThan(0);
+    expect(gos?.treasury).toBe(5000 - created.cost.total);
+    expect(building?.constructionTurnsRemaining).toBe(0);
+    expect(building?.ownerGosId).toBe('gos-1');
+
+    sqlite.close();
+  });
+
   it('rejects GOS-funded construction when the GOS treasury is too low', () => {
     const { sqlite, db } = createTestDatabase();
     seedBuildingConstructionContext(db, { treasury: 0, settlementSize: 'Town' });
@@ -990,6 +1025,47 @@ describe('createTroopRecruitment', () => {
     expect(created.cost.total).toBe(250);
     expect(realm?.treasury).toBe(5000);
     expect(gos?.treasury).toBe(750);
+    expect(troop?.gosId).toBe('gos-1');
+
+    sqlite.close();
+  });
+
+  it('charges actual troop cost when a GM override uses a GOS treasury', () => {
+    const { sqlite, db } = createTestDatabase();
+    seedRecruitmentContext(db, { treasury: 5000 });
+
+    db.insert(schema.guildsOrdersSocieties).values({
+      id: 'gos-1',
+      realmId: 'realm-1',
+      name: 'Order of the Spear',
+      type: 'Order',
+      treasury: 1000,
+    }).run();
+    db.insert(schema.gosRealms).values({ gosId: 'gos-1', realmId: 'realm-1' }).run();
+    db.update(schema.settlements)
+      .set({ ownerGosId: 'gos-1' })
+      .where(eq(schema.settlements.id, 'settlement-1'))
+      .run();
+
+    const created = createTroopRecruitment('game-1', {
+      realmId: 'realm-1',
+      type: 'Spearmen',
+      garrisonSettlementId: 'settlement-1',
+      recruitmentSettlementId: 'settlement-1',
+      gmOverride: true,
+      instant: true,
+    }, {
+      database: db,
+      idGenerator: () => 'troop-gos-override',
+      chargeGosId: 'gos-1',
+    });
+
+    const gos = db.select().from(schema.guildsOrdersSocieties).where(eq(schema.guildsOrdersSocieties.id, 'gos-1')).get();
+    const troop = db.select().from(schema.troops).where(eq(schema.troops.id, 'troop-gos-override')).get();
+
+    expect(created.cost.total).toBe(250);
+    expect(gos?.treasury).toBe(750);
+    expect(troop?.recruitmentTurnsRemaining).toBe(0);
     expect(troop?.gosId).toBe('gos-1');
 
     sqlite.close();

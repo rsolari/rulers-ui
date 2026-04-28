@@ -1,11 +1,11 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db as defaultDb, type DB, type DatabaseExecutor } from '@/db';
-import { actionComments, games, realms, settlements, territories, turnActions, turnEvents, turnReports } from '@/db/schema';
+import { actionComments, buildings, games, realms, settlements, ships, troops, territories, turnActions, turnEventAudiences, turnEvents, turnReports } from '@/db/schema';
 import { BUILDING_DEFS, MAX_ACTION_WORDS_PER_TURN, SEASONS, SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
-import { normalizeEconomicModifiers } from '@/lib/game-logic/economic-modifiers';
 import { parseJson } from '@/lib/json';
-import { createBuilding, createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
+import { createBuilding, createShipConstruction, createTroopRecruitment, isRuleValidationError } from '@/lib/rules-action-service';
+import { createTurnEventService, getPendingFinancialActionsForRealm } from '@/lib/turn-event-service';
 import type {
   ActionCommentCreateDto,
   ActionCommentRecord,
@@ -177,7 +177,6 @@ function serializeAction(action: TurnActionRow, comments: ActionCommentRecord[])
     taxType: (action.taxType as TaxType | null) ?? null,
     technicalKnowledgeKey: action.technicalKnowledgeKey ?? null,
     cost: action.cost,
-    spawnedEventId: action.spawnedEventId ?? null,
     resolutionSummary: action.resolutionSummary ?? null,
     resolutionRolls: normalizeResolutionRolls(parseJson<unknown[]>(action.resolutionRolls, [])),
     submittedAt: toIsoString(action.submittedAt),
@@ -212,8 +211,8 @@ function mapCommentsByAction(commentRows: ActionCommentRow[]) {
 
 function deriveReportStatus(actions: TurnActionRow[]): ReportStatus {
   if (actions.length === 0) return 'draft';
-  if (actions.every((action) => action.status === 'executed')) return 'resolved';
-  if (actions.some((action) => action.status === 'submitted' || action.status === 'executed')) return 'submitted';
+  if (actions.every((action) => action.status === 'resolved')) return 'resolved';
+  if (actions.some((action) => action.status === 'submitted' || action.status === 'pending' || action.status === 'resolved')) return 'submitted';
   return 'draft';
 }
 
@@ -563,7 +562,7 @@ function assertCurrentPoliticalAction(action: TurnActionRow, game: typeof games.
     throw new TurnActionError('Only political actions can be executed by the GM.', 409, 'invalid_action_kind');
   }
 
-  if (action.year !== game.currentYear || action.season !== game.currentSeason) {
+  if (action.status !== 'pending' && (action.year !== game.currentYear || action.season !== game.currentSeason)) {
     throw new TurnActionError('Only current-turn political actions can be executed.', 409, 'stale_turn_action');
   }
 
@@ -695,7 +694,10 @@ function resolveAutomatedFinancialAction(
   actor: TurnActor,
 ) {
   const financialType = getFinancialActionType(action.financialType);
-  if (action.kind !== 'financial' || (financialType !== 'build' && financialType !== 'recruit')) {
+  if (
+    action.kind !== 'financial'
+    || (financialType !== 'build' && financialType !== 'recruit' && financialType !== 'constructShip')
+  ) {
     return false;
   }
 
@@ -719,7 +721,7 @@ function resolveAutomatedFinancialAction(
 
       database.update(turnActions)
         .set({
-          status: 'executed',
+          status: created.constructionTurns > 0 ? 'pending' : 'resolved',
           outcome: 'success',
           settlementId: created.row.settlementId,
           territoryId: created.row.territoryId,
@@ -731,44 +733,134 @@ function resolveAutomatedFinancialAction(
           takesBuildingSlot: created.row.takesBuildingSlot,
           constructionTurns: created.constructionTurns,
           cost: created.cost.total,
-          resolutionSummary: action.resolutionSummary ?? 'Construction began automatically on submission.',
+          resolutionSummary: action.resolutionSummary ?? (created.constructionTurns > 0
+            ? 'Construction began automatically on submission.'
+            : 'Construction completed automatically on submission.'),
           submittedAt: action.submittedAt ?? now,
           submittedBy: action.submittedBy ?? actor.label,
-          executedAt: now,
-          executedBy: actor.label,
+          executedAt: created.constructionTurns > 0 ? null : now,
+          executedBy: created.constructionTurns > 0 ? null : actor.label,
           updatedAt: now,
         })
         .where(eq(turnActions.id, action.id))
         .run();
 
+      database.update(buildings)
+        .set({ originatingActionId: action.id })
+        .where(eq(buildings.id, created.row.id))
+        .run();
+
+      if (created.constructionTurns <= 0) {
+        createTurnEventService().createEventInTransaction(database, {
+          gameId,
+          year: action.year,
+          season: action.season as Season,
+          kind: 'construction_complete',
+          actionId: action.id,
+          causedByRealmId: action.realmId,
+          audienceRealmIds: [action.realmId],
+          outcome: 'success',
+          title: `${created.row.type} construction complete`,
+          description: `${created.row.type} construction is complete.`,
+          autoGenerated: true,
+          resolvedBy: actor.label,
+        });
+      }
+
       return true;
     }
 
-    const created = createTroopRecruitment(gameId, {
-      realmId: action.realmId,
-      type: action.troopType as string,
-      recruitmentSettlementId: action.settlementId,
-      garrisonSettlementId: action.settlementId,
-    }, {
-      database,
-    });
+    if (financialType === 'recruit') {
+      const created = createTroopRecruitment(gameId, {
+        realmId: action.realmId,
+        type: action.troopType as string,
+        recruitmentSettlementId: action.settlementId,
+        garrisonSettlementId: action.settlementId,
+      }, {
+        database,
+      });
 
-    database.update(turnActions)
-      .set({
-        status: 'executed',
-        outcome: 'success',
-        cost: created.cost.total,
-        resolutionSummary: action.resolutionSummary ?? 'Recruitment began automatically on submission.',
-        submittedAt: action.submittedAt ?? now,
-        submittedBy: action.submittedBy ?? actor.label,
-        executedAt: now,
-        executedBy: actor.label,
-        updatedAt: now,
-      })
-      .where(eq(turnActions.id, action.id))
-      .run();
+      const recruitmentTurnsRemaining = created.row.recruitmentTurnsRemaining ?? 0;
 
-    return true;
+      database.update(turnActions)
+        .set({
+          status: recruitmentTurnsRemaining > 0 ? 'pending' : 'resolved',
+          outcome: 'success',
+          cost: created.cost.total,
+          resolutionSummary: action.resolutionSummary ?? 'Recruitment began automatically on submission.',
+          submittedAt: action.submittedAt ?? now,
+          submittedBy: action.submittedBy ?? actor.label,
+          executedAt: recruitmentTurnsRemaining > 0 ? null : now,
+          executedBy: recruitmentTurnsRemaining > 0 ? null : actor.label,
+          updatedAt: now,
+        })
+        .where(eq(turnActions.id, action.id))
+        .run();
+
+      database.update(troops)
+        .set({ originatingActionId: action.id })
+        .where(eq(troops.id, created.row.id))
+        .run();
+
+      return true;
+    }
+
+    if (financialType === 'constructShip') {
+      const created = createShipConstruction(gameId, {
+        realmId: action.realmId,
+        type: action.shipType as string,
+        settlementId: action.settlementId,
+        fleetId: action.fleetId,
+        technicalKnowledgeKey: action.technicalKnowledgeKey,
+      }, {
+        database,
+      });
+
+      const constructionTurnsRemaining = created.row.constructionTurnsRemaining ?? 0;
+
+      database.update(turnActions)
+        .set({
+          status: constructionTurnsRemaining > 0 ? 'pending' : 'resolved',
+          outcome: 'success',
+          cost: created.cost.total,
+          resolutionSummary: action.resolutionSummary ?? (constructionTurnsRemaining > 0
+            ? 'Ship construction began automatically on submission.'
+            : 'Ship construction completed automatically on submission.'),
+          submittedAt: action.submittedAt ?? now,
+          submittedBy: action.submittedBy ?? actor.label,
+          executedAt: constructionTurnsRemaining > 0 ? null : now,
+          executedBy: constructionTurnsRemaining > 0 ? null : actor.label,
+          updatedAt: now,
+        })
+        .where(eq(turnActions.id, action.id))
+        .run();
+
+      database.update(ships)
+        .set({ originatingActionId: action.id })
+        .where(eq(ships.id, created.row.id))
+        .run();
+
+      if (constructionTurnsRemaining <= 0) {
+        createTurnEventService().createEventInTransaction(database, {
+          gameId,
+          year: action.year,
+          season: action.season as Season,
+          kind: 'ship_complete',
+          actionId: action.id,
+          causedByRealmId: action.realmId,
+          audienceRealmIds: [action.realmId],
+          outcome: 'success',
+          title: `${created.row.type} construction complete`,
+          description: `${created.row.type} construction is complete.`,
+          autoGenerated: true,
+          resolvedBy: actor.label,
+        });
+      }
+
+      return true;
+    }
+
+    return false;
   } catch (error) {
     throw toTurnActionError(error) ?? error;
   }
@@ -832,15 +924,33 @@ function getActionOrThrow(database: DatabaseExecutor, gameId: string, actionId: 
 
 type TurnEventRow = typeof turnEvents.$inferSelect;
 
-function serializeEvent(row: TurnEventRow): TurnEventRecord {
+function mapEventAudiences(audienceRows: Array<typeof turnEventAudiences.$inferSelect>) {
+  const byEvent = new Map<string, string[]>();
+  for (const row of audienceRows) {
+    const existing = byEvent.get(row.eventId) ?? [];
+    existing.push(row.realmId);
+    byEvent.set(row.eventId, existing);
+  }
+  return byEvent;
+}
+
+function serializeEvent(row: TurnEventRow, audienceRealmIds: string[] = row.realmId ? [row.realmId] : []): TurnEventRecord {
   return {
     id: row.id,
     gameId: row.gameId,
     year: row.year,
     season: row.season as Season,
     realmId: row.realmId,
+    audienceRealmIds,
+    actionId: row.actionId ?? null,
+    causedByRealmId: row.causedByRealmId ?? null,
     kind: row.kind,
     status: row.status,
+    outcome: (row.outcome as TurnActionOutcome | null) ?? null,
+    rolls: normalizeResolutionRolls(parseJson<unknown[]>(row.rolls, [])),
+    abilityUsed: row.abilityUsed ?? null,
+    abilityModifier: row.abilityModifier ?? null,
+    nobleId: row.nobleId ?? null,
     title: row.title,
     description: row.description,
     resolution: row.resolution,
@@ -856,6 +966,7 @@ function loadBundlesForReports(
   actionRows: TurnActionRow[],
   commentRows: ActionCommentRow[],
   eventRows: TurnEventRow[] = [],
+  audienceRows: Array<typeof turnEventAudiences.$inferSelect> = [],
 ): TurnReportBundle[] {
   const reportByRealm = new Map<string, TurnReportRow>();
   for (const report of reportRows) {
@@ -874,12 +985,15 @@ function loadBundlesForReports(
     actions.sort((left, right) => left.sortOrder - right.sortOrder || left.createdAt!.localeCompare(right.createdAt!));
   }
 
+  const audiencesByEvent = mapEventAudiences(audienceRows);
   const eventsByRealm = new Map<string, TurnEventRecord[]>();
   for (const event of eventRows) {
-    if (event.realmId) {
-      const existing = eventsByRealm.get(event.realmId) ?? [];
-      existing.push(serializeEvent(event));
-      eventsByRealm.set(event.realmId, existing);
+    const audienceRealmIds = audiencesByEvent.get(event.id) ?? (event.realmId ? [event.realmId] : []);
+    const serialized = serializeEvent(event, audienceRealmIds);
+    for (const audienceRealmId of audienceRealmIds) {
+      const existing = eventsByRealm.get(audienceRealmId) ?? [];
+      existing.push(serialized);
+      eventsByRealm.set(audienceRealmId, existing);
     }
   }
 
@@ -937,12 +1051,13 @@ function loadTurnBundles(
     eq(turnEvents.year, year),
     eq(turnEvents.season, season),
   ];
-  if (realmId) {
-    eventConditions.push(eq(turnEvents.realmId, realmId));
-  }
   const eventRows = database.select().from(turnEvents).where(and(...eventConditions)).all();
+  const eventIds = eventRows.map((event) => event.id);
+  const audienceRows = eventIds.length > 0
+    ? database.select().from(turnEventAudiences).where(inArray(turnEventAudiences.eventId, eventIds)).all()
+    : [];
 
-  return loadBundlesForReports(realmRows, reportRows, actionRows, commentRows, eventRows);
+  return loadBundlesForReports(realmRows, reportRows, actionRows, commentRows, eventRows, audienceRows);
 }
 
 export function createTurnActionService(database: DB = defaultDb) {
@@ -966,6 +1081,7 @@ export function createTurnActionService(database: DB = defaultDb) {
           actions: [],
           events: [],
         },
+        pendingFinancial: getPendingFinancialActionsForRealm(realmId),
       };
     }
 
@@ -1058,7 +1174,20 @@ export function createTurnActionService(database: DB = defaultDb) {
       } else {
         assertCurrentPoliticalAction(action, game);
 
-        const allowedKeys = new Set(['status', 'outcome', 'resolutionSummary', 'resolutionRolls', 'event']);
+        const allowedKeys = new Set([
+          'status',
+          'outcome',
+          'resolutionSummary',
+          'resolutionRolls',
+          'event',
+          'abilityUsed',
+          'abilityModifier',
+          'nobleId',
+          'audienceRealmIds',
+          'eventTitle',
+          'eventDescription',
+          'eventKind',
+        ]);
         for (const key of Object.keys(input)) {
           if (!allowedKeys.has(key)) {
             throw new TurnActionError('GM updates may only change execution fields.', 400, 'invalid_gm_action_update');
@@ -1067,51 +1196,8 @@ export function createTurnActionService(database: DB = defaultDb) {
 
         const nextStatus = input.status ?? action.status;
         const nextOutcome = input.outcome ?? action.outcome;
-        if (nextStatus === 'executed' && nextOutcome === 'pending') {
-          throw new TurnActionError('Executed political actions require a non-pending outcome.', 400, 'missing_outcome');
-        }
-
-        let spawnedEventId: string | null = action.spawnedEventId ?? null;
-
-        if (input.event?.title?.trim() && input.event.description?.trim() && !action.spawnedEventId) {
-          const eventId = uuid();
-          spawnedEventId = eventId;
-
-          const modifiers = normalizeEconomicModifiers(
-            [{
-              treasuryDelta: input.event.treasuryDelta ?? 0,
-              turmoilSources: input.event.turmoilAmount
-                ? [{ amount: input.event.turmoilAmount, durationType: 'seasonal' as const, seasonsRemaining: 1 }]
-                : [],
-            }],
-            {
-              description: input.event.description,
-              idPrefix: eventId,
-              originYear: game.currentYear,
-              originSeason: game.currentSeason as Season,
-              linkedEntityType: 'event',
-              linkedEntityId: eventId,
-              autoGenerated: false,
-            },
-          );
-
-          tx.insert(turnEvents).values({
-            id: eventId,
-            gameId,
-            year: game.currentYear,
-            season: game.currentSeason as Season,
-            realmId: action.realmId,
-            kind: 'gm_event',
-            status: 'open',
-            title: input.event.title,
-            description: input.event.description,
-            payload: JSON.stringify({ sourceActionId: action.id }),
-            mechanicalEffect: modifiers.length > 0 ? JSON.stringify(modifiers) : null,
-            resolution: null,
-            autoGenerated: false,
-            resolvedAt: null,
-            resolvedBy: null,
-          }).run();
+        if (nextStatus === 'resolved' && nextOutcome === 'pending') {
+          throw new TurnActionError('Resolved political actions require a non-pending outcome.', 400, 'missing_outcome');
         }
 
         tx.update(turnActions)
@@ -1124,13 +1210,36 @@ export function createTurnActionService(database: DB = defaultDb) {
             resolutionRolls: input.resolutionRolls !== undefined
               ? JSON.stringify(normalizeResolutionRolls(input.resolutionRolls))
               : action.resolutionRolls,
-            spawnedEventId,
-            executedAt: nextStatus === 'executed' ? new Date() : action.executedAt,
-            executedBy: nextStatus === 'executed' ? actor.label : action.executedBy,
+            executedAt: nextStatus === 'resolved' ? new Date() : action.executedAt,
+            executedBy: nextStatus === 'resolved' ? actor.label : action.executedBy,
             updatedAt: new Date(),
           })
           .where(eq(turnActions.id, action.id))
           .run();
+
+        if (nextStatus === 'resolved' && action.status !== 'resolved') {
+          createTurnEventService().createEventInTransaction(tx, {
+            gameId,
+            year: game.currentYear,
+            season: game.currentSeason as Season,
+            kind: input.eventKind ?? 'action_resolution',
+            actionId: action.id,
+            causedByRealmId: action.realmId,
+            audienceRealmIds: input.audienceRealmIds?.length
+              ? input.audienceRealmIds
+              : [action.realmId, action.targetRealmId].filter(Boolean) as string[],
+            outcome: nextOutcome,
+            rolls: input.resolutionRolls ? normalizeResolutionRolls(input.resolutionRolls) : normalizeResolutionRolls(parseJson(action.resolutionRolls, [])),
+            abilityUsed: input.abilityUsed ?? null,
+            abilityModifier: input.abilityModifier ?? null,
+            nobleId: input.nobleId ?? action.assignedNobleId ?? null,
+            title: input.eventTitle ?? input.event?.title ?? 'Action resolved',
+            description: input.eventDescription ?? input.event?.description ?? input.resolutionSummary ?? action.resolutionSummary ?? action.description,
+            payload: { sourceActionId: action.id },
+            resolution: input.resolutionSummary ?? action.resolutionSummary ?? null,
+            resolvedBy: actor.label,
+          });
+        }
 
         syncReportStatus(tx, action.turnReportId);
       }
@@ -1204,12 +1313,12 @@ export function createTurnActionService(database: DB = defaultDb) {
 
       assertTurnAggregateRules(actions);
       for (const action of actions) {
-        if (action.status === 'executed') continue;
+        if (action.status === 'resolved' || action.status === 'pending') continue;
         assertSubmittableAction(action, validSettlementIds, validTerritoryIds);
       }
 
       for (const action of actions) {
-        if (action.status === 'executed') continue;
+        if (action.status === 'resolved' || action.status === 'pending') continue;
         resolveAutomatedFinancialAction(tx, gameId, action, actor);
       }
 
@@ -1268,12 +1377,12 @@ export function createTurnActionService(database: DB = defaultDb) {
       ? database.select().from(actionComments).where(inArray(actionComments.actionId, actionIds)).all()
       : [];
 
-    const eventConditions = [eq(turnEvents.gameId, gameId)];
-    if (realmId) {
-      eventConditions.push(eq(turnEvents.realmId, realmId));
-    }
-    const allEventRows = database.select().from(turnEvents).where(and(...eventConditions)).all()
+    const allEventRows = database.select().from(turnEvents).where(eq(turnEvents.gameId, gameId)).all()
       .filter((event) => event.year !== game.currentYear || event.season !== game.currentSeason);
+    const eventIds = allEventRows.map((event) => event.id);
+    const audiencesByEvent = eventIds.length > 0
+      ? mapEventAudiences(database.select().from(turnEventAudiences).where(inArray(turnEventAudiences.eventId, eventIds)).all())
+      : new Map<string, string[]>();
 
     const realmById = new Map(realmRows.map((realm) => [realm.id, realm]));
     const commentsByAction = mapCommentsByAction(commentRows);
@@ -1286,10 +1395,14 @@ export function createTurnActionService(database: DB = defaultDb) {
 
     const eventsByRealmTurn = new Map<string, TurnEventRecord[]>();
     for (const event of allEventRows) {
-      const key = `${event.realmId ?? ''}:${event.year}:${event.season}`;
-      const existing = eventsByRealmTurn.get(key) ?? [];
-      existing.push(serializeEvent(event));
-      eventsByRealmTurn.set(key, existing);
+      const audienceRealmIds = audiencesByEvent.get(event.id) ?? (event.realmId ? [event.realmId] : []);
+      const serialized = serializeEvent(event, audienceRealmIds);
+      for (const audienceRealmId of audienceRealmIds) {
+        const key = `${audienceRealmId}:${event.year}:${event.season}`;
+        const existing = eventsByRealmTurn.get(key) ?? [];
+        existing.push(serialized);
+        eventsByRealmTurn.set(key, existing);
+      }
     }
 
     const history = reportRows

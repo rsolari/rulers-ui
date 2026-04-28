@@ -16,6 +16,7 @@ const APP_TABLES = [
   'action_comments',
   'turn_actions',
   'turn_reports',
+  'turn_event_audiences',
   'turn_events',
   'noble_grievances',
   'gos_unrest_states',
@@ -110,11 +111,13 @@ function createBuildingsTable(database: Database.Database, tableName: string) {
       owner_gos_id text,
       allotted_gos_id text,
       custom_definition_id text,
+      originating_action_id text,
       FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (territory_id) REFERENCES territories(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (hex_id) REFERENCES map_hexes(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (owner_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (allotted_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (allotted_gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (originating_action_id) REFERENCES turn_actions(id) ON UPDATE no action ON DELETE no action
     );
   `);
 }
@@ -395,11 +398,13 @@ function createBaseSchema(database: Database.Database) {
       recruitment_year integer,
       recruitment_season text,
       recruitment_turns_remaining integer NOT NULL DEFAULT 0,
+      originating_action_id text,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (army_id) REFERENCES armies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (garrison_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (recruitment_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (recruitment_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (originating_action_id) REFERENCES turn_actions(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS ships (
@@ -416,11 +421,13 @@ function createBaseSchema(database: Database.Database) {
       construction_year integer,
       construction_season text,
       construction_turns_remaining integer NOT NULL DEFAULT 0,
+      originating_action_id text,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (gos_id) REFERENCES guilds_orders_societies(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (fleet_id) REFERENCES fleets(id) ON UPDATE no action ON DELETE no action,
       FOREIGN KEY (garrison_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (construction_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action
+      FOREIGN KEY (construction_settlement_id) REFERENCES settlements(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (originating_action_id) REFERENCES turn_actions(id) ON UPDATE no action ON DELETE no action
     );
 
     CREATE TABLE IF NOT EXISTS siege_units (
@@ -645,9 +652,16 @@ function createBaseSchema(database: Database.Database) {
       game_id text NOT NULL,
       year integer NOT NULL,
       season text NOT NULL,
+      action_id text,
+      caused_by_realm_id text,
       realm_id text,
       kind text NOT NULL,
       status text NOT NULL,
+      outcome text,
+      rolls text NOT NULL DEFAULT '[]',
+      ability_used text,
+      ability_modifier integer,
+      noble_id text,
       title text,
       description text NOT NULL,
       payload text NOT NULL DEFAULT '{}',
@@ -657,6 +671,17 @@ function createBaseSchema(database: Database.Database) {
       resolved_at integer,
       resolved_by text,
       FOREIGN KEY (game_id) REFERENCES games(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (action_id) REFERENCES turn_actions(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (caused_by_realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action,
+      FOREIGN KEY (noble_id) REFERENCES nobles(id) ON UPDATE no action ON DELETE no action
+    );
+
+    CREATE TABLE IF NOT EXISTS turn_event_audiences (
+      event_id text NOT NULL,
+      realm_id text NOT NULL,
+      PRIMARY KEY (event_id, realm_id),
+      FOREIGN KEY (event_id) REFERENCES turn_events(id) ON UPDATE no action ON DELETE cascade,
       FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
     );
 
@@ -1366,6 +1391,7 @@ function ensureEconomySchema(database: Database.Database) {
   addColumnIfMissing(database, 'buildings', 'owner_gos_id text', 'owner_gos_id');
   addColumnIfMissing(database, 'buildings', 'allotted_gos_id text', 'allotted_gos_id');
   addColumnIfMissing(database, 'buildings', 'custom_definition_id text', 'custom_definition_id');
+  addColumnIfMissing(database, 'buildings', 'originating_action_id text', 'originating_action_id');
   addColumnIfMissing(database, 'resource_sites', 'owner_gos_id text', 'owner_gos_id');
   addColumnIfMissing(database, 'industries', 'owner_gos_id text', 'owner_gos_id');
   addColumnIfMissing(database, 'troops', 'gos_id text', 'gos_id');
@@ -1381,6 +1407,34 @@ function ensureEconomySchema(database: Database.Database) {
   addColumnIfMissing(database, 'troops', 'recruitment_settlement_id text', 'recruitment_settlement_id');
   addColumnIfMissing(database, 'troops', 'recruitment_year integer', 'recruitment_year');
   addColumnIfMissing(database, 'troops', 'recruitment_season text', 'recruitment_season');
+  addColumnIfMissing(database, 'troops', 'originating_action_id text', 'originating_action_id');
+  addColumnIfMissing(database, 'ships', 'originating_action_id text', 'originating_action_id');
+  addColumnIfMissing(database, 'turn_events', 'action_id text', 'action_id');
+  addColumnIfMissing(database, 'turn_events', 'caused_by_realm_id text', 'caused_by_realm_id');
+  addColumnIfMissing(database, 'turn_events', 'outcome text', 'outcome');
+  addColumnIfMissing(database, 'turn_events', "rolls text DEFAULT '[]' NOT NULL", 'rolls');
+  addColumnIfMissing(database, 'turn_events', 'ability_used text', 'ability_used');
+  addColumnIfMissing(database, 'turn_events', 'ability_modifier integer', 'ability_modifier');
+  addColumnIfMissing(database, 'turn_events', 'noble_id text', 'noble_id');
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS turn_event_audiences (
+      event_id text NOT NULL,
+      realm_id text NOT NULL,
+      PRIMARY KEY (event_id, realm_id),
+      FOREIGN KEY (event_id) REFERENCES turn_events(id) ON UPDATE no action ON DELETE cascade,
+      FOREIGN KEY (realm_id) REFERENCES realms(id) ON UPDATE no action ON DELETE no action
+    );
+
+    INSERT OR IGNORE INTO turn_event_audiences (event_id, realm_id)
+    SELECT id, realm_id
+    FROM turn_events
+    WHERE realm_id IS NOT NULL;
+
+    UPDATE turn_actions
+    SET status = 'resolved'
+    WHERE status = 'executed';
+  `);
 
   database.exec(`
     UPDATE buildings
@@ -1616,6 +1670,10 @@ function createIndexes(database: Database.Database) {
       ON turn_events (game_id, year, season, status);
     CREATE INDEX IF NOT EXISTS turn_events_game_realm_turn_kind_idx
       ON turn_events (game_id, realm_id, year, season, kind);
+    CREATE INDEX IF NOT EXISTS turn_event_audiences_realm_event_idx
+      ON turn_event_audiences (realm_id, event_id);
+    CREATE INDEX IF NOT EXISTS turn_event_audiences_event_idx
+      ON turn_event_audiences (event_id);
     CREATE INDEX IF NOT EXISTS noble_grievances_realm_noble_kind_resolved_idx
       ON noble_grievances (realm_id, noble_id, kind, resolved_at);
     CREATE INDEX IF NOT EXISTS noble_grievances_game_realm_resolved_idx

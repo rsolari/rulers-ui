@@ -38,7 +38,6 @@ function createAction(overrides: Partial<TurnActionRecord> = {}): TurnActionReco
     taxType: 'Levy',
     technicalKnowledgeKey: null,
     cost: 0,
-    spawnedEventId: null,
     resolutionSummary: null,
     resolutionRolls: [],
     submittedAt: null,

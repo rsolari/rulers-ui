@@ -40,8 +40,15 @@
     {
       "idx": 5,
       "version": "7",
+      "when": 1777334400000,
+      "tag": "0005_action_event_loop",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
       "when": 1777680000000,
-      "tag": "0005_settlement_gos_owner",
+      "tag": "0006_settlement_gos_owner",
       "breakpoints": true
     }
   ]

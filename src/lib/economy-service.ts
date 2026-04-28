@@ -22,6 +22,7 @@ import {
   tradeRoutes,
   troops,
   turnActions,
+  turnEventAudiences,
   turnEvents,
   turnReports,
   turnResolutions,
@@ -47,6 +48,7 @@ import { getPaidEstateLevelsForRealm } from '@/lib/game-logic/governance';
 import { parseJson } from '@/lib/json';
 import { resolveTradeNetwork } from '@/lib/game-logic/trade';
 import { prepareTurnReportFinancialActions } from '@/lib/turn-report-financial-actions';
+import { createTurnEventService } from '@/lib/turn-event-service';
 import type {
   FinancialAction,
   MonopolyProduct,
@@ -81,9 +83,19 @@ function compareResolvedTurns(a: { year: number; season: string }, b: { year: nu
 
 function deriveReportStatus(actions: Array<typeof turnActions.$inferSelect>) {
   if (actions.length === 0) return 'draft';
-  if (actions.every((action) => action.status === 'executed')) return 'resolved';
-  if (actions.some((action) => action.status === 'submitted' || action.status === 'executed')) return 'submitted';
+  if (actions.every((action) => action.status === 'resolved')) return 'resolved';
+  if (actions.some((action) => action.status === 'submitted' || action.status === 'pending' || action.status === 'resolved')) return 'submitted';
   return 'draft';
+}
+
+function mapEventAudiences(audienceRows: Array<typeof turnEventAudiences.$inferSelect>) {
+  const byEvent = new Map<string, string[]>();
+  for (const row of audienceRows) {
+    const existing = byEvent.get(row.eventId) ?? [];
+    existing.push(row.realmId);
+    byEvent.set(row.eventId, existing);
+  }
+  return byEvent;
 }
 
 const SETTLEMENT_GROWTH_ORDER: SettlementSize[] = ['Village', 'Town', 'City'];
@@ -316,7 +328,7 @@ function validateEconomyTurn(state: LoadedEconomyState): EconomyTurnValidationRe
 function loadGameEconomyState(
   database: DatabaseExecutor,
   gameId: string,
-  financialActionStatuses: Array<typeof turnActions.$inferSelect['status']> = ['draft', 'submitted', 'executed'],
+  financialActionStatuses: Array<typeof turnActions.$inferSelect['status']> = ['draft', 'submitted', 'pending', 'resolved'],
 ): LoadedEconomyState | null {
   const game = database.select().from(games).where(eq(games.id, gameId)).get();
   if (!game) return null;
@@ -408,6 +420,10 @@ function loadGameEconomyState(
     eq(turnEvents.year, game.currentYear),
     eq(turnEvents.season, currentSeason),
   )).all();
+  const eventIds = eventRows.map((event) => event.id);
+  const audiencesByEvent = eventIds.length > 0
+    ? mapEventAudiences(database.select().from(turnEventAudiences).where(inArray(turnEventAudiences.eventId, eventIds)).all())
+    : new Map<string, string[]>();
 
   const buildingsBySettlement = new Map<string, Array<typeof buildings.$inferSelect>>();
   const standaloneBuildingsByRealm = new Map<string, Array<typeof buildings.$inferSelect>>();
@@ -504,8 +520,12 @@ function loadGameEconomyState(
     if (action.kind !== 'financial') continue;
     if (!financialActionStatuses.includes(action.status)) continue;
     if (
-      action.status === 'executed'
-      && (action.financialType === 'build' || action.financialType === 'recruit')
+      (action.status === 'pending' || action.status === 'resolved')
+      && (
+        action.financialType === 'build'
+        || action.financialType === 'recruit'
+        || action.financialType === 'constructShip'
+      )
     ) {
       continue;
     }
@@ -520,7 +540,12 @@ function loadGameEconomyState(
   const gosSourcesByRealm = new Map<string, TurmoilSource[]>();
   const invalidModifierEvents: InvalidModifierEvent[] = [];
   const globalModifiers = eventRows
-    .filter((event) => !event.realmId && event.kind === 'gm_event' && event.status !== 'dismissed')
+    .filter((event) =>
+      !event.realmId
+      && (audiencesByEvent.get(event.id)?.length ?? 0) === 0
+      && event.kind === 'gm_event'
+      && event.status !== 'dismissed'
+    )
     .flatMap((event) => {
       const rawEffect = event.mechanicalEffect?.trim();
       const modifiers = parseStoredEconomicModifiers(rawEffect, {
@@ -588,7 +613,14 @@ function loadGameEconomyState(
     nobleSourcesByRealm.set(realm.id, grievanceSources);
     gosSourcesByRealm.set(realm.id, gosUnrestSources);
     const realmModifiers = eventRows
-      .filter((event) => event.realmId === realm.id && event.kind === 'gm_event' && event.status !== 'dismissed')
+      .filter((event) => (
+        event.kind === 'gm_event'
+        && event.status !== 'dismissed'
+        && (
+          event.realmId === realm.id
+          || (audiencesByEvent.get(event.id) ?? []).includes(realm.id)
+        )
+      ))
       .flatMap((event) => {
         const rawEffect = event.mechanicalEffect?.trim();
         const modifiers = parseStoredEconomicModifiers(rawEffect, {
@@ -1111,7 +1143,7 @@ export function createEconomyService(database: DB = defaultDb) {
         }
       }
 
-      const state = loadGameEconomyState(tx, gameId, ['submitted', 'executed']);
+      const state = loadGameEconomyState(tx, gameId, ['submitted', 'pending', 'resolved']);
       if (!state) return null;
 
       const currentSeason = state.game.currentSeason as Season;
@@ -1362,6 +1394,7 @@ export function createEconomyService(database: DB = defaultDb) {
       for (const building of state.buildingRows) {
         if (building.constructionTurnsRemaining <= 0) continue;
         const nextTurnsRemaining = Math.max(building.constructionTurnsRemaining - 1, 0);
+        const completesNow = nextTurnsRemaining === 0 && building.originatingActionId;
         tx.update(buildings)
           .set({
             constructionTurnsRemaining: nextTurnsRemaining,
@@ -1369,22 +1402,114 @@ export function createEconomyService(database: DB = defaultDb) {
           })
           .where(eq(buildings.id, building.id))
           .run();
+        if (completesNow) {
+          const action = tx.select().from(turnActions).where(eq(turnActions.id, building.originatingActionId!)).get();
+          if (action && action.status === 'pending') {
+            tx.update(turnActions)
+              .set({
+                status: 'resolved',
+                outcome: 'success',
+                resolutionSummary: action.resolutionSummary ?? `${building.type} construction complete.`,
+                executedAt: new Date(),
+                executedBy: 'system',
+                updatedAt: new Date(),
+              })
+              .where(eq(turnActions.id, action.id))
+              .run();
+            createTurnEventService().createEventInTransaction(tx, {
+              gameId,
+              year: currentYear,
+              season: currentSeason,
+              kind: 'construction_complete',
+              actionId: action.id,
+              causedByRealmId: action.realmId,
+              audienceRealmIds: [action.realmId],
+              outcome: 'success',
+              title: `${building.type} construction complete`,
+              description: `${building.type} construction is complete.`,
+              autoGenerated: true,
+              resolvedBy: 'system',
+            });
+          }
+        }
       }
 
       for (const troop of state.troopRows) {
         if (troop.recruitmentTurnsRemaining <= 0) continue;
+        const nextTurnsRemaining = Math.max(troop.recruitmentTurnsRemaining - 1, 0);
         tx.update(troops)
-          .set({ recruitmentTurnsRemaining: Math.max(troop.recruitmentTurnsRemaining - 1, 0) })
+          .set({ recruitmentTurnsRemaining: nextTurnsRemaining })
           .where(eq(troops.id, troop.id))
           .run();
+        if (nextTurnsRemaining === 0 && troop.originatingActionId) {
+          const action = tx.select().from(turnActions).where(eq(turnActions.id, troop.originatingActionId)).get();
+          if (action && action.status === 'pending') {
+            tx.update(turnActions)
+              .set({
+                status: 'resolved',
+                outcome: 'success',
+                resolutionSummary: action.resolutionSummary ?? `${troop.type} recruitment complete.`,
+                executedAt: new Date(),
+                executedBy: 'system',
+                updatedAt: new Date(),
+              })
+              .where(eq(turnActions.id, action.id))
+              .run();
+            createTurnEventService().createEventInTransaction(tx, {
+              gameId,
+              year: currentYear,
+              season: currentSeason,
+              kind: 'recruit_complete',
+              actionId: action.id,
+              causedByRealmId: action.realmId,
+              audienceRealmIds: [action.realmId],
+              outcome: 'success',
+              title: `${troop.type} recruitment complete`,
+              description: `${troop.type} are ready for service.`,
+              autoGenerated: true,
+              resolvedBy: 'system',
+            });
+          }
+        }
       }
 
       for (const ship of state.shipRows) {
         if (ship.constructionTurnsRemaining <= 0) continue;
+        const nextTurnsRemaining = Math.max(ship.constructionTurnsRemaining - 1, 0);
         tx.update(ships)
-          .set({ constructionTurnsRemaining: Math.max(ship.constructionTurnsRemaining - 1, 0) })
+          .set({ constructionTurnsRemaining: nextTurnsRemaining })
           .where(eq(ships.id, ship.id))
           .run();
+        if (nextTurnsRemaining === 0 && ship.originatingActionId) {
+          const action = tx.select().from(turnActions).where(eq(turnActions.id, ship.originatingActionId)).get();
+          if (action && action.status === 'pending') {
+            tx.update(turnActions)
+              .set({
+                status: 'resolved',
+                outcome: 'success',
+                resolutionSummary: action.resolutionSummary ?? `${ship.type} construction complete.`,
+                executedAt: new Date(),
+                executedBy: 'system',
+                updatedAt: new Date(),
+              })
+              .where(eq(turnActions.id, action.id))
+              .run();
+            createTurnEventService().createEventInTransaction(tx, {
+              gameId,
+              year: currentYear,
+              season: currentSeason,
+              kind: 'ship_complete',
+              actionId: action.id,
+              causedByRealmId: action.realmId,
+              audienceRealmIds: [action.realmId],
+              outcome: 'success',
+              title: `${ship.type} construction complete`,
+              description: `${ship.type} construction is complete.`,
+              autoGenerated: true,
+              resolvedBy: 'system',
+            });
+          }
+        }
       }
 
       for (const army of state.armyRows) {
@@ -1441,7 +1566,7 @@ export function createEconomyService(database: DB = defaultDb) {
 
         tx.update(turnActions)
           .set({
-            status: 'executed',
+            status: 'resolved',
             outcome: 'success',
             resolutionSummary: action.resolutionSummary ?? 'Resolved automatically during economy turn advancement.',
             executedAt: new Date(),

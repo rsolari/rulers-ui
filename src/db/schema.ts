@@ -23,6 +23,7 @@ import type {
   SettlementKind,
   ResourceRarity,
   ResourceType,
+  ResolutionAbility,
   Season,
   SettlementSize,
   ShipClass,
@@ -305,6 +306,7 @@ export const buildings = sqliteTable('buildings', {
   ownerGosId: text('owner_gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
   allottedGosId: text('allotted_gos_id').references((): AnySQLiteColumn => guildsOrdersSocieties.id),
   customDefinitionId: text('custom_definition_id'),
+  originatingActionId: text('originating_action_id').references((): AnySQLiteColumn => turnActions.id),
 });
 
 export const buildingsRelations = relations(buildings, ({ one }) => ({
@@ -551,6 +553,7 @@ export const troops = sqliteTable('troops', {
   recruitmentYear: integer('recruitment_year'),
   recruitmentSeason: text('recruitment_season'),
   recruitmentTurnsRemaining: integer('recruitment_turns_remaining').default(0).notNull(),
+  originatingActionId: text('originating_action_id').references((): AnySQLiteColumn => turnActions.id),
 });
 
 export const troopsRelations = relations(troops, ({ one }) => ({
@@ -580,6 +583,7 @@ export const ships = sqliteTable('ships', {
   constructionYear: integer('construction_year'),
   constructionSeason: text('construction_season').$type<Season>(),
   constructionTurnsRemaining: integer('construction_turns_remaining').default(0).notNull(),
+  originatingActionId: text('originating_action_id').references((): AnySQLiteColumn => turnActions.id),
 });
 
 export const shipsRelations = relations(ships, ({ one }) => ({
@@ -821,7 +825,6 @@ export const turnActions = sqliteTable('turn_actions', {
   submittedBy: text('submitted_by'),
   executedAt: integer('executed_at', { mode: 'timestamp' }),
   executedBy: text('executed_by'),
-  spawnedEventId: text('spawned_event_id'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 }, (table) => ([
@@ -866,9 +869,16 @@ export const turnEvents = sqliteTable('turn_events', {
   gameId: text('game_id').notNull().references(() => games.id),
   year: integer('year').notNull(),
   season: text('season').$type<Season>().notNull(),
+  actionId: text('action_id').references(() => turnActions.id),
+  causedByRealmId: text('caused_by_realm_id').references(() => realms.id),
   realmId: text('realm_id').references(() => realms.id),
   kind: text('kind').$type<TurnEventKind>().notNull(),
   status: text('status').$type<TurnEventStatus>().notNull(),
+  outcome: text('outcome').$type<TurnActionOutcome>(),
+  rolls: text('rolls').default('[]').notNull(),
+  abilityUsed: text('ability_used').$type<ResolutionAbility | null>(),
+  abilityModifier: integer('ability_modifier'),
+  nobleId: text('noble_id').references(() => nobles.id),
   title: text('title'),
   description: text('description').notNull(),
   payload: text('payload').default('{}').notNull(),
@@ -882,9 +892,31 @@ export const turnEvents = sqliteTable('turn_events', {
   index('turn_events_game_realm_turn_kind_idx').on(table.gameId, table.realmId, table.year, table.season, table.kind),
 ]));
 
-export const turnEventsRelations = relations(turnEvents, ({ one }) => ({
+export const turnEventAudiences = sqliteTable('turn_event_audiences', {
+  eventId: text('event_id').notNull().references(() => turnEvents.id, { onDelete: 'cascade' }),
+  realmId: text('realm_id').notNull().references(() => realms.id),
+}, (table) => ([
+  primaryKey({ columns: [table.eventId, table.realmId], name: 'turn_event_audiences_pk' }),
+  index('turn_event_audiences_realm_event_idx').on(table.realmId, table.eventId),
+  index('turn_event_audiences_event_idx').on(table.eventId),
+]));
+
+export const turnEventsRelations = relations(turnEvents, ({ one, many }) => ({
   game: one(games, { fields: [turnEvents.gameId], references: [games.id] }),
   realm: one(realms, { fields: [turnEvents.realmId], references: [realms.id] }),
+  action: one(turnActions, { fields: [turnEvents.actionId], references: [turnActions.id] }),
+  causedByRealm: one(realms, {
+    fields: [turnEvents.causedByRealmId],
+    references: [realms.id],
+    relationName: 'turn_event_caused_by_realm',
+  }),
+  noble: one(nobles, { fields: [turnEvents.nobleId], references: [nobles.id] }),
+  audiences: many(turnEventAudiences),
+}));
+
+export const turnEventAudiencesRelations = relations(turnEventAudiences, ({ one }) => ({
+  event: one(turnEvents, { fields: [turnEventAudiences.eventId], references: [turnEvents.id] }),
+  realm: one(realms, { fields: [turnEventAudiences.realmId], references: [realms.id] }),
 }));
 
 export const nobleGrievances = sqliteTable('noble_grievances', {

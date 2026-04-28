@@ -6,7 +6,8 @@ import type { ActionKind, TurnActionOutcome, TurnActionStatus } from '@/types/ga
 const STATUS_VARIANTS: Record<TurnActionStatus, 'default' | 'gold' | 'green'> = {
   draft: 'default',
   submitted: 'gold',
-  executed: 'green',
+  pending: 'gold',
+  resolved: 'green',
 };
 
 const OUTCOME_VARIANTS: Record<TurnActionOutcome, 'default' | 'gold' | 'green' | 'red'> = {
@@ -15,6 +16,7 @@ const OUTCOME_VARIANTS: Record<TurnActionOutcome, 'default' | 'gold' | 'green' |
   failure: 'red',
   partial: 'gold',
   void: 'default',
+  informational: 'default',
 };
 
 export function ActionKindBadge({ kind }: { kind: ActionKind }) {

@@ -40,10 +40,12 @@ const OUTCOME_OPTIONS = [
   { value: 'failure', label: 'Failure' },
   { value: 'partial', label: 'Partial' },
   { value: 'void', label: 'Void' },
+  { value: 'informational', label: 'Informational' },
 ];
 const EXECUTION_STATUS_OPTIONS = [
   { value: 'submitted', label: 'Submitted' },
-  { value: 'executed', label: 'Executed' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'resolved', label: 'Resolved' },
 ];
 const GOS_PREREQUISITES = new Set<GOSType>(['Guild', 'Order', 'Society']);
 
@@ -274,7 +276,6 @@ function ResolutionMetadata({
         <span className="text-sm font-semibold text-ink-500">Resolution</span>
         <ActionStatusBadge status={action.status} />
         <ActionOutcomeBadge outcome={action.outcome} />
-        {action.spawnedEventId ? <Badge variant="gold">Event Spawned</Badge> : null}
       </div>
       <DiceRollRows rolls={action.resolutionRolls} />
       {action.resolutionSummary ? (
@@ -650,50 +651,29 @@ export function TurnActionCard({
               value={draft.resolutionSummary ?? ''}
               onChange={(event) => setDraft((current) => ({ ...current, resolutionSummary: event.target.value }))}
             />
-            {action.spawnedEventId ? (
-              <Badge variant="gold">Event Spawned</Badge>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowEventForm((v) => !v)}
-                >
-                  {showEventForm ? 'Cancel Event' : '+ Spawn Event'}
-                </Button>
-                {showEventForm ? (
-                  <div className="space-y-2 rounded border border-dashed border-ink-200 bg-parchment-50/40 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Spawn Event</p>
-                    <Input
-                      label="Event Title"
-                      value={eventDraft.title}
-                      onChange={(e) => setEventDraft((c) => ({ ...c, title: e.target.value }))}
-                    />
-                    <Textarea
-                      label="Event Description"
-                      rows={2}
-                      value={eventDraft.description}
-                      onChange={(e) => setEventDraft((c) => ({ ...c, description: e.target.value }))}
-                    />
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Input
-                        label="Treasury Delta"
-                        type="number"
-                        value={eventDraft.treasuryDelta}
-                        onChange={(e) => setEventDraft((c) => ({ ...c, treasuryDelta: Number(e.target.value) || 0 }))}
-                      />
-                      <Input
-                        label="Turmoil Amount"
-                        type="number"
-                        min={0}
-                        value={eventDraft.turmoilAmount}
-                        onChange={(e) => setEventDraft((c) => ({ ...c, turmoilAmount: Math.max(0, Number(e.target.value) || 0) }))}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowEventForm((v) => !v)}
+            >
+              {showEventForm ? 'Cancel Event' : '+ Event Details'}
+            </Button>
+            {showEventForm ? (
+              <div className="space-y-2 rounded border border-dashed border-ink-200 bg-parchment-50/40 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Resolution Event</p>
+                <Input
+                  label="Event Title"
+                  value={eventDraft.title}
+                  onChange={(e) => setEventDraft((c) => ({ ...c, title: e.target.value }))}
+                />
+                <Textarea
+                  label="Event Description"
+                  rows={2}
+                  value={eventDraft.description}
+                  onChange={(e) => setEventDraft((c) => ({ ...c, description: e.target.value }))}
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -718,7 +698,10 @@ export function TurnActionCard({
                       outcome: draft.outcome,
                       resolutionSummary: draft.resolutionSummary,
                       resolutionRolls: draft.resolutionRolls,
-                      ...(showEventForm && eventDraft.title.trim() ? { event: eventDraft } : {}),
+                      ...(showEventForm && eventDraft.title.trim() ? {
+                        eventTitle: eventDraft.title,
+                        eventDescription: eventDraft.description,
+                      } : {}),
                     };
                     void onSave(gmPayload);
                   } else {

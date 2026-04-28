@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
 import { TurnEventCard } from '@/components/turn-actions/turn-event-card';
-import type { CurrentTurnResponseDto, TurnActionRecord, TurnActionUpdateDto } from '@/types/game';
+import type { CurrentTurnResponseDto, ResolutionQueueItem, TurnActionRecord, TurnActionUpdateDto } from '@/types/game';
 
 interface GmTurnReviewPanelProps {
   gameId: string;
@@ -25,6 +25,7 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
   const [settlementOptions, setSettlementOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [realmOptions, setRealmOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [nobleOptionsByRealm, setNobleOptionsByRealm] = useState<Record<string, Array<{ value: string; label: string }>>>({});
+  const [resolutionQueue, setResolutionQueue] = useState<ResolutionQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
   const [commentActionId, setCommentActionId] = useState<string | null>(null);
@@ -39,13 +40,16 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
     setAdvanceConfirm(false);
 
     try {
-      const [turnData, settlements, allRealms] = await Promise.all([
+      const [turnData, settlements, allRealms, queueData] = await Promise.all([
         parseResponse<CurrentTurnResponseDto>(await fetch(`/api/game/${gameId}/turn`, { cache: 'no-store' })),
         parseResponse<Array<{ id: string; name: string; kind?: string }>>(
           await fetch(`/api/game/${gameId}/settlements`, { cache: 'no-store' }),
         ),
         parseResponse<Array<{ id: string; name: string }>>(
           await fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
+        ),
+        parseResponse<{ queue: ResolutionQueueItem[] }>(
+          await fetch(`/api/game/${gameId}/resolutions-queue`, { cache: 'no-store' }),
         ),
       ]);
 
@@ -68,6 +72,7 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
           .map((settlement) => ({ value: settlement.id, label: settlement.name })));
         setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
         setNobleOptionsByRealm(noblesByRealm);
+        setResolutionQueue(queueData.queue);
       });
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Failed to load current turn');
@@ -209,6 +214,48 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
             )}
           </div>
         )}
+        <Card variant="gold">
+          <CardHeader>
+            <CardTitle>Resolutions Queue</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {resolutionQueue.length === 0 ? (
+              <p className="text-sm text-ink-300">No submitted actions or open events need resolution.</p>
+            ) : (
+              resolutionQueue.map((item) => {
+                const action = item.action;
+                const event = item.event;
+                const audienceNames = item.audienceRealmIds
+                  .map((id) => realmOptions.find((realm) => realm.value === id)?.label ?? id)
+                  .join(', ');
+                return (
+                  <div key={`${item.type}-${item.id}`} className="rounded border border-ink-100 bg-parchment-50 p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={item.type === 'action' ? 'gold' : 'default'}>
+                            {item.type === 'action' ? 'Action' : 'GM Event'}
+                          </Badge>
+                          {item.realmName ? <Badge>{item.realmName}</Badge> : null}
+                          {action?.cost ? <Badge>Cost {action.cost.toLocaleString()}gc</Badge> : null}
+                        </div>
+                        <p className="text-sm font-semibold text-ink-600">
+                          {action ? action.description || action.actionWords.join(', ') || action.kind : event?.title ?? event?.kind}
+                        </p>
+                        {item.assignedNoble ? (
+                          <p className="text-xs text-ink-400">
+                            {item.assignedNoble.name} | Reason {item.assignedNoble.reasonSkill} / Cunning {item.assignedNoble.cunningSkill}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Badge variant="default">Audience: {audienceNames || 'none'}</Badge>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
         {realms.length === 0 ? (
           <p className="text-sm text-ink-300">No realms found for this game.</p>
         ) : (

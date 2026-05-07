@@ -29,7 +29,7 @@ function countRemainingSeasons(currentYear: number, currentSeason: Season, expir
   return expiryIndex - currentIndex + 1;
 }
 
-export function isActiveGOSUnrest(
+function isActiveGOSUnrest(
   unrest: GOSUnrestState,
   currentYear: number,
   currentSeason: Season,
@@ -50,7 +50,7 @@ export function isActiveGOSUnrest(
   return compareTurns(currentYear, currentSeason, unrest.expiresYear, unrest.expiresSeason) <= 0;
 }
 
-export function mapGOSUnrestToTurmoilSource(
+function mapGOSUnrestToTurmoilSource(
   unrest: GOSUnrestState,
   currentYear: number,
   currentSeason: Season,

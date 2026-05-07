@@ -42,8 +42,11 @@ import type {
 type TurnEventRow = typeof turnEvents.$inferSelect;
 type TurnActionRow = typeof turnActions.$inferSelect;
 type ActionCommentRow = typeof actionComments.$inferSelect;
+type RunnableInsert = {
+  run?: () => void;
+};
 
-export class TurnEventError extends Error {
+class TurnEventError extends Error {
   status: number;
   code: string;
 
@@ -209,8 +212,8 @@ function insertAudienceRows(database: DatabaseExecutor, eventId: string, audienc
   }
 }
 
-function runInsert(insert: unknown) {
-  if (insert && typeof insert === 'object' && 'run' in insert && typeof insert.run === 'function') {
+function runInsert(insert: RunnableInsert) {
+  if (typeof insert.run === 'function') {
     insert.run();
   }
 }

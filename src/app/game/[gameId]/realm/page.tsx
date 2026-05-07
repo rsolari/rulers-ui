@@ -19,8 +19,15 @@ import { parseTechnicalKnowledge } from '@/lib/technical-knowledge';
 import type { TaxType } from '@/types/game';
 import { TurmoilSummaryCard } from '@/components/turmoil/turmoil-summary-card';
 import { PlayerTurnReportPanel } from '@/components/turn-actions/player-turn-report-panel';
-import type { GovernmentType, PlayerSetupState, TechnicalKnowledgeKey, Tradition } from '@/types/game';
+import type { GovernmentType, PlayerSetupState, Tradition } from '@/types/game';
 import type { PlayerSetupChecklist } from '@/lib/game-init-state';
+import type {
+  GameDto,
+  GameSettlementDto,
+  GameTerritoryDto,
+  RealmDto,
+  RealmResponseDto,
+} from '@/types/api';
 
 const GOVERNMENT_OPTIONS = [
   { value: 'Monarch', label: 'Monarch' },
@@ -55,51 +62,6 @@ function TraditionTooltipBadge({ tradition }: { tradition: Tradition }) {
   );
 }
 
-interface Game {
-  id: string;
-  name: string;
-  currentYear: number;
-  currentSeason: string;
-  turnPhase: string;
-  gamePhase: string;
-  initState: string;
-}
-
-interface Realm {
-  id: string;
-  name: string;
-  governmentType: string;
-  treasury: number;
-  taxType: string;
-  traditions: string;
-  technicalKnowledge: TechnicalKnowledgeKey[];
-  projectedTurmoil?: number | null;
-  buildingTurmoilReduction?: number | null;
-  openTurmoilEventId?: string | null;
-  winterUnrestPending?: boolean;
-  capitalSettlementId?: string | null;
-}
-
-interface RealmResponse extends Omit<Realm, 'technicalKnowledge'> {
-  technicalKnowledge: string;
-}
-
-interface Territory {
-  id: string;
-  name: string;
-  realmId: string | null;
-}
-
-interface Settlement {
-  id: string;
-  name: string;
-  size: string;
-  kind: string;
-  hexId: string | null;
-  territoryId: string;
-  buildings: Array<{ id: string; type: string; size: string; constructionTurnsRemaining: number }>;
-}
-
 interface Ruler {
   id: string;
   name: string;
@@ -116,10 +78,10 @@ export default function RealmDashboard() {
   const gmRealmIdParam = searchParams.get('realmId');
   const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
   const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
-  const [game, setGame] = useState<Game | null>(null);
-  const [realm, setRealm] = useState<Realm | null>(null);
-  const [territories, setTerritories] = useState<Territory[]>([]);
-  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [game, setGame] = useState<GameDto | null>(null);
+  const [realm, setRealm] = useState<RealmDto | null>(null);
+  const [territories, setTerritories] = useState<GameTerritoryDto[]>([]);
+  const [settlements, setSettlements] = useState<GameSettlementDto[]>([]);
   const [ruler, setRuler] = useState<Ruler | null>(null);
   const [militaryData, setMilitaryData] = useState<{ troops: Array<{ type: string }>; siegeUnits: Array<{ type: string }> }>({ troops: [], siegeUnits: [] });
   const [shipCount, setShipCount] = useState(0);
@@ -173,12 +135,12 @@ export default function RealmDashboard() {
       ]);
 
       const gameData = await gameResponse.json();
-      const realmList: Realm[] = (await realmsResponse.json() as RealmResponse[]).map((entry) => ({
+      const realmList: RealmDto[] = (await realmsResponse.json() as RealmResponseDto[]).map((entry) => ({
         ...entry,
         technicalKnowledge: parseTechnicalKnowledge(entry.technicalKnowledge),
       }));
       const realmData = realmList.find((entry) => entry.id === realmId) || null;
-      const allTerritories: Territory[] = await territoriesResponse.json();
+      const allTerritories: GameTerritoryDto[] = await territoriesResponse.json();
       const settlementsList = await settlementsResponse.json();
       const rulerData = await rulerResponse.json();
 
@@ -481,7 +443,6 @@ export default function RealmDashboard() {
             <CardTitle>Realm Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Money group */}
             <div className="flex items-center justify-between">
               <span>Treasury</span>
               <strong>{realm.treasury.toLocaleString()}gc</strong>
@@ -501,7 +462,6 @@ export default function RealmDashboard() {
 
             <hr className="border-gold-500/20" />
 
-            {/* Food & Turmoil group */}
             {economyProjection && (
               <div className="flex items-center justify-between">
                 <span>Food Balance</span>
@@ -617,7 +577,6 @@ export default function RealmDashboard() {
         />
       </div>
 
-      {/* Navigation */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-6">
         <Link href={ruler ? `/game/${gameId}/realm/nobles${realmLinkSuffix}` : `/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
           <Card className="hover:border-gold-500 transition-colors cursor-pointer">

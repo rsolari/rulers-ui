@@ -52,7 +52,7 @@ export function hexToPixel(q: number, r: number, size: number): PixelPoint {
   };
 }
 
-export function getHexCorners(cx: number, cy: number, size: number): PixelPoint[] {
+function getHexCorners(cx: number, cy: number, size: number): PixelPoint[] {
   return CORNER_ANGLES.map((angle) => {
     const radians = (Math.PI / 180) * angle;
     return {

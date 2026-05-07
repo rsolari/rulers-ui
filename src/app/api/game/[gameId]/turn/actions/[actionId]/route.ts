@@ -2,12 +2,8 @@ import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
 import { deleteAction, updateAction } from '@/lib/turn-action-service';
+import { getTurnActorLabel } from '@/lib/turn-actors';
 import type { TurnActionUpdateDto } from '@/types/game';
-
-function getActorLabel(role: 'player' | 'gm', displayName?: string | null) {
-  if (role === 'gm') return 'GM';
-  return displayName?.trim() || 'Player';
-}
 
 export async function PATCH(
   request: Request,
@@ -26,7 +22,7 @@ export async function PATCH(
       return NextResponse.json({
         action: updateAction(gameId, actionId, body.realmId ?? '', {
           role: 'gm',
-          label: getActorLabel('gm'),
+          label: getTurnActorLabel('gm'),
         }, body),
       });
     }
@@ -35,7 +31,7 @@ export async function PATCH(
     return NextResponse.json({
       action: updateAction(gameId, actionId, realmId, {
         role: 'player',
-        label: getActorLabel('player', session.displayName),
+        label: getTurnActorLabel('player', session.displayName),
       }, body),
     });
   } catch (error) {

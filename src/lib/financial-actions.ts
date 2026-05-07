@@ -149,7 +149,7 @@ function normalizeSpendingFinancialAction(record: Record<string, unknown>): Fina
   };
 }
 
-export function normalizeFinancialAction(value: unknown): FinancialAction | null {
+function normalizeFinancialAction(value: unknown): FinancialAction | null {
   if (!isRecord(value) || typeof value.type !== 'string') return null;
 
   switch (value.type) {

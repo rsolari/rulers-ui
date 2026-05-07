@@ -19,13 +19,13 @@ import {
 
 const ESTATE_LEVEL_ORDER: EstateLevel[] = ['Meagre', 'Comfortable', 'Ample', 'Substantial', 'Luxurious'];
 
-export function getSettlementGovernorRequiredEstate(size: SettlementSize): EstateLevel {
+function getSettlementGovernorRequiredEstate(size: SettlementSize): EstateLevel {
   if (size === 'City') return 'Ample';
   if (size === 'Town') return 'Comfortable';
   return 'Meagre';
 }
 
-export function getHighestEstateLevel(levels: Array<EstateLevel | null | undefined>): EstateLevel {
+function getHighestEstateLevel(levels: Array<EstateLevel | null | undefined>): EstateLevel {
   return levels.reduce<EstateLevel>((highest, level) => {
     if (!level) return highest;
     return ESTATE_LEVEL_ORDER.indexOf(level) > ESTATE_LEVEL_ORDER.indexOf(highest) ? level : highest;

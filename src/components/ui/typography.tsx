@@ -10,15 +10,6 @@ export function Eyebrow({ className = '', ...props }: HTMLAttributes<HTMLDivElem
   );
 }
 
-export function Lede({ className = '', ...props }: HTMLAttributes<HTMLParagraphElement>) {
-  return (
-    <p
-      className={`font-body italic text-[1.25rem] leading-relaxed text-ink-400 ${className}`}
-      {...props}
-    />
-  );
-}
-
 interface FleurDividerProps extends HTMLAttributes<HTMLDivElement> {
   size?: number;
   tone?: 'default' | 'light';

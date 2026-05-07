@@ -10,8 +10,6 @@ export interface NobleActivityInput {
   gmStatusText: string | null;
 }
 
-// ── Output ──
-
 export type ActivityKind =
   | 'ruler'
   | 'heir'
@@ -33,8 +31,6 @@ export interface NobleActivity {
   /** All activity lines, ordered by priority. */
   lines: ActivityLine[];
 }
-
-// ── Mapper ──
 
 export function deriveNobleActivity(noble: NobleActivityInput): NobleActivity {
   const lines: ActivityLine[] = [];
@@ -71,7 +67,6 @@ export function deriveNobleActivity(noble: NobleActivityInput): NobleActivity {
     lines.push({ kind: 'gm_status', label: noble.gmStatusText });
   }
 
-  // Fallback
   if (lines.length === 0) {
     lines.push({ kind: 'idle', label: 'At court' });
   }

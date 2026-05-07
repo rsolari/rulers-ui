@@ -23,12 +23,14 @@ vi.mock('@/hooks/use-role', () => ({
   useRole: () => useRoleMock(),
 }));
 
-function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }) {
+type JsonResponseMock = Pick<Response, 'ok' | 'status' | 'json'>;
+
+function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }): JsonResponseMock {
   return {
     ok: init?.ok ?? true,
     status: init?.status ?? 200,
     json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
+  };
 }
 
 beforeAll(() => {

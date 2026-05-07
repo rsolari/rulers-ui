@@ -6,25 +6,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
 import { TurnEventCard } from '@/components/turn-actions/turn-event-card';
+import { parseResponse } from '@/components/turn-actions/api-client';
+import {
+  toNobleOptions,
+  toSelectOptions,
+  toSettlementOptions,
+  type SelectOption,
+} from '@/components/turn-actions/options';
 import type { CurrentTurnResponseDto, ResolutionQueueItem, TurnActionRecord, TurnActionUpdateDto } from '@/types/game';
 
 interface GmTurnReviewPanelProps {
   gameId: string;
 }
 
-async function parseResponse<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(typeof data?.error === 'string' ? data.error : 'Request failed');
-  }
-  return data as T;
-}
-
 export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
   const [currentTurn, setCurrentTurn] = useState<CurrentTurnResponseDto | null>(null);
-  const [settlementOptions, setSettlementOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const [realmOptions, setRealmOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const [nobleOptionsByRealm, setNobleOptionsByRealm] = useState<Record<string, Array<{ value: string; label: string }>>>({});
+  const [settlementOptions, setSettlementOptions] = useState<SelectOption[]>([]);
+  const [realmOptions, setRealmOptions] = useState<SelectOption[]>([]);
+  const [nobleOptionsByRealm, setNobleOptionsByRealm] = useState<Record<string, SelectOption[]>>({});
   const [resolutionQueue, setResolutionQueue] = useState<ResolutionQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingActionId, setSavingActionId] = useState<string | null>(null);
@@ -53,7 +52,7 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
         ),
       ]);
 
-      const noblesByRealm: Record<string, Array<{ value: string; label: string }>> = {};
+      const noblesByRealm: Record<string, SelectOption[]> = {};
       const realmIds = (turnData.realms ?? []).map((r) => r.realmId);
       const nobleResponses = await Promise.all(
         realmIds.map((rId) =>
@@ -62,15 +61,13 @@ export function GmTurnReviewPanel({ gameId }: GmTurnReviewPanelProps) {
         ),
       );
       for (let i = 0; i < realmIds.length; i++) {
-        noblesByRealm[realmIds[i]] = (nobleResponses[i] ?? []).map((n) => ({ value: n.id, label: `${n.name} (R${n.reasonSkill} / C${n.cunningSkill})` }));
+        noblesByRealm[realmIds[i]] = toNobleOptions(nobleResponses[i] ?? []);
       }
 
       startTransition(() => {
         setCurrentTurn(turnData);
-        setSettlementOptions(settlements
-          .filter((settlement) => !settlement.kind || settlement.kind === 'settlement')
-          .map((settlement) => ({ value: settlement.id, label: settlement.name })));
-        setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
+        setSettlementOptions(toSettlementOptions(settlements));
+        setRealmOptions(toSelectOptions(allRealms));
         setNobleOptionsByRealm(noblesByRealm);
         setResolutionQueue(queueData.queue);
       });

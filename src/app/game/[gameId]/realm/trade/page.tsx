@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
 import { TRADE_BONUS_PER_PRODUCT, MERCANTILE_TRADE_BONUS } from '@/lib/game-logic/constants';
+import type { GameTerritoryDto, RealmResponseDto, ResourceSiteDto } from '@/types/api';
 
 interface TradeRoute {
   id: string;
@@ -20,25 +21,6 @@ interface TradeRoute {
   protectedProducts: string;
 }
 
-interface Realm {
-  id: string;
-  name: string;
-  traditions: string;
-}
-
-interface Territory {
-  id: string;
-  name: string;
-  realmId: string | null;
-}
-
-interface ResourceSite {
-  id: string;
-  territoryId: string;
-  resourceType: string;
-  rarity: string;
-}
-
 export default function TradePage() {
   const params = useParams();
   const gameId = params.gameId as string;
@@ -48,9 +30,9 @@ export default function TradePage() {
   const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
   const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [routes, setRoutes] = useState<TradeRoute[]>([]);
-  const [allRealms, setAllRealms] = useState<Realm[]>([]);
-  const [territories, setTerritories] = useState<Territory[]>([]);
-  const [resources, setResources] = useState<ResourceSite[]>([]);
+  const [allRealms, setAllRealms] = useState<RealmResponseDto[]>([]);
+  const [territories, setTerritories] = useState<GameTerritoryDto[]>([]);
+  const [resources, setResources] = useState<ResourceSiteDto[]>([]);
 
   useEffect(() => {
     fetch(`/api/game/${gameId}/trade-routes`).then(r => r.json()).then(setRoutes);

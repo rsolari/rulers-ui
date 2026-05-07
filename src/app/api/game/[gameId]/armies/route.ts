@@ -10,26 +10,10 @@ import { TROOP_DEFS } from '@/lib/game-logic/constants';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { assertNobleCanHoldExclusiveOffice } from '@/lib/game-logic/nobles';
 import { isRuleValidationError, prepareRealmTroopRecruitment } from '@/lib/rules-action-service';
+import { normalizeOptionalString, normalizeStringArray } from '@/lib/request-parsing';
 import type { TroopType } from '@/types/game';
 
 const TROOP_TYPES = Object.keys(TROOP_DEFS) as TroopType[];
-
-function normalizeOptionalString(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function normalizeStringArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return [...new Set(
-    value
-      .filter((item): item is string => typeof item === 'string')
-      .map((item) => item.trim())
-      .filter(Boolean),
-  )];
-}
 
 function getTroopRecruitmentOptions(gameId: string, realmId: string, recruitmentSettlementId: string | null) {
   return TROOP_TYPES.map((type) => {

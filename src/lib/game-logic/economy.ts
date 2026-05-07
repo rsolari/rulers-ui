@@ -623,7 +623,7 @@ function createGOSRevenueEntries(goses: EconomyGOSInput[]) {
   return { total, entries };
 }
 
-export function calculateRealmEconomy(
+function calculateRealmEconomy(
   realm: EconomyRealmInput,
   currentYear: number,
   currentSeason: Season,

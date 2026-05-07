@@ -81,7 +81,7 @@ export function buildRealmTurmoilSources(input: RealmTurmoilSourceInput) {
   return [...byId.values()];
 }
 
-export function rollWinterUnrest(turmoil: number): WinterUnrestRoll {
+function rollWinterUnrest(turmoil: number): WinterUnrestRoll {
   if (turmoil >= 9) {
     return { unrestKind: 'revolt' };
   }

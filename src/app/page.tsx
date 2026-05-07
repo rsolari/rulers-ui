@@ -16,7 +16,7 @@ export default function LandingPage() {
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
   const [createdGame, setCreatedGame] = useState<{
-    id: string; gmCode: string; playerCode: string;
+    id: string; gmCode: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -70,7 +70,6 @@ export default function LandingPage() {
 
   return (
     <>
-      {/* Hero background — fixed full-bleed image with dark wash + grain */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <Image
           src="/hero-kingdom-bg.webp"

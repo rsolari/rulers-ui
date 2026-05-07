@@ -20,6 +20,7 @@ import {
 import { BUILDING_DEFS, BUILDING_SIZE_DATA, LEVY_DURATION_SEASONS, SEASONS, SHIP_DEFS, TAX_RATES, TAX_TURMOIL, TROOP_DEFS } from '@/lib/game-logic/constants';
 import { ActionComments } from '@/components/turn-actions/action-comments';
 import { ActionKindBadge, ActionOutcomeBadge, ActionStatusBadge } from '@/components/turn-actions/action-status-badge';
+import { lookupLabel, type SelectOption } from '@/components/turn-actions/options';
 import { Badge } from '@/components/ui/badge';
 
 const BUILDING_OPTIONS = Object.entries(BUILDING_DEFS).map(([value, def]) => {
@@ -85,9 +86,9 @@ const DICE_SIDES = 6;
 
 interface TurnActionCardProps {
   action: TurnActionRecord;
-  settlementOptions: Array<{ value: string; label: string }>;
-  realmOptions?: Array<{ value: string; label: string }>;
-  nobleOptions?: Array<{ value: string; label: string }>;
+  settlementOptions: SelectOption[];
+  realmOptions?: SelectOption[];
+  nobleOptions?: SelectOption[];
   taxProjectionContext?: TaxProjectionContext | null;
   editable?: boolean;
   gmExecutable?: boolean;
@@ -137,11 +138,6 @@ function createDraftState(action: TurnActionRecord): TurnActionUpdateDto {
     resolutionSummary: action.resolutionSummary,
     resolutionRolls: action.resolutionRolls,
   };
-}
-
-function lookupLabel(options: Array<{ value: string; label: string }>, value: string | null | undefined): string | null {
-  if (!value) return null;
-  return options.find((o) => o.value === value)?.label ?? value;
 }
 
 function getRequiredAllotmentType(buildingType: string | null | undefined): GOSType | null {
@@ -341,9 +337,9 @@ function ReadOnlySummary({
   taxProjectionContext,
 }: {
   action: TurnActionRecord;
-  settlementOptions: Array<{ value: string; label: string }>;
-  realmOptions: Array<{ value: string; label: string }>;
-  nobleOptions: Array<{ value: string; label: string }>;
+  settlementOptions: SelectOption[];
+  realmOptions: SelectOption[];
+  nobleOptions: SelectOption[];
   taxProjectionContext?: TaxProjectionContext | null;
 }) {
   if (action.kind === 'political') {

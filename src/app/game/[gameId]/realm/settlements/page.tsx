@@ -206,7 +206,6 @@ export default function SettlementsPage() {
       return data.error ?? 'Failed to assign governor';
     }
 
-    // Refresh settlements
     await refreshSettlements();
     return null;
   }

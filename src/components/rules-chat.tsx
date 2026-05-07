@@ -36,7 +36,6 @@ export function RulesChat() {
 
   return (
     <>
-      {/* Trigger button */}
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -46,10 +45,8 @@ export function RulesChat() {
         {open ? '\u2715' : '\u2709'}
       </button>
 
-      {/* Chat panel */}
       {open && (
         <div className="fixed bottom-20 right-6 z-50 w-[400px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-7rem)] flex flex-col medieval-border rounded-lg bg-card shadow-xl">
-          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-ink-100">
             <h3 className="font-heading text-sm font-semibold text-ink-600">Rules Advisor</h3>
             <div className="flex items-center gap-2">
@@ -65,7 +62,6 @@ export function RulesChat() {
             </div>
           </div>
 
-          {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
               <p className="text-sm text-ink-300 text-center mt-8">
@@ -99,14 +95,12 @@ export function RulesChat() {
             ))}
           </div>
 
-          {/* Error */}
           {error && (
             <div className="px-4 py-2 text-xs text-red-600 bg-red-50 border-t border-red-200">
               {error}
             </div>
           )}
 
-          {/* Input */}
           <div className="border-t border-ink-100 px-4 py-3 flex gap-2">
             <textarea
               ref={textareaRef}

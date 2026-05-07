@@ -68,21 +68,16 @@ async function getCookieValue(name: string) {
   return cookieStore.get(name)?.value ?? null;
 }
 
-export async function getGameIdCookie(): Promise<string | null> {
+async function getGameIdCookie(): Promise<string | null> {
   return getCookieValue('rulers-game-id');
 }
 
-export async function getClaimCode(): Promise<string | null> {
+async function getClaimCode(): Promise<string | null> {
   return getCookieValue('rulers-claim-code');
 }
 
 export async function getGmCode(): Promise<string | null> {
   return getCookieValue('rulers-gm-code');
-}
-
-export async function getRealmId(): Promise<string | null> {
-  const session = await resolveSessionFromCookies();
-  return session.realmId;
 }
 
 export async function resolveSessionFromCookies(): Promise<PublicSession> {

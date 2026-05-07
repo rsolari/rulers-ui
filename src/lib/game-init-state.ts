@@ -13,7 +13,7 @@ import {
 } from '@/db/schema';
 import type { GameInitState, GamePhase, GMSetupState, PlayerSetupState } from '@/types/game';
 
-export const INIT_STATE_TO_LEGACY_PHASE: Record<GameInitState, GamePhase> = {
+const INIT_STATE_TO_LEGACY_PHASE: Record<GameInitState, GamePhase> = {
   gm_world_setup: 'Setup',
   player_invites_open: 'RealmCreation',
   parallel_final_setup: 'RealmCreation',
@@ -338,4 +338,3 @@ export async function setGMSetupState(gameId: string, nextState: GMSetupState) {
 
   return recomputeGameInitState(gameId);
 }
-

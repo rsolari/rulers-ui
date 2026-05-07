@@ -4,7 +4,7 @@ import path from 'path';
 
 const RULES_DIR = path.join(process.cwd(), 'rules');
 
-export function getAllRulesContent(): string {
+function getAllRulesContent(): string {
   const chapters = getRuleChapters();
   return chapters
     .map((ch) => {

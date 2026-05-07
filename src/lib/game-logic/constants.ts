@@ -60,25 +60,9 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDef> = {
   Weaponsmith:   { type: 'Weaponsmith',   category: 'Military',      size: 'Medium', prerequisites: ['Ore'],                              description: 'Allows recruitment of certain Troops.' },
 };
 
-// Buildings that require an associated GOS to construct. The mapped GOS type
-// must match the type of the GOS the building is allotted to or owned by.
-export const GOS_REQUIRED_BUILDINGS: Partial<Record<BuildingType, GOSType>> = {
-  Chapel: 'Order',
-  Church: 'Order',
-  Cathedral: 'Order',
-  Academy: 'Society',
-  College: 'Society',
-  University: 'Society',
-  Bank: 'Guild',
-};
-
-export function buildingRequiresGosType(buildingType: BuildingType): GOSType | null {
-  return GOS_REQUIRED_BUILDINGS[buildingType] ?? null;
-}
-
 const BUILDING_SIZE_ORDER: BuildingSize[] = ['Tiny', 'Small', 'Medium', 'Large', 'Colossal'];
 
-export const BUILDING_UPGRADE_PATHS: Partial<Record<BuildingType, BuildingType[]>> = {
+const BUILDING_UPGRADE_PATHS: Partial<Record<BuildingType, BuildingType[]>> = {
   Academy: ['College', 'University'],
   Chapel: ['Church', 'Cathedral'],
   Church: ['Cathedral'],
@@ -405,7 +389,6 @@ export const TRADE_BONUS_PER_PRODUCT = 0.05;     // 5% per product exported
 export const MERCANTILE_TRADE_BONUS = 0.10;       // additional 10%
 export const TRADED_RESOURCE_SURCHARGE = 0.25;    // 25% extra cost
 export const TRADE_PROTECTION_SEASONS = 2;
-export const TRADE_ROUTE_CLOSE_TURMOIL = 1;
 
 // Quality tiers for price competition (1-8, higher wins)
 export const QUALITY_TIERS = {
@@ -433,14 +416,6 @@ export const ORDER_INCOME: Record<BuildingSize, number> = {
 
 export const SOCIETY_INCOME: Record<BuildingSize, number> = {
   Tiny: 100, Small: 200, Medium: 400, Large: 800, Colossal: 1600,
-};
-
-// --- Fortification Defence Ratings ---
-
-export const FORTIFICATION_DEFENCE: Record<string, number> = {
-  'Wooden Walls': 2, 'Wooden Gatehouse': 4, 'Wooden Watchtower': 3,
-  'Stone Walls': 4, 'Stone Gatehouse': 6, 'Stone Watchtower': 5,
-  'Fort': 6, 'Castle': 8,
 };
 
 // --- Noble Personality Generation Tables ---

@@ -4,12 +4,14 @@ import { PlayerTurnReportPanel } from './player-turn-report-panel';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
 import type { CurrentTurnResponseDto, TurnHistoryEntry } from '@/types/game';
 
-function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }) {
+type JsonResponseMock = Pick<Response, 'ok' | 'status' | 'json'>;
+
+function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }): JsonResponseMock {
   return {
     ok: init?.ok ?? true,
     status: init?.status ?? 200,
     json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
+  };
 }
 
 const currentTurn: CurrentTurnResponseDto = {

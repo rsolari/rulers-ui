@@ -32,7 +32,6 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
     window.scrollTo(0, 0);
   }, [pathname]);
 
-  // Don't show nav on the join/auth page itself
   const isJoinPage = pathname === `/game/${gameId}`;
 
   return (

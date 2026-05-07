@@ -2,12 +2,8 @@ import { apiErrorResponse } from '@/lib/api-errors';
 import { NextResponse } from 'next/server';
 import { requireOwnedRealmAccess, resolveSessionFromCookies } from '@/lib/auth';
 import { createComment, listComments } from '@/lib/turn-action-service';
+import { getTurnActorLabel } from '@/lib/turn-actors';
 import type { ActionCommentCreateDto } from '@/types/game';
-
-function getActorLabel(role: 'player' | 'gm', displayName?: string | null) {
-  if (role === 'gm') return 'GM';
-  return displayName?.trim() || 'Player';
-}
 
 export async function GET(
   request: Request,
@@ -51,7 +47,7 @@ export async function POST(
       return NextResponse.json({
         comment: createComment(gameId, actionId, {
           role: 'gm',
-          label: getActorLabel('gm'),
+          label: getTurnActorLabel('gm'),
         }, body.body),
       });
     }
@@ -60,7 +56,7 @@ export async function POST(
     return NextResponse.json({
       comment: createComment(gameId, actionId, {
         role: 'player',
-        label: getActorLabel('player', session.displayName),
+        label: getTurnActorLabel('player', session.displayName),
       }, body.body, realmId),
     });
   } catch (error) {

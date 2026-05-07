@@ -18,7 +18,6 @@ export function getRuleChapters(): RuleChapter[] {
   return files.map(filename => {
     const slug = filename.replace('.md', '');
     const number = slug.split('-')[0];
-    // Read first line to get the title
     const content = fs.readFileSync(path.join(RULES_DIR, filename), 'utf-8');
     const firstLine = content.split('\n')[0];
     const title = firstLine.replace(/^#+\s*/, '') || slug;

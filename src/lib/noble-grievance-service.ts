@@ -31,7 +31,7 @@ function countRemainingSeasons(currentYear: number, currentSeason: Season, expir
   return expiryIndex - currentIndex + 1;
 }
 
-export function isActiveNobleGrievance(
+function isActiveNobleGrievance(
   grievance: NobleGrievanceState,
   currentYear: number,
   currentSeason: Season,
@@ -52,7 +52,7 @@ export function isActiveNobleGrievance(
   return compareTurns(currentYear, currentSeason, grievance.expiresYear, grievance.expiresSeason) <= 0;
 }
 
-export function mapNobleGrievanceToTurmoilSource(
+function mapNobleGrievanceToTurmoilSource(
   grievance: NobleGrievanceState,
   currentYear: number,
   currentSeason: Season,

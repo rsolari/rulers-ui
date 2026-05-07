@@ -33,7 +33,6 @@ export async function POST(request: Request) {
     id,
     name,
     gmCode,
-    playerCode,
     gamePhase: 'Setup',
     initState: 'gm_world_setup',
     gmSetupState: 'pending',

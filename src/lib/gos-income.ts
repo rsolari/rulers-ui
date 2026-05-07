@@ -47,7 +47,7 @@ function rateForRarity(rarity: ResourceRarity): number {
   return GUILD_INCOME[rarity] ?? 0;
 }
 
-export function computeGuildIncomeBreakdown(args: {
+function computeGuildIncomeBreakdown(args: {
   gos: GosRow;
   sites: GuildIncomeSiteInput[];
   industries: GuildIncomeIndustryInput[];
@@ -144,7 +144,7 @@ function calculateBuildingIncome(
   return total;
 }
 
-export function calculateGosTurnIncome(args: {
+function calculateGosTurnIncome(args: {
   gos: GosRow;
   buildings: BuildingRow[];
   sites: GuildIncomeSiteInput[];

@@ -86,11 +86,11 @@ function getHexIssues(definition: CuratedMapDefinition) {
   return issues;
 }
 
-export function getHexCoordKey(q: number, r: number) {
+function getHexCoordKey(q: number, r: number) {
   return `${q}:${r}`;
 }
 
-export function getHexNeighbors({ q, r }: HexCoordinate) {
+function getHexNeighbors({ q, r }: HexCoordinate) {
   return HEX_DIRECTIONS.map((direction) => ({
     q: q + direction.q,
     r: r + direction.r,
@@ -117,7 +117,7 @@ export function getCuratedMapDefinition(mapKey = DEFAULT_CURATED_MAP_KEY) {
   return validateCuratedMapDefinition(definition);
 }
 
-export function getCuratedMapTerritories(mapKey = DEFAULT_CURATED_MAP_KEY): CuratedMapTerritoryDefinition[] {
+function getCuratedMapTerritories(mapKey = DEFAULT_CURATED_MAP_KEY): CuratedMapTerritoryDefinition[] {
   return getCuratedMapDefinition(mapKey).territories;
 }
 
@@ -214,7 +214,7 @@ export function importCuratedGameMap(
   return { gameMapId, territoryHexIds, hexIdsByCoordKey };
 }
 
-export async function getTerritoryLandHexes(database: MapReadDatabase, territoryId: string) {
+async function getTerritoryLandHexes(database: MapReadDatabase, territoryId: string) {
   return database.select({
     id: mapHexes.id,
     territoryId: mapHexes.territoryId,

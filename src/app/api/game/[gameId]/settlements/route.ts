@@ -9,6 +9,7 @@ import { getAvailableSettlementHexId, getLandHexById } from '@/lib/game-logic/ma
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { assertNobleCanHoldExclusiveOffice } from '@/lib/game-logic/nobles';
 import { BUILDING_DEFS } from '@/lib/game-logic/constants';
+import { normalizeOptionalString } from '@/lib/request-parsing';
 import type { SettlementKind, SettlementSize } from '@/types/game';
 
 type GoverningNobleSummary = {
@@ -47,10 +48,6 @@ function normalizeSettlementKind(value: unknown): SettlementKind {
 
 function normalizeSettlementSize(value: unknown): SettlementSize {
   return parseSettlementSize(value) ?? 'Village';
-}
-
-function normalizeOptionalString(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 async function getGoverningNobleMap(settlementList: Array<{

@@ -177,12 +177,10 @@ export default function GOSPage() {
   const [newFocus, setNewFocus] = useState('');
   const [selectedRealmIds, setSelectedRealmIds] = useState<string[]>([]);
 
-  // Edit state
   const [editGosId, setEditGosId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Assets panel state
   const [expandedGosId, setExpandedGosId] = useState<string | null>(null);
   const [assets, setAssets] = useState<GOSAssets | null>(null);
   const [assetsLoading, setAssetsLoading] = useState(false);
@@ -401,7 +399,6 @@ export default function GOSPage() {
                 ))}
               </div>
 
-              {/* Assets toggle */}
               <div className="pt-2 border-t border-card-border">
                 <Button
                   variant="ghost"
@@ -488,7 +485,6 @@ export default function GOSPage() {
         </Dialog>
       )}
 
-      {/* Edit GOS Dialog (GM only) */}
       {editGosId && editForm && (
         <Dialog open onClose={() => { setEditGosId(null); setEditForm(null); }}>
           <DialogTitle>Edit Guild, Order, or Society</DialogTitle>
@@ -609,7 +605,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
   const hasFleets = assets.fleets.length > 0;
   const hasAny = hasBuildings || hasAllottedBuildings || hasResourceSites || hasIndustries || hasTroops || hasArmies || hasShips || hasFleets;
 
-  // Calculate income from industries (via resource sites)
   const industryIncome = assets.resourceSites
     .filter((rs) => rs.industryIsOperational && rs.industryWealthGenerated)
     .reduce((sum, rs) => sum + (rs.industryWealthGenerated ?? 0), 0)
@@ -617,7 +612,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
       .filter((ind) => ind.isOperational)
       .reduce((sum, ind) => sum + ind.wealthGenerated, 0);
 
-  // Estimate troop/ship upkeep (simplified — just count ready units)
   const readyTroops = assets.troops.filter((t) => t.recruitmentTurnsRemaining === 0).length;
   const readyShips = assets.ships.filter((s) => s.constructionTurnsRemaining === 0).length;
 
@@ -641,7 +635,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         </div>
       )}
 
-      {/* Summary */}
       <div className="flex flex-wrap gap-x-6 gap-y-2 p-3 rounded medieval-border bg-parchment-800/30">
         {industryIncome > 0 && (
           <div><span className="text-ink-300">Industry Wealth Generated:</span> <span className="text-green-700">{industryIncome}gc</span></div>
@@ -657,7 +650,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         )}
       </div>
 
-      {/* Owned Buildings */}
       {hasBuildings && (
         <div>
           <p className="font-heading font-semibold mb-1">Owned Buildings</p>
@@ -683,7 +675,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         </div>
       )}
 
-      {/* Allotted Buildings */}
       {hasAllottedBuildings && (
         <div>
           <p className="font-heading font-semibold mb-1">Allotted Buildings</p>
@@ -700,7 +691,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         </div>
       )}
 
-      {/* Resource Sites */}
       {hasResourceSites && (
         <div>
           <p className="font-heading font-semibold mb-1">Resource Sites</p>
@@ -729,7 +719,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         </div>
       )}
 
-      {/* Standalone Industries */}
       {hasIndustries && (
         <div>
           <p className="font-heading font-semibold mb-1">Owned Industries</p>
@@ -752,7 +741,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         </div>
       )}
 
-      {/* Armies */}
       {hasArmies && (
         <div>
           <p className="font-heading font-semibold mb-1">Armies</p>
@@ -764,7 +752,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         </div>
       )}
 
-      {/* Troops */}
       {hasTroops && (
         <div>
           <p className="font-heading font-semibold mb-1">Troops ({assets.troops.length})</p>
@@ -788,7 +775,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         </div>
       )}
 
-      {/* Fleets */}
       {hasFleets && (
         <div>
           <p className="font-heading font-semibold mb-1">Fleets</p>
@@ -800,7 +786,6 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
         </div>
       )}
 
-      {/* Ships */}
       {hasShips && (
         <div>
           <p className="font-heading font-semibold mb-1">Ships ({assets.ships.length})</p>

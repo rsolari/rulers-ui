@@ -23,7 +23,6 @@ export default function GameRedirect() {
   const [joining, setJoining] = useState(false);
   const [realmChoices, setRealmChoices] = useState<RealmOption[] | null>(null);
 
-  // Redirect if already authenticated
   useEffect(() => {
     if (loading) {
       return;
@@ -105,7 +104,6 @@ export default function GameRedirect() {
     );
   }
 
-  // Realm selection step
   if (realmChoices) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4">
@@ -134,7 +132,6 @@ export default function GameRedirect() {
     );
   }
 
-  // Join form
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
       <Card className="w-full max-w-md">

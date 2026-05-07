@@ -33,14 +33,6 @@ export async function POST(request: Request) {
 
   const slot = await db.select().from(playerSlots).where(eq(playerSlots.claimCode, code)).get();
   if (!slot) {
-    // Check if this is the legacy game-level player code (not used for joining)
-    const gameByPlayerCode = await db.select().from(games).where(eq(games.playerCode, code)).get();
-    if (gameByPlayerCode) {
-      return NextResponse.json(
-        { error: 'That is the game reference code, not a player claim code. Ask your GM for your individual claim code.' },
-        { status: 404 }
-      );
-    }
     return NextResponse.json({ error: 'Invalid game code' }, { status: 404 });
   }
 

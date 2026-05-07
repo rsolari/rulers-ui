@@ -14,6 +14,7 @@ import { useRole } from '@/hooks/use-role';
 import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import { RESOURCE_RARITY } from '@/lib/game-logic/constants';
 import type { ResourceRarity, ResourceType, SettlementSize } from '@/types/game';
+import type { GameSettlementDto, GameTerritoryDto, PlayerSlotDto, ResourceSiteDto } from '@/types/api';
 
 const RESOURCE_OPTIONS = [
   { value: 'Timber', label: 'Timber (Common)' },
@@ -43,42 +44,6 @@ const SETUP_STATE_LABELS: Record<string, string> = {
   ready: 'Ready',
 };
 
-interface PlayerSlotDto {
-  id: string;
-  claimCode: string;
-  territoryId: string;
-  territoryName: string | null;
-  realmId: string | null;
-  displayName: string | null;
-  setupState: string;
-  status: string;
-  checklist: Record<string, boolean> | null;
-  missingRequirements: string[];
-}
-
-interface Territory {
-  id: string;
-  name: string;
-  description: string | null;
-  realmId: string | null;
-}
-
-interface Settlement {
-  id: string;
-  territoryId: string;
-  hexId: string | null;
-  name: string;
-  size: string;
-  kind: string;
-}
-
-interface ResourceSite {
-  id: string;
-  territoryId: string;
-  resourceType: string;
-  rarity: string;
-}
-
 interface SettlementDraft {
   name: string;
   hexId: string;
@@ -98,14 +63,13 @@ export default function RealmSlotsPage() {
   const { role, loading } = useRole();
 
   const [slots, setSlots] = useState<PlayerSlotDto[]>([]);
-  const [allTerritories, setAllTerritories] = useState<Territory[]>([]);
-  const [allSettlements, setAllSettlements] = useState<Settlement[]>([]);
-  const [allResources, setAllResources] = useState<ResourceSite[]>([]);
+  const [allTerritories, setAllTerritories] = useState<GameTerritoryDto[]>([]);
+  const [allSettlements, setAllSettlements] = useState<GameSettlementDto[]>([]);
+  const [allResources, setAllResources] = useState<ResourceSiteDto[]>([]);
   const [mapData, setMapData] = useState<GameMapData | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  // New slot form state
   const [showNewSlotForm, setShowNewSlotForm] = useState(false);
   const [newSlotTerritoryId, setNewSlotTerritoryId] = useState('');
   const [newSlotDisplayName, setNewSlotDisplayName] = useState('');
@@ -145,12 +109,10 @@ export default function RealmSlotsPage() {
   );
 
   const newSlotPlacements = useMemo<TerritoryMapPlacement[]>(() => {
-    // Existing settlements in this territory
     const existing = allSettlements
       .filter((s) => s.territoryId === newSlotTerritoryId && s.hexId)
       .map((s) => ({ id: s.id, name: s.name, size: s.size, kind: s.kind, hexId: s.hexId }));
 
-    // Draft placements
     const drafts = newSlotSettlements
       .filter((d) => d.hexId)
       .map((d, i) => ({ id: `draft-${i}`, name: d.name || 'New Settlement', size: d.size, hexId: d.hexId }));
@@ -406,7 +368,6 @@ export default function RealmSlotsPage() {
         ) : null}
       </div>
 
-      {/* New Slot Form */}
       {!showNewSlotForm ? (
         <div className="mt-8">
           <Button

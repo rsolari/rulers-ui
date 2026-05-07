@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SettlementMarker } from '@/components/map/SettlementMarker';
+import { terrainFill } from '@/components/map/terrain-colors';
 import { computeTerritoryBorderSegments, computeViewBox, hexToPixel, hexVertices } from '@/components/map/hex-utils';
 import { computeRiverPaths, type RiverHexInput } from '@/components/map/river-utils';
 import type { TerritoryMapData } from '@/lib/maps/territory-map';
@@ -10,27 +11,6 @@ const HEX_SIZE_BY_VARIANT = {
   compact: 16,
   full: 22,
 } as const;
-
-const TERRAIN_COLORS: Record<string, string> = {
-  flat_grassland: '#9fbf68',
-  flat_forest_deciduous_heavy: '#2f5f38',
-  hills: '#b8a070',
-  hills_forest_deciduous: '#6f8a4f',
-  mountains_forest_deciduous: '#6f7565',
-  flat_farmland: '#c8b870',
-  flat_swamp: '#6a7a58',
-  flat_desert_rocky: '#c59f61',
-  flat_forest_deciduous: '#5a7a4a',
-  mountains: '#8a8078',
-  mountains_forest_jungle: '#4f6650',
-  flat_desert_sandy: '#d4b868',
-  hills_grassy: '#a6ad62',
-  hills_forest_jungle: '#4e7644',
-  flat_forest_jungle: '#3a6a3a',
-  badlands: '#b07a58',
-  sea: '#5a7a9a',
-  lake: '#7a9ab0',
-};
 
 export interface TerritoryMapPlacement {
   id: string;
@@ -49,14 +29,6 @@ interface TerritoryHexMapProps {
   variant?: 'compact' | 'full';
   showContext?: boolean;
   onHexSelect?: (hexId: string) => void;
-}
-
-function terrainFill(hex: TerritoryMapData['hexes'][number]) {
-  if (hex.hexKind === 'water') {
-    return hex.waterKind === 'lake' ? TERRAIN_COLORS.lake : TERRAIN_COLORS.sea;
-  }
-
-  return hex.terrainType ? TERRAIN_COLORS[hex.terrainType] ?? TERRAIN_COLORS.flat_farmland : TERRAIN_COLORS.flat_farmland;
 }
 
 export function TerritoryHexMap({

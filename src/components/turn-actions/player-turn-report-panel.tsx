@@ -7,6 +7,16 @@ import { Badge } from '@/components/ui/badge';
 import { TurnActionCard } from '@/components/turn-actions/turn-action-card';
 import { TurnEventCard } from '@/components/turn-actions/turn-event-card';
 import { TurnHistoryList } from '@/components/turn-actions/turn-history-list';
+import { parseOptionalResponse, parseResponse } from '@/components/turn-actions/api-client';
+import {
+  lookupLabel,
+  toGosOptions,
+  toNobleOptions,
+  toSelectOptions,
+  toSettlementOptions,
+  type GOSOption,
+  type SelectOption,
+} from '@/components/turn-actions/options';
 import { SEASONS } from '@/lib/game-logic/constants';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
 import type { CurrentTurnResponseDto, GOSType, TaxType, TurnActionCreateDto, TurnActionRecord, TurnActionUpdateDto, TurnHistoryEntry } from '@/types/game';
@@ -15,33 +25,6 @@ interface PlayerTurnReportPanelProps {
   gameId: string;
   realmId: string;
   compact?: boolean;
-}
-
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-interface GOSOption extends SelectOption {
-  type: GOSType;
-}
-
-async function parseResponse<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(typeof data?.error === 'string' ? data.error : 'Request failed');
-  }
-  return data as T;
-}
-
-async function parseOptionalResponse<T>(response: Response): Promise<T | null> {
-  if (!response.ok) return null;
-  return response.json() as Promise<T>;
-}
-
-function lookupLabel(options: SelectOption[], value: string | null | undefined): string | null {
-  if (!value) return null;
-  return options.find((option) => option.value === value)?.label ?? value;
 }
 
 function formatFinancialActionSummary(action: TurnActionRecord, settlementOptions: SelectOption[]) {
@@ -117,12 +100,10 @@ export function PlayerTurnReportPanel({ gameId, realmId, compact = false }: Play
       startTransition(() => {
         setCurrentTurn(turnData);
         setHistory(historyData.history);
-        setSettlementOptions(settlements
-          .filter((settlement) => !settlement.kind || settlement.kind === 'settlement')
-          .map((s) => ({ value: s.id, label: s.name })));
-        setRealmOptions(allRealms.map((r) => ({ value: r.id, label: r.name })));
-        setNobleOptions(realmNobles.map((n) => ({ value: n.id, label: `${n.name} (R${n.reasonSkill} / C${n.cunningSkill})` })));
-        setGosOptions(gosList.map((gos) => ({ value: gos.id, label: `${gos.name} (${gos.type})`, type: gos.type })));
+        setSettlementOptions(toSettlementOptions(settlements));
+        setRealmOptions(toSelectOptions(allRealms));
+        setNobleOptions(toNobleOptions(realmNobles));
+        setGosOptions(toGosOptions(gosList));
         setEconomyProjection(projection);
       });
     } catch (refreshError) {

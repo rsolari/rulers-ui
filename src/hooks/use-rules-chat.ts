@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { readErrorMessage } from '@/lib/http';
 
 export interface ChatMessage {
   id: string;
@@ -49,8 +50,7 @@ export function useRulesChat() {
       });
 
       if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(err.error || `HTTP ${response.status}`);
+        throw new Error(await readErrorMessage(response, `HTTP ${response.status}`));
       }
 
       if (!response.body) throw new Error('No response body');

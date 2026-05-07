@@ -14,6 +14,7 @@ import { useRole } from '@/hooks/use-role';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import type { GovernmentType, Tradition } from '@/types/game';
+import type { GameSettlementDto, GameTerritoryDto, ResourceSiteDto } from '@/types/api';
 
 const GOVERNMENT_OPTIONS = [
   { value: 'Monarch', label: 'Monarch' },
@@ -30,36 +31,15 @@ const TRADITION_OPTIONS = Object.entries(TRADITION_DEFS).map(([key, def]) => ({
   label: `${def.displayName} (${def.category})`,
 }));
 
-interface Territory {
-  id: string;
-  name: string;
-  description: string | null;
-}
-
-interface Settlement {
-  id: string;
-  hexId: string | null;
-  name: string;
-  size: string;
-  kind: string;
-}
-
-interface ResourceSite {
-  id: string;
-  territoryId: string;
-  resourceType: string;
-  rarity: string;
-}
-
 export default function CreateRealmPage() {
   const params = useParams();
   const router = useRouter();
   const gameId = params.gameId as string;
   const { role, realmId, territoryId, initState, displayName, loading } = useRole();
 
-  const [territory, setTerritory] = useState<Territory | null>(null);
-  const [settlements, setSettlements] = useState<Settlement[]>([]);
-  const [resources, setResources] = useState<ResourceSite[]>([]);
+  const [territory, setTerritory] = useState<GameTerritoryDto | null>(null);
+  const [settlements, setSettlements] = useState<GameSettlementDto[]>([]);
+  const [resources, setResources] = useState<ResourceSiteDto[]>([]);
   const [mapData, setMapData] = useState<GameMapData | null>(null);
   const [name, setName] = useState('');
   const [governmentType, setGovernmentType] = useState<GovernmentType>('Monarch');
@@ -141,13 +121,13 @@ export default function CreateRealmPage() {
         fetch(`/api/game/${gameId}/map`),
       ]);
 
-      const territoryList = await territoryResponse.json();
-      const territoryRecord = territoryList.find((entry: Territory) => entry.id === territoryId) || null;
+      const territoryList: GameTerritoryDto[] = await territoryResponse.json();
+      const territoryRecord = territoryList.find((entry) => entry.id === territoryId) || null;
       setTerritory(territoryRecord);
       setSettlements(await settlementsResponse.json());
 
-      const resourceList = await resourcesResponse.json();
-      setResources(resourceList.filter((entry: ResourceSite) => entry.territoryId === territoryId));
+      const resourceList: ResourceSiteDto[] = await resourcesResponse.json();
+      setResources(resourceList.filter((entry) => entry.territoryId === territoryId));
       setMapData(await mapResponse.json());
     }
 

@@ -10,6 +10,7 @@ import { SHIP_DEFS } from '@/lib/game-logic/constants';
 import { recomputeGameInitState } from '@/lib/game-init-state';
 import { assertNobleCanHoldExclusiveOffice } from '@/lib/game-logic/nobles';
 import { isRuleValidationError, prepareRealmShipConstruction } from '@/lib/rules-action-service';
+import { normalizeOptionalString } from '@/lib/request-parsing';
 import type { ShipType, WaterZoneType } from '@/types/game';
 
 const SHIP_TYPES = Object.keys(SHIP_DEFS) as ShipType[];
@@ -133,21 +134,31 @@ export async function POST(
 ) {
   try {
     const { gameId } = await params;
-    const body = await request.json();
-    const access = await requireOwnedRealmAccess(gameId, body.realmId);
+    const body = await request.json() as Record<string, unknown>;
+    const name = normalizeOptionalString(body.name);
+    const requestedRealmId = normalizeOptionalString(body.realmId);
+    const locationHexIdInput = normalizeOptionalString(body.locationHexId);
+    const locationTerritoryId = normalizeOptionalString(body.locationTerritoryId);
+    const homeSettlementId = normalizeOptionalString(body.homeSettlementId);
+    const admiralId = normalizeOptionalString(body.admiralId);
+    const waterZoneType = normalizeOptionalString(body.waterZoneType);
+
+    if (!name) {
+      return NextResponse.json({ error: 'Fleet name is required' }, { status: 400 });
+    }
+
+    const access = await requireOwnedRealmAccess(gameId, requestedRealmId);
     const realmId = access.realmId;
     const isPlayer = access.session.gameId === gameId && access.session.role === 'player';
-    const locationHex = body.locationHexId
-      ? await getWaterHexById(db, body.locationHexId)
+    const locationHex = locationHexIdInput
+      ? await getWaterHexById(db, locationHexIdInput)
       : null;
-
-    const locationTerritoryId = body.locationTerritoryId as string | undefined;
 
     if (!locationTerritoryId) {
       return NextResponse.json({ error: 'locationTerritoryId required' }, { status: 400 });
     }
 
-    if (body.locationHexId && !locationHex) {
+    if (locationHexIdInput && !locationHex) {
       return NextResponse.json({ error: 'Fleet must be placed on a water hex' }, { status: 400 });
     }
 
@@ -177,8 +188,8 @@ export async function POST(
     }
 
     const inferredZone: WaterZoneType =
-      body.waterZoneType === 'river' || body.waterZoneType === 'coast' || body.waterZoneType === 'ocean'
-        ? body.waterZoneType
+      waterZoneType === 'river' || waterZoneType === 'coast' || waterZoneType === 'ocean'
+        ? waterZoneType
         : locationTerritory.hasSeaAccess
           ? 'coast'
           : 'river';
@@ -191,11 +202,11 @@ export async function POST(
       return NextResponse.json({ error: 'Sea fleets require sea access' }, { status: 400 });
     }
 
-    if (body.homeSettlementId) {
+    if (homeSettlementId) {
       const homeSettlement = await db.select({ id: settlements.id })
         .from(settlements)
         .where(and(
-          eq(settlements.id, body.homeSettlementId),
+          eq(settlements.id, homeSettlementId),
           eq(settlements.realmId, realmId),
         ))
         .get();
@@ -205,10 +216,10 @@ export async function POST(
       }
     }
 
-    if (body.admiralId) {
+    if (admiralId) {
       const admiral = await db.select().from(nobles)
         .where(and(
-          eq(nobles.id, body.admiralId),
+          eq(nobles.id, admiralId),
           eq(nobles.realmId, realmId),
         ))
         .get();
@@ -231,9 +242,9 @@ export async function POST(
     await db.insert(fleets).values({
       id,
       realmId,
-      name: body.name,
-      admiralId: body.admiralId || null,
-      homeSettlementId: body.homeSettlementId || null,
+      name,
+      admiralId,
+      homeSettlementId,
       locationTerritoryId: locationTerritory.id,
       locationHexId,
       destinationTerritoryId: null,
@@ -247,9 +258,9 @@ export async function POST(
     return NextResponse.json({
       id,
       realmId,
-      name: body.name,
-      admiralId: body.admiralId || null,
-      homeSettlementId: body.homeSettlementId || null,
+      name,
+      admiralId,
+      homeSettlementId,
       locationTerritoryId: locationTerritory.id,
       locationHexId,
       destinationTerritoryId: null,

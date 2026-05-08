@@ -227,6 +227,62 @@ describe('/api/game/[gameId]/fleets', () => {
     });
   });
 
+  it('trims fleet names before writing to the database', async () => {
+    uuidMock.mockReturnValue('fleet-1');
+    authMocks.requireOwnedRealmAccess.mockResolvedValue({
+      realm: { id: 'realm-player' },
+      realmId: 'realm-player',
+      session: { gameId: 'game-1', role: 'player', realmId: 'realm-player' },
+    });
+    mapMocks.getWaterHexById.mockResolvedValue(null);
+    mapMocks.getDefaultFleetHexId.mockResolvedValue('hex-coast');
+    dbMocks.dbGet.mockResolvedValue({
+      id: 'territory-1',
+      realmId: 'realm-player',
+      hasRiverAccess: false,
+      hasSeaAccess: true,
+    });
+
+    const response = await POST(new Request('http://localhost/api/game/game-1/fleets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-player',
+        name: '  Western Fleet  ',
+        locationTerritoryId: 'territory-1',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      name: 'Western Fleet',
+    });
+    expect(dbMocks.insertValues).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Western Fleet',
+    }));
+  });
+
+  it('rejects blank fleet names before writing to the database', async () => {
+    const response = await POST(new Request('http://localhost/api/game/game-1/fleets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        realmId: 'realm-player',
+        name: '   ',
+        locationTerritoryId: 'territory-1',
+      }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Fleet name is required' });
+    expect(authMocks.requireOwnedRealmAccess).not.toHaveBeenCalled();
+    expect(dbMocks.insertValues).not.toHaveBeenCalled();
+  });
+
   it('rejects fleet creation when the territory has no usable water hex', async () => {
     authMocks.requireOwnedRealmAccess.mockResolvedValue({
       realm: { id: 'realm-player' },

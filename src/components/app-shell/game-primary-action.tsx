@@ -61,7 +61,7 @@ export function GamePrimaryAction({ shell, onRefresh }: GamePrimaryActionProps) 
       return <LinkButton href={`/game/${game.id}/gm/realm-slots`} label="Manage Realm Slots" />;
     }
 
-    return <LinkButton href={`/game/${game.id}/gm#turn-review`} label="Review Turns" />;
+    return <LinkButton href={`/game/${game.id}/gm?tab=turns#turn-review`} label="Review Turns" />;
   }
 
   if (session.role === 'player') {

@@ -68,6 +68,22 @@ describe('buildGameNavigation', () => {
     expect(nav.sections.flatMap((section) => section.items).find((item) => item.id === 'world-map')?.active).toBe(true);
   });
 
+  it('links active GM turn review navigation to the turns tab', () => {
+    const nav = buildGameNavigation({
+      gameId: 'game-1',
+      pathname: '/game/game-1/gm',
+      role: 'gm',
+      initState: 'active',
+      gamePhase: 'Active',
+      activeRealmId: null,
+      isGmManagingRealm: false,
+    });
+
+    expect(nav.sections.flatMap((section) => section.items).find((item) => item.id === 'review-turns')).toMatchObject({
+      href: '/game/game-1/gm?tab=turns#turn-review',
+    });
+  });
+
   it('preserves GM managed realm query in realm links', () => {
     const nav = buildGameNavigation({
       gameId: 'game-1',

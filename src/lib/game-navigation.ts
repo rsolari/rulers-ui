@@ -100,7 +100,7 @@ export function buildGameNavigation(input: BuildGameNavigationInput): {
       { id: 'realm-slots', label: 'Realm Slots', path: '/gm/realm-slots' },
       { id: 'world-map', label: 'World Map', path: '/map' },
       ...(activeOrCompleted
-        ? [{ id: 'review-turns', label: 'Review Turns', path: '/gm#turn-review', activePaths: ['/gm'] }]
+        ? [{ id: 'review-turns', label: 'Review Turns', path: '/gm?tab=turns#turn-review', activePaths: ['/gm'] }]
         : []),
       { id: 'rulebook', label: 'Rulebook', path: '/rules' },
     ];

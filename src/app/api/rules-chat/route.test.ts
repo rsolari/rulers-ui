@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/rules-chat', () => ({
   buildSystemPrompt: vi.fn(() => 'rules system prompt'),
 }));
 
 import { POST } from './route';
+import { buildSystemPrompt } from '@/lib/rules-chat';
 
 const encoder = new TextEncoder();
+const buildSystemPromptMock = vi.mocked(buildSystemPrompt);
 
 function jsonRequest(body: unknown) {
   return new Request('http://localhost/api/rules-chat', {
@@ -34,6 +36,12 @@ describe('POST /api/rules-chat', () => {
     vi.clearAllMocks();
     process.env.OPENROUTER_API_KEY = 'test-key';
     vi.stubGlobal('fetch', fetchMock);
+    buildSystemPromptMock.mockReturnValue('rules system prompt');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('streams OpenRouter deltas even when SSE JSON is split across chunks', async () => {
@@ -86,6 +94,13 @@ describe('POST /api/rules-chat', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Rules advisor provider returned 401',
     });
+    expect(console.error).toHaveBeenCalledWith(
+      '[rules-chat] OpenRouter returned non-OK response',
+      expect.objectContaining({
+        status: 401,
+        body: 'secret provider details',
+      }),
+    );
   });
 
   it('returns a provider-unavailable error when fetch fails', async () => {
@@ -99,5 +114,30 @@ describe('POST /api/rules-chat', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Rules advisor provider is unavailable',
     });
+    expect(console.error).toHaveBeenCalledWith(
+      '[rules-chat] OpenRouter request failed',
+      expect.any(Error),
+    );
+  });
+
+  it('returns a logged setup error when rules content cannot load', async () => {
+    const error = new Error('rules directory missing');
+    buildSystemPromptMock.mockImplementation(() => {
+      throw error;
+    });
+
+    const response = await POST(jsonRequest({
+      messages: [{ role: 'user', content: 'Question' }],
+    }));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Rules advisor failed to load rules content',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      '[rules-chat] Failed to build system prompt',
+      error,
+    );
   });
 });

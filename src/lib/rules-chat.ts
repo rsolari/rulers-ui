@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const RULES_DIR = path.join(process.cwd(), 'rules');
+let cachedSystemPrompt: string | null = null;
 
 function getAllRulesContent(): string {
   const chapters = getRuleChapters();
@@ -15,8 +16,12 @@ function getAllRulesContent(): string {
 }
 
 export function buildSystemPrompt(): string {
+  if (cachedSystemPrompt) {
+    return cachedSystemPrompt;
+  }
+
   const rules = getAllRulesContent();
-  return `You are a rules advisor for "Rulers," a tabletop RPG about ruling civilizations.
+  cachedSystemPrompt = `You are a rules advisor for "Rulers," a tabletop RPG about ruling civilizations.
 You answer questions based ONLY on the official rulebook provided below.
 
 Guidelines:
@@ -31,4 +36,5 @@ Guidelines:
 <rules>
 ${rules}
 </rules>`;
+  return cachedSystemPrompt;
 }

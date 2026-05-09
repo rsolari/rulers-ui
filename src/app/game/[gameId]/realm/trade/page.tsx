@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRole } from '@/hooks/use-role';
@@ -69,9 +68,6 @@ export default function TradePage() {
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
-      <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm${isGmManaging ? '?realmId=' + realmId : ''}`} className="hover:text-ink-100">← Realm</Link>
-      </nav>
       <h1 className="text-3xl font-bold mb-2">Trade & Resources</h1>
 
       <h2 className="text-xl font-heading font-semibold mt-6 mb-3">Resources</h2>

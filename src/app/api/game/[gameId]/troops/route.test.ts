@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
+  requireGM: vi.fn(),
   requireOwnedRealmAccess: vi.fn(),
   isAuthError: vi.fn((error: unknown) => (
     typeof error === 'object' &&
@@ -17,13 +18,32 @@ const actionMocks = vi.hoisted(() => ({
 
 const recomputeGameInitStateMock = vi.hoisted(() => vi.fn());
 
+const dbMocks = vi.hoisted(() => ({
+  select: vi.fn(),
+  update: vi.fn(),
+}));
+
 vi.mock('@/lib/auth', () => authMocks);
 vi.mock('@/lib/rules-action-service', () => actionMocks);
 vi.mock('@/lib/game-init-state', () => ({
   recomputeGameInitState: recomputeGameInitStateMock,
 }));
+vi.mock('@/db', () => ({
+  db: {
+    select: dbMocks.select,
+    update: dbMocks.update,
+  },
+}));
 
-import { POST } from './route';
+import { PATCH, POST } from './route';
+
+function mockSelectAllOnce(result: unknown) {
+  const all = vi.fn().mockResolvedValue(result);
+  const where = vi.fn(() => ({ all }));
+  const innerJoin = vi.fn(() => ({ where }));
+  const from = vi.fn(() => ({ innerJoin, where }));
+  dbMocks.select.mockReturnValueOnce({ from });
+}
 
 describe('POST /api/game/[gameId]/troops', () => {
   beforeEach(() => {
@@ -118,5 +138,27 @@ describe('POST /api/game/[gameId]/troops', () => {
       details: { troopType: 'Shieldbearers' },
     });
     expect(recomputeGameInitStateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/game/[gameId]/troops', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not bulk-update troops that are not scoped to the route game', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+    mockSelectAllOnce([]);
+
+    const response = await PATCH(new Request('http://localhost/api/game/game-1/troops', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ troopId: 'foreign-troop', condition: 'Ready' }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(dbMocks.update).not.toHaveBeenCalled();
   });
 });

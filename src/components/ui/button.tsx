@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 type ButtonVariant =
   | 'default'
@@ -7,11 +7,15 @@ type ButtonVariant =
   | 'outline-hero'
   | 'ghost'
   | 'destructive';
-type ButtonSize = 'sm' | 'md' | 'lg';
+type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  leftIcon?: ReactNode;
+  rightIcon?: ReactNode;
+  iconOnly?: boolean;
+  loading?: boolean;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -33,16 +37,53 @@ const sizeClasses: Record<ButtonSize, string> = {
   sm: 'px-3.5 py-1.5 text-xs',
   md: 'px-5 py-2.5 text-sm',
   lg: 'px-7 py-3.5 text-base',
+  icon: 'h-11 w-11 p-0 text-sm',
+};
+
+const iconSizeClasses: Record<ButtonSize, string> = {
+  sm: 'h-9 w-9 p-0 text-xs',
+  md: 'h-11 w-11 p-0 text-sm',
+  lg: 'h-12 w-12 p-0 text-base',
+  icon: 'h-11 w-11 p-0 text-sm',
 };
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className = '', variant = 'default', size = 'md', ...props }, ref) => {
+  (
+    {
+      className = '',
+      variant = 'default',
+      size = 'md',
+      leftIcon,
+      rightIcon,
+      iconOnly = false,
+      loading = false,
+      disabled,
+      children,
+      ...props
+    },
+    ref,
+  ) => {
+    const contentClasses = iconOnly || size === 'icon' ? iconSizeClasses[size] : sizeClasses[size];
+
     return (
       <button
         ref={ref}
-        className={`inline-flex items-center justify-center font-display tracking-[0.06em] rounded transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-0 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
+        className={`inline-flex items-center justify-center gap-2 font-display tracking-[0.06em] rounded transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-0 ${variantClasses[variant]} ${contentClasses} ${className}`}
         {...props}
-      />
+      >
+        {loading ? (
+          <span
+            className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+            aria-hidden="true"
+          />
+        ) : leftIcon ? (
+          <span className="inline-flex shrink-0" aria-hidden="true">{leftIcon}</span>
+        ) : null}
+        {iconOnly ? <span className="sr-only">{children}</span> : children}
+        {!loading && rightIcon ? <span className="inline-flex shrink-0" aria-hidden="true">{rightIcon}</span> : null}
+      </button>
     );
   }
 );

@@ -2,14 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { Edit, Eye, EyeOff, Plus } from 'lucide-react';
+import { AppPage, AppPageHeader } from '@/components/layout/app-page';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { EmptyState, LoadingState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { StatRow } from '@/components/ui/stat-row';
+import { StatusPill } from '@/components/ui/status-pill';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { InlineMutationMessage } from '@/components/ui/mutation-feedback';
 import { useRole } from '@/hooks/use-role';
+import { getApiErrorMessage, requestJson } from '@/lib/api-client';
 import type { GOSType } from '@/types/game';
 
 const GOS_TYPE_OPTIONS = [
@@ -171,15 +178,19 @@ export default function GOSPage() {
   const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
   const [gosList, setGosList] = useState<GOS[]>([]);
   const [realmOptions, setRealmOptions] = useState<RealmOption[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<GOSType>('Guild');
   const [newFocus, setNewFocus] = useState('');
   const [selectedRealmIds, setSelectedRealmIds] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const [editGosId, setEditGosId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const [expandedGosId, setExpandedGosId] = useState<string | null>(null);
   const [assets, setAssets] = useState<GOSAssets | null>(null);
@@ -194,22 +205,27 @@ export default function GOSPage() {
     const controller = new AbortController();
 
     async function loadData() {
-      const gosPromise = fetch(`/api/game/${gameId}/gos?realmId=${realmId}`, {
+      setLoadError(null);
+      const gosPromise = requestJson<GOS[]>(`/api/game/${gameId}/gos?realmId=${realmId}`, {
         cache: 'no-store',
         signal: controller.signal,
-      });
+      }, 'Failed to load GOS');
       const realmsPromise = role === 'gm'
-        ? fetch(`/api/game/${gameId}/realms`, { signal: controller.signal })
-        : Promise.resolve(null);
+        ? requestJson<RealmOption[]>(`/api/game/${gameId}/realms`, { signal: controller.signal }, 'Failed to load realms')
+        : Promise.resolve([]);
 
-      const [gosResponse, realmsResponse] = await Promise.all([gosPromise, realmsPromise]);
+      const [gosData, realmsData] = await Promise.all([gosPromise, realmsPromise]);
       if (!controller.signal.aborted) {
-        setGosList(gosResponse.ok ? await gosResponse.json() : []);
-        setRealmOptions(realmsResponse?.ok ? await realmsResponse.json() : []);
+        setGosList(gosData);
+        setRealmOptions(realmsData);
       }
     }
 
-    void loadData();
+    void loadData().catch((error) => {
+      if (!controller.signal.aborted) {
+        setLoadError(getApiErrorMessage(error, 'Failed to load GOS'));
+      }
+    });
 
     return () => controller.abort();
   }, [gameId, realmId, role]);
@@ -220,8 +236,11 @@ export default function GOSPage() {
 
   async function reloadGosList() {
     if (!realmId) return;
-    const response = await fetch(`/api/game/${gameId}/gos?realmId=${realmId}`, { cache: 'no-store' });
-    setGosList(response.ok ? await response.json() : []);
+    setGosList(await requestJson<GOS[]>(
+      `/api/game/${gameId}/gos?realmId=${realmId}`,
+      { cache: 'no-store' },
+      'Failed to refresh GOS',
+    ));
   }
 
   function toggleRealmSelection(toggledRealmId: string) {
@@ -237,27 +256,41 @@ export default function GOSPage() {
     const realmIds = role === 'gm' ? selectedRealmIds : [realmId];
     if (realmIds.length === 0) return;
 
-    await fetch(`/api/game/${gameId}/gos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        realmId,
-        realmIds,
-        name: newName.trim(),
-        type: newType,
-        focus: newFocus.trim() || null,
-      }),
-    });
-    setNewName('');
-    setNewType('Guild');
-    setNewFocus('');
-    setSelectedRealmIds(realmId ? [realmId] : []);
-    setCreateOpen(false);
-    await reloadGosList();
+    setCreating(true);
+    setCreateError(null);
+
+    try {
+      await requestJson<{ id: string }>(
+        `/api/game/${gameId}/gos`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            realmId,
+            realmIds,
+            name: newName.trim(),
+            type: newType,
+            focus: newFocus.trim() || null,
+          }),
+        },
+        'Failed to create GOS',
+      );
+      await reloadGosList();
+      setNewName('');
+      setNewType('Guild');
+      setNewFocus('');
+      setSelectedRealmIds(realmId ? [realmId] : []);
+      setCreateOpen(false);
+    } catch (error) {
+      setCreateError(getApiErrorMessage(error, 'Failed to create GOS'));
+    } finally {
+      setCreating(false);
+    }
   }
 
   function openEditDialog(gos: GOS) {
     setEditGosId(gos.id);
+    setEditError(null);
     setEditForm({
       name: gos.name,
       type: gos.type as GOSType,
@@ -274,31 +307,41 @@ export default function GOSPage() {
   async function saveEdit() {
     if (!editGosId || !editForm) return;
     setSaving(true);
+    setEditError(null);
 
     const alcoveNames = editForm.alcoveNames.split(',').map((s) => s.trim()).filter(Boolean);
     const centreNames = editForm.centreNames.split(',').map((s) => s.trim()).filter(Boolean);
 
-    await fetch(`/api/game/${gameId}/gos`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        gosId: editGosId,
-        name: editForm.name.trim(),
-        type: editForm.type,
-        focus: editForm.focus.trim() || null,
-        treasury: editForm.treasury,
-        monopolyProduct: editForm.type === 'Guild' ? (editForm.monopolyProduct || null) : null,
-        alcoveNames: alcoveNames.length > 0 ? alcoveNames : null,
-        centreNames: centreNames.length > 0 ? centreNames : null,
-        firstBuildingId: editForm.firstBuildingId || null,
-        realmIds: editForm.realmIds,
-      }),
-    });
+    try {
+      await requestJson<{ updated: true }>(
+        `/api/game/${gameId}/gos`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gosId: editGosId,
+            name: editForm.name.trim(),
+            type: editForm.type,
+            focus: editForm.focus.trim() || null,
+            treasury: editForm.treasury,
+            monopolyProduct: editForm.type === 'Guild' ? (editForm.monopolyProduct || null) : null,
+            alcoveNames: alcoveNames.length > 0 ? alcoveNames : null,
+            centreNames: centreNames.length > 0 ? centreNames : null,
+            firstBuildingId: editForm.firstBuildingId || null,
+            realmIds: editForm.realmIds,
+          }),
+        },
+        'Failed to update GOS',
+      );
 
-    setSaving(false);
-    setEditGosId(null);
-    setEditForm(null);
-    await reloadGosList();
+      await reloadGosList();
+      setEditGosId(null);
+      setEditForm(null);
+    } catch (error) {
+      setEditError(getApiErrorMessage(error, 'Failed to update GOS'));
+    } finally {
+      setSaving(false);
+    }
   }
 
   function toggleEditRealm(toggledRealmId: string) {
@@ -326,37 +369,45 @@ export default function GOSPage() {
     setAssetsLoading(false);
   }
 
-  const realmLinkSuffix = isGmManaging ? `?realmId=${realmId}` : '';
   const canCreate = Boolean(realmId && newName.trim() && (role !== 'gm' || selectedRealmIds.length > 0));
 
   return (
-    <main className="min-h-screen p-6 max-w-6xl mx-auto">
-      <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm${realmLinkSuffix}`} className="hover:text-ink-100">&larr; Realm</Link>
-      </nav>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Guilds, Orders & Societies</h1>
-        <div className="flex items-center gap-3">
-          <Link href={`/game/${gameId}/realm${realmLinkSuffix}`}>
-            <Button variant="ghost">Back to Realm</Button>
-          </Link>
-          <Button variant="accent" onClick={() => setCreateOpen(true)} disabled={!realmId}>+ New</Button>
-        </div>
-      </div>
+    <AppPage>
+      <AppPageHeader
+        title="Guilds, Orders & Societies"
+        subtitle="Manage organizations, shared memberships, assets, and income for the selected realm."
+        actions={
+          <Button
+            variant="accent"
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => {
+              setCreateError(null);
+              setCreateOpen(true);
+            }}
+            disabled={!realmId}
+          >
+            New
+          </Button>
+        }
+      />
+
+      {loadError ? (
+        <Alert className="mb-6" tone="danger">{loadError}</Alert>
+      ) : null}
 
       <div className="space-y-4">
         {gosList.map((gos) => (
-          <Card key={gos.id}>
+          <Card key={gos.id} variant="panel">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle>{gos.name}</CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="gold">{gos.type}</Badge>
-                  <Badge variant={gos.isShared ? 'green' : 'default'}>
+                  <StatusPill tone="active">{gos.type}</StatusPill>
+                  <StatusPill tone={gos.isShared ? 'success' : 'muted'}>
                     {gos.isShared ? 'Shared' : 'Realm-specific'}
-                  </Badge>
+                  </StatusPill>
                   {isGM && (
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(gos)}>Edit</Button>
+                    <Button variant="outline" size="sm" leftIcon={<Edit className="h-4 w-4" />} onClick={() => openEditDialog(gos)}>Edit</Button>
                   )}
                 </div>
               </div>
@@ -393,9 +444,9 @@ export default function GOSPage() {
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-ink-300">Present in:</span>
                 {gos.realms.map((realm) => (
-                  <Badge key={realm.id} variant={realm.isPrimary ? 'green' : 'default'}>
+                  <StatusPill key={realm.id} tone={realm.isPrimary ? 'success' : 'muted'}>
                     {realm.name}{realm.isPrimary ? ' (primary)' : ''}
-                  </Badge>
+                  </StatusPill>
                 ))}
               </div>
 
@@ -403,6 +454,7 @@ export default function GOSPage() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  leftIcon={expandedGosId === gos.id ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   onClick={() => void toggleAssets(gos.id)}
                 >
                   {expandedGosId === gos.id ? 'Hide Assets' : 'View Assets & Income'}
@@ -411,11 +463,11 @@ export default function GOSPage() {
                 {expandedGosId === gos.id && (
                   <div className="mt-3 space-y-4">
                     {assetsLoading ? (
-                      <p className="text-sm text-ink-300">Loading assets...</p>
+                      <LoadingState compact label="Loading assets..." />
                     ) : assets ? (
                       <GOSAssetsPanel assets={assets} />
                     ) : (
-                      <p className="text-sm text-ink-300">Failed to load assets.</p>
+                      <EmptyState compact tone="danger" title="Assets failed to load" description="Try opening the asset panel again." />
                     )}
                   </div>
                 )}
@@ -425,20 +477,29 @@ export default function GOSPage() {
         ))}
 
         {!realmId && (
-          <p className="py-8 text-center text-ink-300">Choose a realm first to manage its guilds, orders, and societies.</p>
+          <EmptyState title="Choose a realm first" description="G.O.S. management is scoped to a realm context." />
         )}
 
         {realmId && gosList.length === 0 && (
-          <p className="py-8 text-center text-ink-300">
-            No guilds, orders, or societies are attached to this realm yet. Create one to get started.
-          </p>
+          <EmptyState
+            title="No organizations attached"
+            description="Create a guild, order, or society to manage realm assets and income."
+            action={(
+              <Button variant="accent" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+                New
+              </Button>
+            )}
+          />
         )}
       </div>
 
       {createOpen && (
-        <Dialog open onClose={() => setCreateOpen(false)}>
+        <Dialog open onClose={() => setCreateOpen(false)} size="lg">
           <DialogTitle>New Guild, Order, or Society</DialogTitle>
-          <DialogContent>
+          <DialogDescription>
+            Create an organization and choose which realms can access it.
+          </DialogDescription>
+          <DialogContent aria-busy={creating}>
             <div className="space-y-4">
               <Input label="Name" value={newName} onChange={(event) => setNewName(event.target.value)} />
               <Select
@@ -476,19 +537,31 @@ export default function GOSPage() {
                   </p>
                 </div>
               )}
+              {createError ? (
+                <InlineMutationMessage
+                  status="error"
+                  message={createError}
+                  onRetry={() => void createGos()}
+                />
+              ) : null}
             </div>
           </DialogContent>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button variant="accent" onClick={() => void createGos()} disabled={!canCreate}>Create</Button>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={creating}>Cancel</Button>
+            <Button variant="accent" onClick={() => void createGos()} disabled={!canCreate || creating}>
+              {creating ? 'Creating...' : 'Create'}
+            </Button>
           </DialogFooter>
         </Dialog>
       )}
 
       {editGosId && editForm && (
-        <Dialog open onClose={() => { setEditGosId(null); setEditForm(null); }}>
+        <Dialog open onClose={() => { setEditGosId(null); setEditForm(null); setEditError(null); }} size="xl">
           <DialogTitle>Edit Guild, Order, or Society</DialogTitle>
-          <DialogContent>
+          <DialogDescription>
+            Update the organization profile, treasury, monopoly details, and realm memberships.
+          </DialogDescription>
+          <DialogContent aria-busy={saving}>
             <div className="space-y-4">
               <Input
                 label="Name"
@@ -576,10 +649,23 @@ export default function GOSPage() {
                   </div>
                 </div>
               )}
+              {editError ? (
+                <InlineMutationMessage
+                  status="error"
+                  message={editError}
+                  onRetry={() => void saveEdit()}
+                />
+              ) : null}
             </div>
           </DialogContent>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { setEditGosId(null); setEditForm(null); }}>Cancel</Button>
+            <Button
+              variant="ghost"
+              onClick={() => { setEditGosId(null); setEditForm(null); setEditError(null); }}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
             <Button
               variant="accent"
               onClick={() => void saveEdit()}
@@ -590,7 +676,7 @@ export default function GOSPage() {
           </DialogFooter>
         </Dialog>
       )}
-    </main>
+    </AppPage>
   );
 }
 
@@ -619,34 +705,34 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
   const monopolyIndustryIds = new Set(assets.income?.monopolyIndustryIds ?? []);
 
   if (!hasAny && !(assets.income && assets.income.total > 0)) {
-    return <p className="text-sm text-ink-300">This GOS has no owned assets.</p>;
+    return <EmptyState compact title="No owned assets" description="Assets assigned to this G.O.S. will appear here." />;
   }
 
   return (
     <div className="space-y-4 text-sm">
       {assets.income && (assets.income.total > 0 || assets.income.membershipFees > 0 || assets.income.ownership > 0 || assets.income.food > 0) && (
-        <div className="flex flex-wrap gap-x-6 gap-y-2 p-3 rounded medieval-border bg-parchment-800/30">
-          <div><span className="text-ink-300">Membership Fees:</span> <span className="text-green-700">{assets.income.membershipFees}gc</span></div>
-          <div><span className="text-ink-300">Ownership:</span> <span className="text-green-700">{assets.income.ownership}gc</span></div>
+        <div className="grid gap-2 rounded-md border border-border-subtle bg-surface-row p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatRow label="Membership Fees"><span className="text-green-700">{assets.income.membershipFees}gc</span></StatRow>
+          <StatRow label="Ownership"><span className="text-green-700">{assets.income.ownership}gc</span></StatRow>
           {assets.income.food > 0 && (
-            <div><span className="text-ink-300">Food Income:</span> <span className="text-green-700">{assets.income.food}gc</span></div>
+            <StatRow label="Food Income"><span className="text-green-700">{assets.income.food}gc</span></StatRow>
           )}
-          <div><span className="text-ink-300">Total Guild Income:</span> <span className="text-green-700">{assets.income.total}gc</span></div>
+          <StatRow label="Total Guild Income"><span className="text-green-700">{assets.income.total}gc</span></StatRow>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-x-6 gap-y-2 p-3 rounded medieval-border bg-parchment-800/30">
+      <div className="grid gap-2 rounded-md border border-border-subtle bg-surface-row p-3 sm:grid-cols-2 lg:grid-cols-4">
         {industryIncome > 0 && (
-          <div><span className="text-ink-300">Industry Wealth Generated:</span> <span className="text-green-700">{industryIncome}gc</span></div>
+          <StatRow label="Industry Wealth"><span className="text-green-700">{industryIncome}gc</span></StatRow>
         )}
         {readyTroops > 0 && (
-          <div><span className="text-ink-300">Active Troops:</span> {readyTroops}</div>
+          <StatRow label="Active Troops">{readyTroops}</StatRow>
         )}
         {readyShips > 0 && (
-          <div><span className="text-ink-300">Active Ships:</span> {readyShips}</div>
+          <StatRow label="Active Ships">{readyShips}</StatRow>
         )}
         {hasBuildings && (
-          <div><span className="text-ink-300">Buildings Owned:</span> {assets.ownedBuildings.length}</div>
+          <StatRow label="Buildings Owned">{assets.ownedBuildings.length}</StatRow>
         )}
       </div>
 
@@ -655,7 +741,7 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
           <p className="font-heading font-semibold mb-1">Owned Buildings</p>
           <div className="space-y-1">
             {assets.ownedBuildings.map((b) => (
-              <div key={b.id} className="flex items-center justify-between p-2 medieval-border rounded">
+              <div key={b.id} className="flex items-center justify-between rounded-md border border-border-subtle bg-surface-row p-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{b.type}</span>
                   <Badge>{b.category}</Badge>
@@ -680,7 +766,7 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
           <p className="font-heading font-semibold mb-1">Allotted Buildings</p>
           <div className="space-y-1">
             {assets.allottedBuildings.map((b) => (
-              <div key={b.id} className="flex items-center gap-2 p-2 medieval-border rounded">
+              <div key={b.id} className="flex items-center gap-2 rounded-md border border-border-subtle bg-surface-row p-2">
                 <span className="font-semibold">{b.type}</span>
                 <Badge>{b.category}</Badge>
                 <Badge>{b.size}</Badge>
@@ -696,7 +782,7 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
           <p className="font-heading font-semibold mb-1">Resource Sites</p>
           <div className="space-y-1">
             {assets.resourceSites.map((rs) => (
-              <div key={rs.id} className="flex items-center justify-between p-2 medieval-border rounded">
+              <div key={rs.id} className="flex items-center justify-between rounded-md border border-border-subtle bg-surface-row p-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{rs.resourceType}</span>
                   <Badge>{rs.rarity}</Badge>
@@ -724,7 +810,7 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
           <p className="font-heading font-semibold mb-1">Owned Industries</p>
           <div className="space-y-1">
             {assets.ownedIndustries.map((ind) => (
-              <div key={ind.id} className="flex items-center justify-between p-2 medieval-border rounded">
+              <div key={ind.id} className="flex items-center justify-between rounded-md border border-border-subtle bg-surface-row p-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{ind.outputProduct}</span>
                   <Badge>{ind.quality}</Badge>
@@ -746,7 +832,7 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
           <p className="font-heading font-semibold mb-1">Armies</p>
           <div className="space-y-1">
             {assets.armies.map((a) => (
-              <div key={a.id} className="p-2 medieval-border rounded font-semibold">{a.name}</div>
+              <div key={a.id} className="rounded-md border border-border-subtle bg-surface-row p-2 font-semibold">{a.name}</div>
             ))}
           </div>
         </div>
@@ -757,7 +843,7 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
           <p className="font-heading font-semibold mb-1">Troops ({assets.troops.length})</p>
           <div className="space-y-1">
             {assets.troops.map((t) => (
-              <div key={t.id} className="flex items-center justify-between p-2 medieval-border rounded">
+              <div key={t.id} className="flex items-center justify-between rounded-md border border-border-subtle bg-surface-row p-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{t.type}</span>
                   <Badge>{t.class}</Badge>
@@ -780,7 +866,7 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
           <p className="font-heading font-semibold mb-1">Fleets</p>
           <div className="space-y-1">
             {assets.fleets.map((f) => (
-              <div key={f.id} className="p-2 medieval-border rounded font-semibold">{f.name}</div>
+              <div key={f.id} className="rounded-md border border-border-subtle bg-surface-row p-2 font-semibold">{f.name}</div>
             ))}
           </div>
         </div>
@@ -791,7 +877,7 @@ function GOSAssetsPanel({ assets }: { assets: GOSAssets }) {
           <p className="font-heading font-semibold mb-1">Ships ({assets.ships.length})</p>
           <div className="space-y-1">
             {assets.ships.map((s) => (
-              <div key={s.id} className="flex items-center justify-between p-2 medieval-border rounded">
+              <div key={s.id} className="flex items-center justify-between rounded-md border border-border-subtle bg-surface-row p-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{s.type}</span>
                   <Badge>{s.class}</Badge>

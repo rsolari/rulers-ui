@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { games, realms, settlements, territories, troops, siegeUnits } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { requireGM } from '@/lib/auth';
 import { apiErrorResponse } from '@/lib/api-errors';
@@ -26,12 +26,25 @@ export async function POST(
     }
 
     // Load settlement, target realm, and game
-    const settlement = await db.select().from(settlements).where(eq(settlements.id, settlementId)).get();
+    const settlementRow = await db.select({ settlement: settlements })
+      .from(settlements)
+      .innerJoin(territories, eq(settlements.territoryId, territories.id))
+      .where(and(
+        eq(settlements.id, settlementId),
+        eq(territories.gameId, gameId),
+      ))
+      .get();
+    const settlement = settlementRow?.settlement ?? null;
     if (!settlement) {
       return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
     }
 
-    const targetRealm = await db.select().from(realms).where(eq(realms.id, targetRealmId)).get();
+    const targetRealm = await db.select().from(realms)
+      .where(and(
+        eq(realms.id, targetRealmId),
+        eq(realms.gameId, gameId),
+      ))
+      .get();
     if (!targetRealm) {
       return NextResponse.json({ error: 'Target realm not found' }, { status: 404 });
     }

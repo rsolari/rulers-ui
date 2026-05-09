@@ -92,4 +92,22 @@ describe('TurnActionCard', () => {
 
     expect(screen.getByText('Construct Galley at Harbor')).toBeInTheDocument();
   });
+
+  it('renders editable political action words as pressed toggle buttons', () => {
+    render(
+      <TurnActionCard
+        action={createAction({
+          kind: 'political',
+          actionWords: ['Accuse'],
+          financialType: null,
+          taxType: null,
+        })}
+        settlementOptions={[]}
+        editable
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Accuse' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Arrange' })).toHaveAttribute('aria-pressed', 'false');
+  });
 });

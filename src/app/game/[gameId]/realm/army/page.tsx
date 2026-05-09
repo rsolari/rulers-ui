@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { InlineMutationMessage } from '@/components/ui/mutation-feedback';
 import { Select } from '@/components/ui/select';
 import { Tabs } from '@/components/ui/tabs';
 import { useRole } from '@/hooks/use-role';
+import { getApiErrorMessage, requestJson } from '@/lib/api-client';
 import { readErrorMessage } from '@/lib/http';
 import { SHIP_DEFS, TROOP_DEFS } from '@/lib/game-logic/constants';
 import type { ShipType, TroopType } from '@/types/game';
@@ -162,7 +164,6 @@ export default function ArmyPage() {
   const gmRealmIdParam = searchParams.get('realmId');
   const isGmManaging = role === 'gm' && Boolean(gmRealmIdParam);
   const realmId = isGmManaging ? gmRealmIdParam : sessionRealmId;
-  const realmLinkSuffix = isGmManaging ? `?realmId=${realmId}` : '';
 
   const [armies, setArmies] = useState<Army[]>([]);
   const [allTroops, setTroops] = useState<Troop[]>([]);
@@ -190,10 +191,13 @@ export default function ArmyPage() {
   const [isCreatingArmy, setIsCreatingArmy] = useState(false);
   const [newFleetName, setNewFleetName] = useState('');
   const [createFleetError, setCreateFleetError] = useState('');
-  const [recruitError, setRecruitError] = useState('');
-  const [constructShipError, setConstructShipError] = useState('');
+  const [isCreatingFleet, setIsCreatingFleet] = useState(false);
   const [selectedTroopType, setSelectedTroopType] = useState<TroopType>('Spearmen');
+  const [recruitError, setRecruitError] = useState('');
+  const [isRecruiting, setIsRecruiting] = useState(false);
   const [selectedShipType, setSelectedShipType] = useState<ShipType>('Galley');
+  const [constructShipError, setConstructShipError] = useState('');
+  const [isConstructingShip, setIsConstructingShip] = useState(false);
   const [recruitmentSettlementIdOverride, setRecruitmentSettlementIdOverride] = useState('');
   const [constructionSettlementIdOverride, setConstructionSettlementIdOverride] = useState('');
 
@@ -332,26 +336,25 @@ export default function ArmyPage() {
     setIsCreatingArmy(true);
 
     try {
-      const response = await fetch(`/api/game/${gameId}/armies`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          realmId,
-          name: trimmedName,
-          generalId: newArmyGeneralId || undefined,
-          troopIds: newArmyTroopIds,
-          locationTerritoryId: selectedArmySource?.territoryId || defaultArmyTerritoryId || undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Failed to create army'));
-      }
-
+      await requestJson<{ id: string }>(
+        `/api/game/${gameId}/armies`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            realmId,
+            name: trimmedName,
+            generalId: newArmyGeneralId || undefined,
+            troopIds: newArmyTroopIds,
+            locationTerritoryId: selectedArmySource?.territoryId || defaultArmyTerritoryId || undefined,
+          }),
+        },
+        'Failed to create army',
+      );
       await refreshMilitaryState(gameId, realmId);
       closeCreateArmyDialog();
     } catch (error) {
-      setCreateArmyError(error instanceof Error ? error.message : 'Failed to create army');
+      setCreateArmyError(getApiErrorMessage(error, 'Failed to create army'));
     } finally {
       setIsCreatingArmy(false);
     }
@@ -374,24 +377,26 @@ export default function ArmyPage() {
       return;
     }
 
+    setIsCreatingFleet(true);
     setCreateFleetError('');
 
     try {
-      const response = await fetch(`/api/game/${gameId}/fleets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realmId, name: trimmedName, locationTerritoryId: defaultFleetTerritoryId }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Failed to create fleet'));
-      }
-
+      await requestJson<{ id: string }>(
+        `/api/game/${gameId}/fleets`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ realmId, name: trimmedName, locationTerritoryId: defaultFleetTerritoryId }),
+        },
+        'Failed to create fleet',
+      );
       await refreshMilitaryState(gameId, realmId);
       setNewFleetName('');
       setCreateFleetOpen(false);
     } catch (error) {
-      setCreateFleetError(error instanceof Error ? error.message : 'Failed to create fleet');
+      setCreateFleetError(getApiErrorMessage(error, 'Failed to create fleet'));
+    } finally {
+      setIsCreatingFleet(false);
     }
   }
 
@@ -401,28 +406,30 @@ export default function ArmyPage() {
       return;
     }
 
+    setIsRecruiting(true);
     setRecruitError('');
 
     try {
-      const response = await fetch(`/api/game/${gameId}/troops`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          realmId,
-          type: selectedTroopType,
-          garrisonSettlementId: selectedRecruitmentSettlementId,
-          recruitmentSettlementId: selectedRecruitmentSettlementId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Failed to recruit troop'));
-      }
-
+      await requestJson<{ id: string }>(
+        `/api/game/${gameId}/troops`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            realmId,
+            type: selectedTroopType,
+            garrisonSettlementId: selectedRecruitmentSettlementId,
+            recruitmentSettlementId: selectedRecruitmentSettlementId,
+          }),
+        },
+        'Failed to recruit troop',
+      );
       await refreshMilitaryState(gameId, realmId);
       setRecruitOpen(false);
     } catch (error) {
-      setRecruitError(error instanceof Error ? error.message : 'Failed to recruit troop');
+      setRecruitError(getApiErrorMessage(error, 'Failed to recruit troop'));
+    } finally {
+      setIsRecruiting(false);
     }
   }
 
@@ -432,28 +439,30 @@ export default function ArmyPage() {
       return;
     }
 
+    setIsConstructingShip(true);
     setConstructShipError('');
 
     try {
-      const response = await fetch(`/api/game/${gameId}/ships`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          realmId,
-          type: selectedShipType,
-          settlementId: selectedConstructionSettlementId,
-          fleetId: constructShipOpen === 'harbor' ? null : constructShipOpen,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Failed to construct ship'));
-      }
-
+      await requestJson<{ id: string }>(
+        `/api/game/${gameId}/ships`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            realmId,
+            type: selectedShipType,
+            settlementId: selectedConstructionSettlementId,
+            fleetId: constructShipOpen === 'harbor' ? null : constructShipOpen,
+          }),
+        },
+        'Failed to construct ship',
+      );
       await refreshMilitaryState(gameId, realmId);
       setConstructShipOpen(null);
     } catch (error) {
-      setConstructShipError(error instanceof Error ? error.message : 'Failed to construct ship');
+      setConstructShipError(getApiErrorMessage(error, 'Failed to construct ship'));
+    } finally {
+      setIsConstructingShip(false);
     }
   }
 
@@ -561,7 +570,7 @@ export default function ArmyPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Armies & Troops</h2>
-        <Button variant="accent" onClick={openCreateArmyDialog}>+ New Army</Button>
+        <Button variant="accent" leftIcon={<Plus className="h-4 w-4" />} onClick={openCreateArmyDialog}>New Army</Button>
       </div>
 
       <Card>
@@ -571,12 +580,13 @@ export default function ArmyPage() {
             <Button
               variant="outline"
               size="sm"
+              leftIcon={<Plus className="h-4 w-4" />}
               onClick={() => {
                 setRecruitError('');
                 setRecruitOpen(true);
               }}
             >
-              + Recruit Troops
+              Recruit Troops
             </Button>
           </div>
         </CardHeader>
@@ -640,12 +650,13 @@ export default function ArmyPage() {
         <h2 className="text-2xl font-bold">Fleets & Ships</h2>
         <Button
           variant="accent"
+          leftIcon={<Plus className="h-4 w-4" />}
           onClick={() => {
             setCreateFleetError('');
             setCreateFleetOpen(true);
           }}
         >
-          + New Fleet
+          New Fleet
         </Button>
       </div>
 
@@ -715,10 +726,6 @@ export default function ArmyPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl p-6">
-      <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm${realmLinkSuffix}`} className="hover:text-ink-100">← Realm</Link>
-      </nav>
-
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Military Forces</h1>
         <p className="text-ink-300">Manage field armies, harbor squadrons, and open-water fleets.</p>
@@ -733,8 +740,11 @@ export default function ArmyPage() {
       />
 
       {createArmyOpen ? (
-        <Dialog open onClose={closeCreateArmyDialog}>
+        <Dialog open onClose={closeCreateArmyDialog} size="lg">
           <DialogTitle>Create Army</DialogTitle>
+          <DialogDescription>
+            Organize ready troops into a field army and assign a general if one is available.
+          </DialogDescription>
           <DialogContent className="space-y-4">
             <p className="text-sm text-ink-300">
               Creating an army reorganizes ready troops from one garrison or the unassigned pool. Recruitment stays at the settlement level.
@@ -823,7 +833,13 @@ export default function ArmyPage() {
                     : 'Only ready troops can be organized into a new army.'}
                 </p>
               )}
-              {createArmyError ? <p className="text-sm text-red-500">{createArmyError}</p> : null}
+              {createArmyError ? (
+                <InlineMutationMessage
+                  status="error"
+                  message={createArmyError}
+                  onRetry={() => void createArmy()}
+                />
+              ) : null}
             </div>
           </DialogContent>
           <DialogFooter>
@@ -842,27 +858,34 @@ export default function ArmyPage() {
       {createFleetOpen ? (
         <Dialog open onClose={() => setCreateFleetOpen(false)}>
           <DialogTitle>Create Fleet</DialogTitle>
-          <DialogContent className="space-y-3">
+          <DialogContent aria-busy={isCreatingFleet}>
             <Input label="Fleet Name" value={newFleetName} onChange={(event) => setNewFleetName(event.target.value)} />
-            {createFleetError ? <p className="text-sm text-red-500">{createFleetError}</p> : null}
+            {createFleetError ? (
+              <div className="mt-3">
+                <InlineMutationMessage
+                  status="error"
+                  message={createFleetError}
+                  onRetry={() => void createFleet()}
+                />
+              </div>
+            ) : null}
           </DialogContent>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateFleetOpen(false)}>Cancel</Button>
-            <Button
-              variant="accent"
-              onClick={() => void createFleet()}
-              disabled={!newFleetName.trim() || !realmId}
-            >
-              Create
+            <Button variant="ghost" onClick={() => setCreateFleetOpen(false)} disabled={isCreatingFleet}>Cancel</Button>
+            <Button variant="accent" onClick={() => void createFleet()} disabled={!newFleetName.trim() || !realmId || !defaultFleetTerritoryId || isCreatingFleet}>
+              {isCreatingFleet ? 'Creating...' : 'Create'}
             </Button>
           </DialogFooter>
         </Dialog>
       ) : null}
 
       {recruitOpen ? (
-        <Dialog open onClose={() => setRecruitOpen(false)}>
+        <Dialog open onClose={() => setRecruitOpen(false)} size="lg">
           <DialogTitle>Recruit Troop</DialogTitle>
-          <DialogContent>
+          <DialogDescription>
+            Choose a settlement and recruitable troop type for the next garrison order.
+          </DialogDescription>
+          <DialogContent aria-busy={isRecruiting}>
             <Select
               label="Recruit From"
               options={settlementOptions}
@@ -903,25 +926,36 @@ export default function ArmyPage() {
                 ) : null}
               </div>
             ) : null}
-            {recruitError ? <p className="mt-3 text-sm text-red-500">{recruitError}</p> : null}
+            {recruitError ? (
+              <div className="mt-3">
+                <InlineMutationMessage
+                  status="error"
+                  message={recruitError}
+                  onRetry={() => void recruitTroop()}
+                />
+              </div>
+            ) : null}
           </DialogContent>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRecruitOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setRecruitOpen(false)} disabled={isRecruiting}>Cancel</Button>
             <Button
               variant="accent"
               onClick={() => void recruitTroop()}
-              disabled={!selectedRecruitmentSettlementId || !selectedTroopRecruitmentOption?.canRecruit}
+              disabled={!selectedRecruitmentSettlementId || !selectedTroopRecruitmentOption?.canRecruit || isRecruiting}
             >
-              Recruit
+              {isRecruiting ? 'Recruiting...' : 'Recruit'}
             </Button>
           </DialogFooter>
         </Dialog>
       ) : null}
 
       {constructShipOpen ? (
-        <Dialog open onClose={() => setConstructShipOpen(null)}>
+        <Dialog open onClose={() => setConstructShipOpen(null)} size="lg">
           <DialogTitle>Construct Ship</DialogTitle>
-          <DialogContent>
+          <DialogDescription>
+            Choose where to build the ship and review its cost, upkeep, and requirements.
+          </DialogDescription>
+          <DialogContent aria-busy={isConstructingShip}>
             <Select
               label="Construct At"
               options={settlementOptions}
@@ -960,16 +994,24 @@ export default function ArmyPage() {
                 ) : null}
               </div>
             ) : null}
-            {constructShipError ? <p className="mt-3 text-sm text-red-500">{constructShipError}</p> : null}
+            {constructShipError ? (
+              <div className="mt-3">
+                <InlineMutationMessage
+                  status="error"
+                  message={constructShipError}
+                  onRetry={() => void constructShip()}
+                />
+              </div>
+            ) : null}
           </DialogContent>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setConstructShipOpen(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setConstructShipOpen(null)} disabled={isConstructingShip}>Cancel</Button>
             <Button
               variant="accent"
               onClick={() => void constructShip()}
-              disabled={!selectedConstructionSettlementId || !selectedShipConstructionOption?.canConstruct}
+              disabled={!selectedConstructionSettlementId || !selectedShipConstructionOption?.canConstruct || isConstructingShip}
             >
-              Construct
+              {isConstructingShip ? 'Constructing...' : 'Construct'}
             </Button>
           </DialogFooter>
         </Dialog>

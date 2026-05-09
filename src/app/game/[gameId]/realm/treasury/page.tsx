@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useRole } from '@/hooks/use-role';
@@ -39,9 +38,6 @@ export default function TreasuryPage() {
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
-      <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm${isGmManaging ? '?realmId=' + realmId : ''}`} className="hover:text-ink-100">← Realm</Link>
-      </nav>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold">Treasury</h1>

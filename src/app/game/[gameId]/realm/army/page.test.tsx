@@ -141,7 +141,7 @@ describe('ArmyPage', () => {
       expect(fetch).toHaveBeenCalledTimes(4);
     });
 
-    await user.click(screen.getByRole('button', { name: /\+ new army/i }));
+    await user.click(screen.getByRole('button', { name: /new army/i }));
     await user.type(screen.getByLabelText('Army Name'), 'First Army');
     await user.selectOptions(screen.getByLabelText('General'), 'noble-1');
     await user.click(screen.getByLabelText('Select Spearmen troop-1'));
@@ -180,7 +180,7 @@ describe('ArmyPage', () => {
     });
 
     await user.click(screen.getByRole('button', { name: /naval forces/i }));
-    await user.click(screen.getByRole('button', { name: /\+ new fleet/i }));
+    await user.click(screen.getByRole('button', { name: /^new fleet$/i }));
     await user.type(screen.getByLabelText('Fleet Name'), 'Western Fleet');
     await user.click(screen.getByRole('button', { name: /^create$/i }));
 

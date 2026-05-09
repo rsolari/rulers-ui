@@ -19,6 +19,19 @@ const REALM_COLORS = [
   '#3f5f66', '#6a4f2d',
 ];
 
+function parseFeatureMetadata(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ gameId: string }> }
@@ -48,16 +61,16 @@ export async function GET(
 
   const [features, settlementList, armyList, fleetList] = await Promise.all([
     hexIds.length > 0
-    ? await db.select().from(mapHexFeatures).where(inArray(mapHexFeatures.hexId, hexIds))
+      ? db.select().from(mapHexFeatures).where(inArray(mapHexFeatures.hexId, hexIds))
       : [],
     territoryIds.length > 0
-      ? await db.select().from(settlements).where(inArray(settlements.territoryId, territoryIds))
+      ? db.select().from(settlements).where(inArray(settlements.territoryId, territoryIds))
       : [],
     realmIds.length > 0
-      ? await db.select().from(armies).where(inArray(armies.realmId, realmIds))
+      ? db.select().from(armies).where(inArray(armies.realmId, realmIds))
       : [],
     realmIds.length > 0
-      ? await db.select().from(fleets).where(inArray(fleets.realmId, realmIds))
+      ? db.select().from(fleets).where(inArray(fleets.realmId, realmIds))
       : [],
   ]);
 
@@ -128,7 +141,7 @@ export async function GET(
         terrainType: hex.terrainType ?? null,
         territoryId: hex.territoryId,
         features: (featuresByHexId.get(hex.id) ?? []).map((feature) => {
-          const metadata = feature.metadata ? JSON.parse(feature.metadata as string) : null;
+          const metadata = parseFeatureMetadata(feature.metadata);
           return {
             featureType: feature.featureType,
             name: feature.name ?? null,

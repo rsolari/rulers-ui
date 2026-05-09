@@ -1,17 +1,23 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { CheckCircle2, ChevronRight, Dice5, Plus, RotateCcw } from 'lucide-react';
 import { TerritoryHexMap, type TerritoryMapPlacement } from '@/components/map/TerritoryHexMap';
+import { AppPage, AppPageHeader } from '@/components/layout/app-page';
+import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ListRow } from '@/components/ui/list-row';
 import { Select } from '@/components/ui/select';
+import { StatusPill } from '@/components/ui/status-pill';
 import {
   getPreferredTerritoryHexIds,
   type TerritoryMapData,
 } from '@/lib/maps/territory-map';
+import { getApiErrorMessage, requestJson } from '@/lib/api-client';
 import { RESOURCE_RARITY } from '@/lib/game-logic/constants';
 import {
   generateMap,
@@ -21,6 +27,21 @@ import {
 } from '@/lib/game-logic/map-generation';
 import { generatePlaceName } from '@/lib/game-logic/place-names';
 import type { GovernmentType, ResourceType, SettlementSize, Tradition } from '@/types/game';
+import {
+  SETUP_STEPS,
+  canNavigateToStep,
+  combineValidation,
+  getFirstInvalidStep,
+  getStepIndex,
+  getStepProgress,
+  validateAssignments,
+  validateMapPlacements,
+  validateTerritories,
+  type OwnerKind,
+  type SetupStep,
+  type StepProgress,
+  type StepValidation,
+} from './setup-validation';
 
 const TERRITORY_TYPE_OPTIONS = [
   { value: 'Realm', label: 'Realm Territory' },
@@ -59,8 +80,7 @@ const SETTLEMENT_SIZE_OPTIONS = [
   { value: 'City', label: 'City' },
 ];
 
-type Step = 'territories' | 'map' | 'assignments' | 'review';
-type OwnerKind = 'player' | 'npc' | 'neutral';
+type Step = SetupStep;
 
 interface TerritoryDraft {
   name: string;
@@ -167,6 +187,148 @@ function getPlacementSummary(resource: GeneratedSetupResource) {
   return resource.hexKey ? `Hex ${resource.hexKey}` : 'Unplaced';
 }
 
+const VALIDATION_SUMMARY_IDS: Record<Step, string> = {
+  territories: 'territories-validation-summary',
+  map: 'map-validation-summary',
+  assignments: 'assignments-validation-summary',
+  review: 'review-validation-summary',
+};
+
+const STEP_HEADING_IDS: Record<Step, string> = {
+  territories: 'territories-step-heading',
+  map: 'map-step-heading',
+  assignments: 'assignments-step-heading',
+  review: 'review-step-heading',
+};
+
+function ValidationSummary({
+  id,
+  validation,
+  title = 'Before continuing',
+}: {
+  id: string;
+  validation: StepValidation;
+  title?: string;
+}) {
+  if (validation.isValid && validation.warnings.length === 0) {
+    return (
+      <Alert
+        id={id}
+        tabIndex={-1}
+        tone="success"
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+      >
+        Validation passed.
+      </Alert>
+    );
+  }
+
+  return (
+    <Alert
+      id={id}
+      tabIndex={-1}
+      aria-live="polite"
+      tone={validation.isValid ? 'warning' : 'danger'}
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+    >
+      <p className="font-semibold">{title}</p>
+      {validation.blockers.length > 0 ? (
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          {validation.blockers.map((blocker) => (
+            <li key={blocker}>{blocker}</li>
+          ))}
+        </ul>
+      ) : null}
+      {validation.warnings.length > 0 ? (
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-ink-500">
+          {validation.warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      ) : null}
+    </Alert>
+  );
+}
+
+function SetupWizardFooter({
+  step,
+  stepIndex,
+  stepCount,
+  validation,
+  progress,
+  saving,
+  primaryLabel,
+  secondaryLabel,
+  onBack,
+  onPrimary,
+  onSecondary,
+  onFocusSummary,
+}: {
+  step: Step;
+  stepIndex: number;
+  stepCount: number;
+  validation: StepValidation;
+  progress: StepProgress;
+  saving: boolean;
+  primaryLabel: string;
+  secondaryLabel?: string;
+  onBack: () => void;
+  onPrimary: () => void;
+  onSecondary?: () => void;
+  onFocusSummary: () => void;
+}) {
+  const blocker = validation.blockers[0] ?? Object.values(validation.fieldErrors)[0] ?? '';
+  const isFirstStep = stepIndex === 0;
+  const primaryDisabled = saving || !validation.isValid;
+
+  return (
+    <div className="sticky bottom-0 z-20 -mx-4 mt-8 border-t border-ink-200/70 bg-parchment-50/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(28,28,28,0.08)] backdrop-blur sm:-mx-6 sm:px-6 sm:py-4 sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold text-ink-600">
+            Step {stepIndex + 1} of {stepCount} - {progress.label}
+          </p>
+          {blocker ? (
+            <button
+              type="button"
+              className="text-left text-sm text-red-600 underline-offset-2 hover:underline"
+              onClick={onFocusSummary}
+            >
+              Blocked: {blocker}
+            </button>
+          ) : (
+            <p className="text-sm text-green-700">Ready to continue.</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+          {!isFirstStep ? (
+            <Button variant="ghost" className="w-full sm:w-auto" onClick={onBack} disabled={saving}>
+              Back
+            </Button>
+          ) : null}
+          {secondaryLabel && onSecondary ? (
+            <Button variant="outline" className="w-full sm:w-auto" onClick={onSecondary} disabled={saving}>
+              {secondaryLabel}
+            </Button>
+          ) : null}
+          <Button
+            variant="accent"
+            size={step === 'review' ? 'lg' : 'md'}
+            className="w-full sm:w-auto"
+            onClick={onPrimary}
+            disabled={primaryDisabled}
+            aria-describedby={blocker ? VALIDATION_SUMMARY_IDS[step] : undefined}
+            title={blocker || undefined}
+          >
+            {saving && step === 'review' ? 'Saving...' : primaryLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SetupWizard() {
   const params = useParams();
   const router = useRouter();
@@ -182,19 +344,50 @@ export default function SetupWizard() {
   const [loadingMaps, setLoadingMaps] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const pendingFocusStepRef = useRef<Step | null>(null);
 
   const selectedMap = useMemo(
     () => availableMaps.find((entry) => entry.key === selectedMapKey) ?? null,
     [availableMaps, selectedMapKey]
   );
 
-  const unplacedSettlementCount = useMemo(
-    () => generatedMap.reduce(
-      (count, entry) => count + entry.resources.filter((resource) => !resource.hexKey).length,
-      0
-    ),
-    [generatedMap]
-  );
+  const territoryValidation = useMemo(() => validateTerritories({
+    selectedMapKey,
+    loadingMaps,
+    territories,
+    availableMaps,
+  }), [availableMaps, loadingMaps, selectedMapKey, territories]);
+
+  const mapValidation = useMemo(() => validateMapPlacements({
+    territories,
+    generatedMap,
+    selectedMap,
+  }), [generatedMap, selectedMap, territories]);
+
+  const assignmentValidation = useMemo(() => validateAssignments({
+    territories,
+    assignments,
+  }), [assignments, territories]);
+
+  const reviewValidation = useMemo(() => combineValidation([
+    territoryValidation,
+    mapValidation,
+    assignmentValidation,
+  ]), [assignmentValidation, mapValidation, territoryValidation]);
+
+  const validationByStep = useMemo<Record<Step, StepValidation>>(() => ({
+    territories: territoryValidation,
+    map: mapValidation,
+    assignments: assignmentValidation,
+    review: reviewValidation,
+  }), [assignmentValidation, mapValidation, reviewValidation, territoryValidation]);
+
+  const progressByStep = useMemo<Record<Step, StepProgress>>(() => ({
+    territories: getStepProgress('territories', { territories, generatedMap, assignments }),
+    map: getStepProgress('map', { territories, generatedMap, assignments }),
+    assignments: getStepProgress('assignments', { territories, generatedMap, assignments }),
+    review: getStepProgress('review', { territories, generatedMap, assignments }),
+  }), [assignments, generatedMap, territories]);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,6 +446,26 @@ export default function SetupWizard() {
       cancelled = true;
     };
   }, [gameId]);
+
+  useEffect(() => {
+    if (pendingFocusStepRef.current !== step) {
+      return;
+    }
+
+    pendingFocusStepRef.current = null;
+    document.getElementById(STEP_HEADING_IDS[step])?.focus();
+  }, [step]);
+
+  function focusValidationSummary(targetStep: Step) {
+    window.requestAnimationFrame(() => {
+      document.getElementById(VALIDATION_SUMMARY_IDS[targetStep])?.focus();
+    });
+  }
+
+  function moveToStep(targetStep: Step) {
+    pendingFocusStepRef.current = targetStep;
+    setStep(targetStep);
+  }
 
   function syncAssignments(nextTerritories: TerritoryDraft[]) {
     setAssignments((current) => nextTerritories.map((territory, index) => {
@@ -320,9 +533,64 @@ export default function SetupWizard() {
     rebuildGeneratedMap(territories);
   }
 
-  function goToMap() {
+  function confirmRegeneration(message: string) {
+    if (generatedMap.length === 0) {
+      return true;
+    }
+
+    return window.confirm(message);
+  }
+
+  function rerollAllTerritories() {
+    if (!confirmRegeneration('Re-roll all generated resources and placements? Current map placements will be replaced.')) {
+      return;
+    }
+
     doGenerateMap();
-    setStep('map');
+  }
+
+  function attemptStepChange(targetStep: Step) {
+    const navigation = canNavigateToStep(targetStep, step, validationByStep);
+    if (!navigation.allowed) {
+      setError(navigation.reason ?? 'Complete the current step before continuing.');
+      focusValidationSummary(step);
+      return;
+    }
+
+    setError('');
+
+    if (targetStep === 'map' && generatedMap.length === 0) {
+      doGenerateMap();
+    }
+
+    moveToStep(targetStep);
+  }
+
+  function goNext() {
+    if (step === 'territories') {
+      attemptStepChange('map');
+      return;
+    }
+
+    if (step === 'map') {
+      attemptStepChange('assignments');
+      return;
+    }
+
+    if (step === 'assignments') {
+      attemptStepChange('review');
+      return;
+    }
+
+    void handleFinish();
+  }
+
+  function goBack() {
+    const previousStep = SETUP_STEPS[getStepIndex(step) - 1]?.key;
+    if (previousStep) {
+      setError('');
+      moveToStep(previousStep);
+    }
   }
 
   function rerollTerritory(territoryIndex: number) {
@@ -330,6 +598,10 @@ export default function SetupWizard() {
     const territoryMap = selectedMap?.territoryMaps[territoryIndex];
 
     if (!territory) {
+      return;
+    }
+
+    if (!window.confirm(`Re-roll generated resources and placements for ${territory.name || `Territory ${territoryIndex + 1}`}?`)) {
       return;
     }
 
@@ -430,7 +702,7 @@ export default function SetupWizard() {
       }
 
       const remainingResources = entry.resources.filter((resource) => resource.id !== resourceId);
-      nextActiveResourceId = remainingResources[0]?.id ?? null;
+      nextActiveResourceId = remainingResources.find((resource) => !resource.hexKey)?.id ?? remainingResources[0]?.id ?? null;
 
       return {
         ...entry,
@@ -493,9 +765,11 @@ export default function SetupWizard() {
   }
 
   async function handleFinish() {
-    if (unplacedSettlementCount > 0) {
-      setError(`Place all generated settlements before finishing setup. ${unplacedSettlementCount} remain unplaced.`);
-      setStep('map');
+    if (!reviewValidation.isValid) {
+      const firstInvalidStep = getFirstInvalidStep(validationByStep);
+      setError(reviewValidation.blockers[0] ?? 'Complete all setup steps before finishing.');
+      moveToStep(firstInvalidStep);
+      window.requestAnimationFrame(() => focusValidationSummary(firstInvalidStep));
       return;
     }
 
@@ -530,96 +804,121 @@ export default function SetupWizard() {
         })),
       };
 
-      const response = await fetch(`/api/game/${gameId}/setup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Setup failed');
-      }
+      await requestJson<unknown>(
+        `/api/game/${gameId}/setup`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+        'Setup failed',
+      );
 
       router.push(`/game/${gameId}/gm`);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Setup failed');
+      const message = getApiErrorMessage(caughtError, 'Setup failed');
+      setError(message);
+      if (/hex|placement|settlement|territory land|duplicate/i.test(message)) {
+        moveToStep('map');
+        window.requestAnimationFrame(() => focusValidationSummary('map'));
+      }
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <main className="min-h-screen max-w-6xl mx-auto p-6">
-      <h1 className="mb-2 text-3xl font-bold">Game Setup</h1>
-      <p className="mb-6 text-ink-300">
-        Choose a curated world map, review its territories, place starting settlements on each territory map,
-        assign owners, and then open realm creation for players.
-      </p>
+    <AppPage className="pb-32 sm:pb-32">
+      <AppPageHeader
+        title="Game Setup"
+        subtitle="Choose a curated world map, place starting settlements, assign owners, and open realm creation for players."
+        status={
+          <>
+            <StatusPill tone="active">Step {getStepIndex(step) + 1} of {SETUP_STEPS.length}</StatusPill>
+            <StatusPill tone={validationByStep[step].isValid ? 'success' : 'warning'}>
+              {progressByStep[step].label}
+            </StatusPill>
+          </>
+        }
+      />
 
-      <div className="mb-8 flex items-center">
-        {(['territories', 'map', 'assignments', 'review'] as Step[]).map((currentStep, index, arr) => {
-          const stepLabels: Record<Step, string> = {
-            territories: 'Territories',
-            map: 'Generated Map',
-            assignments: 'Assignments',
-            review: 'Review',
-          };
-          const stepIndex = arr.indexOf(step);
-          const isActive = step === currentStep;
-          const isPast = index < stepIndex;
+      <nav aria-label="Setup steps" className="-mx-4 mb-3 overflow-x-auto px-4 [scrollbar-width:thin]">
+        <ol className="flex min-w-max snap-x items-center gap-1 pb-2 sm:min-w-0 sm:flex-wrap sm:gap-y-2 sm:pb-0">
+          {SETUP_STEPS.map((stepDefinition, index, arr) => {
+            const currentStep = stepDefinition.key;
+            const stepIndex = getStepIndex(step);
+            const isActive = step === currentStep;
+            const validation = validationByStep[currentStep];
+            const navigation = canNavigateToStep(currentStep, step, validationByStep);
+            const isComplete = validation.isValid && index < stepIndex;
+            const isDisabled = !navigation.allowed || saving;
 
-          return (
-            <div key={currentStep} className="flex items-center">
-              <button
-                type="button"
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-heading font-semibold rounded-full transition-colors ${
-                  isActive
-                    ? 'bg-gold-400 text-ink-700'
-                    : isPast
-                      ? 'bg-gold-400/40 text-ink-600'
-                      : 'bg-ink-200 text-ink-500'
-                } cursor-pointer hover:opacity-80`}
-                onClick={() => {
-                  if (currentStep === 'map' && generatedMap.length === 0) {
-                    goToMap();
-                    return;
-                  }
+            return (
+              <li key={currentStep} className="flex snap-start items-center">
+                <button
+                  type="button"
+                  disabled={isDisabled}
+                  aria-current={isActive ? 'step' : undefined}
+                  aria-describedby={isDisabled ? VALIDATION_SUMMARY_IDS[step] : undefined}
+                  title={!navigation.allowed ? navigation.reason : undefined}
+                  className={`flex min-h-11 min-w-[9.5rem] items-center gap-2 rounded-full border px-3 py-2 text-left text-xs font-heading font-semibold leading-tight transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 sm:min-h-0 sm:min-w-0 sm:py-1.5 ${
+                    isActive
+                      ? 'border-gold-500 bg-[var(--status-warning-bg)] text-ink-700'
+                      : isComplete
+                        ? 'border-green-600/30 bg-green-500/10 text-green-700'
+                        : isDisabled
+                          ? 'border-ink-200 bg-ink-100 text-ink-300'
+                          : 'border-border-subtle bg-surface-row text-ink-500'
+                  } disabled:cursor-not-allowed disabled:opacity-70 hover:enabled:opacity-80`}
+                  onClick={() => {
+                    attemptStepChange(currentStep);
+                  }}
+                >
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                    isActive
+                      ? 'bg-ink-700 text-gold-400'
+                      : isComplete
+                        ? 'bg-ink-600/60 text-parchment-50'
+                        : 'bg-ink-400/40 text-ink-600'
+                  }`}>
+                    {isComplete ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> : index + 1}
+                  </span>
+                  <span className="min-w-0 break-words">{stepDefinition.label}</span>
+                </button>
+                {index < arr.length - 1 ? (
+                  <ChevronRight className={`mx-1 hidden h-4 w-4 flex-shrink-0 sm:block ${isComplete ? 'text-gold-500' : 'text-ink-300'}`} aria-hidden="true" />
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
-                  setStep(currentStep);
-                }}
-              >
-                <span className={`flex items-center justify-center w-4.5 h-4.5 rounded-full text-[10px] font-bold ${
-                  isActive
-                    ? 'bg-ink-700 text-gold-400'
-                    : isPast
-                      ? 'bg-ink-600/60 text-parchment-50'
-                      : 'bg-ink-400/40 text-ink-600'
-                }`}>
-                  {isPast ? '✓' : index + 1}
-                </span>
-                {stepLabels[currentStep]}
-              </button>
-              {index < arr.length - 1 ? (
-                <svg className={`mx-1 flex-shrink-0 ${isPast ? 'text-gold-400' : 'text-ink-300'}`} width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : null}
-            </div>
-          );
-        })}
+      <div className="mb-8 flex flex-wrap gap-2 text-xs text-ink-400">
+        {SETUP_STEPS.slice(0, 3).map((stepDefinition) => (
+          <StatusPill key={stepDefinition.key} tone={validationByStep[stepDefinition.key].isValid ? 'success' : 'muted'}>
+            {progressByStep[stepDefinition.key].label}
+          </StatusPill>
+        ))}
       </div>
 
-      {error ? <p className="mb-4 text-red-500">{error}</p> : null}
+      {error ? <Alert className="mb-4" tone="danger">{error}</Alert> : null}
 
       {step === 'territories' ? (
         <div className="space-y-4">
-          <h2 className="mb-4 text-2xl">Define Territories</h2>
+          <h2 id={STEP_HEADING_IDS.territories} tabIndex={-1} className="mb-4 text-2xl focus:outline-none">
+            Define Territories
+          </h2>
           <p className="mb-4 text-sm text-ink-300">
             Curated maps define the territory layout. You can still rename territories, adjust their role, and decide
             whether each becomes a player realm, NPC realm, or neutral territory.
           </p>
-          <Card>
+          <ValidationSummary
+            id={VALIDATION_SUMMARY_IDS.territories}
+            validation={territoryValidation}
+            title="Territory validation"
+          />
+          <Card variant="panel">
             <CardContent>
               <div className="pt-4">
                 <Select
@@ -649,29 +948,49 @@ export default function SetupWizard() {
               : [];
 
             return (
-              <Card key={`${selectedMapKey}-${index}`}>
+              <Card key={`${selectedMapKey}-${index}`} variant="panel">
                 <CardContent className="pt-4">
-                  <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-                    <div className="space-y-2">
+                  <div className="grid min-w-0 gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+                    <div className="min-w-0 space-y-2">
                       {territoryMap ? <TerritoryHexMap data={territoryMap} placements={territoryPlacements} showContext /> : null}
                       <p className="text-xs text-ink-300">
                         {territoryMap?.selectableHexIds.length ?? 0} territory hexes
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <Input
-                        label="Territory Name"
-                        value={territory.name}
-                        onChange={(event) => updateTerritory(index, 'name', event.target.value)}
-                      />
-                      <Select
-                        label="Type"
-                        options={TERRITORY_TYPE_OPTIONS}
-                        value={territory.type}
-                        onChange={(event) => updateTerritory(index, 'type', event.target.value)}
-                      />
-                      <div className="col-span-2">
+                    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                      <div>
+                        <Input
+                          id={`territory-${index}-name`}
+                          label="Territory Name"
+                          value={territory.name}
+                          aria-invalid={Boolean(territoryValidation.fieldErrors[`territories.${index}.name`])}
+                          aria-describedby={`territory-${index}-name-error`}
+                          onChange={(event) => updateTerritory(index, 'name', event.target.value)}
+                        />
+                        {territoryValidation.fieldErrors[`territories.${index}.name`] ? (
+                          <p id={`territory-${index}-name-error`} className="mt-1 text-xs text-red-600">
+                            {territoryValidation.fieldErrors[`territories.${index}.name`]}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div>
+                        <Select
+                          id={`territory-${index}-type`}
+                          label="Type"
+                          options={TERRITORY_TYPE_OPTIONS}
+                          value={territory.type}
+                          aria-invalid={Boolean(territoryValidation.fieldErrors[`territories.${index}.type`])}
+                          aria-describedby={`territory-${index}-type-error`}
+                          onChange={(event) => updateTerritory(index, 'type', event.target.value)}
+                        />
+                        {territoryValidation.fieldErrors[`territories.${index}.type`] ? (
+                          <p id={`territory-${index}-type-error`} className="mt-1 text-xs text-red-600">
+                            {territoryValidation.fieldErrors[`territories.${index}.type`]}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="sm:col-span-2">
                         <Input
                           label="Description"
                           value={territory.description}
@@ -684,27 +1003,23 @@ export default function SetupWizard() {
               </Card>
             );
           })}
-
-          <div className="flex justify-end">
-            <Button variant="accent" onClick={goToMap} disabled={!selectedMapKey || loadingMaps}>
-              Next: Generate Map
-            </Button>
-          </div>
         </div>
       ) : null}
 
       {step === 'map' ? (
         <div className="space-y-4">
-          <h2 className="mb-4 text-2xl">Generated Map</h2>
+          <h2 id={STEP_HEADING_IDS.map} tabIndex={-1} className="mb-4 text-2xl focus:outline-none">
+            Generated Map
+          </h2>
           <p className="mb-2 text-sm text-ink-300">
             Resources and settlements have been generated for each territory. Select a settlement row, then click a hex
             on the territory map to place it.
           </p>
-          {unplacedSettlementCount > 0 ? (
-            <p className="text-sm text-red-500">
-              {unplacedSettlementCount} settlements still need a hex assignment before setup can be finished.
-            </p>
-          ) : null}
+          <ValidationSummary
+            id={VALIDATION_SUMMARY_IDS.map}
+            validation={mapValidation}
+            title="Map placement validation"
+          />
 
           {generatedMap.map((entry) => {
             const territory = territories[entry.territoryIndex];
@@ -715,32 +1030,48 @@ export default function SetupWizard() {
               size: resource.settlement.size,
               hexId: resource.hexKey,
             }));
+            const placedCount = entry.resources.filter((resource) => resource.hexKey).length;
+            const unplacedCount = entry.resources.length - placedCount;
+            const territoryHasPlacementError = entry.resources.some((resource) => {
+              const errorKey = `resources.${entry.territoryIndex}.${resource.id}.settlement.hexKey`;
+              return Boolean(mapValidation.fieldErrors[errorKey]);
+            });
 
             return (
-              <Card key={entry.territoryIndex} variant={territory.type === 'Realm' ? 'gold' : 'default'}>
+              <Card key={entry.territoryIndex} variant={territory.type === 'Realm' ? 'emphasis' : 'panel'}>
                 <CardHeader>
-                  <div className="flex items-center justify-between gap-4">
-                    <CardTitle>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <CardTitle className="flex min-w-0 flex-wrap items-center gap-2">
                       {territory.name || `Territory ${entry.territoryIndex + 1}`}
-                      <Badge className="ml-2" variant={territory.type === 'Realm' ? 'gold' : 'default'}>
+                      <StatusPill tone={territory.type === 'Realm' ? 'active' : 'muted'}>
                         {territory.type}
-                      </Badge>
+                      </StatusPill>
                     </CardTitle>
-                    <Button variant="outline" size="sm" onClick={() => rerollTerritory(entry.territoryIndex)}>
-                      Re-roll
-                    </Button>
+                    <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                      <StatusPill tone={unplacedCount === 0 && !territoryHasPlacementError ? 'success' : 'danger'}>
+                        {placedCount}/{entry.resources.length} placed
+                      </StatusPill>
+                      <Button className="w-full sm:w-auto" variant="outline" size="sm" leftIcon={<RotateCcw className="h-4 w-4" />} onClick={() => rerollTerritory(entry.territoryIndex)}>
+                        Re-roll
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
+                  <div className="flex flex-wrap gap-2 text-xs text-ink-400">
+                    <Badge variant="outline">{entry.resources.length} resources</Badge>
+                    <StatusPill tone={unplacedCount === 0 ? 'success' : 'danger'}>{unplacedCount} unplaced</StatusPill>
+                    {territoryHasPlacementError ? <StatusPill tone="danger">Placement issue</StatusPill> : null}
+                  </div>
                   {territory.type === 'Realm' ? (
                     <p className="text-sm text-ink-400">
                       Realm resource settlements start as villages during setup, but you still choose their exact hexes.
                     </p>
                   ) : null}
 
-                  <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-                    <div className="space-y-2">
+                  <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                    <div className="min-w-0 space-y-2">
                       {territoryMap ? (
                         <TerritoryHexMap
                           data={territoryMap}
@@ -755,28 +1086,47 @@ export default function SetupWizard() {
                       </p>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="min-w-0 space-y-3">
+                      {entry.resources.some((resource) => !resource.hexKey) ? (
+                        <Button
+                          className="w-full sm:w-auto"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const nextUnplaced = entry.resources.find((resource) => !resource.hexKey);
+                            if (nextUnplaced) {
+                              setActivePlacement(entry.territoryIndex, nextUnplaced.id);
+                            }
+                          }}
+                        >
+                          Place next unplaced
+                        </Button>
+                      ) : null}
                       {entry.resources.map((resource, resourceIndex) => {
                         const isActive = activePlacementIds[entry.territoryIndex] === resource.id;
+                        const resourcePrefix = `resources.${entry.territoryIndex}.${resource.id}`;
+                        const resourceTypeError = mapValidation.fieldErrors[`${resourcePrefix}.resourceType`];
+                        const settlementNameError = mapValidation.fieldErrors[`${resourcePrefix}.settlement.name`];
+                        const hexError = mapValidation.fieldErrors[`${resourcePrefix}.settlement.hexKey`];
 
                         return (
-                          <div
-                            key={resource.id}
-                            className={`rounded-xl border px-4 py-4 ${
-                              isActive ? 'border-accent bg-gold-500/8' : 'border-ink-200/70 bg-parchment-50/60'
-                            }`}
-                          >
-                            <div className="mb-3 flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2">
+                          <ListRow key={resource.id} selected={isActive} className="px-4 py-4">
+                            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0 flex flex-wrap items-center gap-2">
                                 <Badge variant={resource.rarity === 'Luxury' ? 'gold' : 'default'}>
                                   {resource.resourceType}
                                 </Badge>
-                                <span className="text-sm text-ink-400">{getPlacementSummary(resource)}</span>
+                                <span className={`min-w-0 break-words text-sm ${hexError ? 'text-red-600' : 'text-ink-400'}`}>
+                                  {getPlacementSummary(resource)}
+                                  {hexError ? ` - ${hexError}` : ''}
+                                </span>
+                                {isActive && !resource.hexKey ? <StatusPill tone="danger">Active unplaced</StatusPill> : null}
                               </div>
-                              <div className="flex gap-2">
+                              <div className="grid grid-cols-1 gap-2 sm:flex sm:justify-end">
                                 <Button
                                   variant={isActive ? 'accent' : 'outline'}
                                   size="sm"
+                                  className="w-full sm:w-auto"
                                   onClick={() => setActivePlacement(entry.territoryIndex, resource.id)}
                                 >
                                   {isActive ? 'Placing' : 'Place on map'}
@@ -784,6 +1134,7 @@ export default function SetupWizard() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  className="w-full sm:w-auto"
                                   onClick={() => removeResourceFromTerritory(entry.territoryIndex, resource.id)}
                                 >
                                   Remove
@@ -791,33 +1142,57 @@ export default function SetupWizard() {
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
-                              <Select
-                                label={resourceIndex === 0 ? 'Resource' : undefined}
-                                options={RESOURCE_OPTIONS}
-                                value={resource.resourceType}
-                                onChange={(event) => updateMapResource(
-                                  entry.territoryIndex,
-                                  resource.id,
-                                  'resourceType',
-                                  event.target.value
-                                )}
-                              />
-                              <div className="flex gap-1 items-end">
-                                <Input
-                                  label={resourceIndex === 0 ? 'Settlement Name' : undefined}
-                                  value={resource.settlement.name}
+                            <div className="grid min-w-0 items-start gap-2 md:grid-cols-[1fr_1fr_auto]">
+                              <div>
+                                <Select
+                                  id={`resource-${entry.territoryIndex}-${resource.id}-type`}
+                                  label={resourceIndex === 0 ? 'Resource' : undefined}
+                                  options={RESOURCE_OPTIONS}
+                                  value={resource.resourceType}
+                                  aria-invalid={Boolean(resourceTypeError)}
+                                  aria-describedby={`resource-${entry.territoryIndex}-${resource.id}-type-error`}
                                   onChange={(event) => updateMapResource(
                                     entry.territoryIndex,
                                     resource.id,
-                                    'settlementName',
+                                    'resourceType',
                                     event.target.value
                                   )}
                                 />
-                                <button
+                                {resourceTypeError ? (
+                                  <p id={`resource-${entry.territoryIndex}-${resource.id}-type-error`} className="mt-1 text-xs text-red-600">
+                                    {resourceTypeError}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <div className="flex gap-1 items-end">
+                                <div className="min-w-0 flex-1">
+                                  <Input
+                                    id={`resource-${entry.territoryIndex}-${resource.id}-settlement-name`}
+                                    label={resourceIndex === 0 ? 'Settlement Name' : undefined}
+                                    value={resource.settlement.name}
+                                    aria-invalid={Boolean(settlementNameError)}
+                                    aria-describedby={`resource-${entry.territoryIndex}-${resource.id}-settlement-name-error`}
+                                    onChange={(event) => updateMapResource(
+                                      entry.territoryIndex,
+                                      resource.id,
+                                      'settlementName',
+                                      event.target.value
+                                    )}
+                                  />
+                                  {settlementNameError ? (
+                                    <p id={`resource-${entry.territoryIndex}-${resource.id}-settlement-name-error`} className="mt-1 text-xs text-red-600">
+                                      {settlementNameError}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <Button
                                   type="button"
-                                  title="Generate random name"
-                                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded border-2 border-input-border bg-input-bg text-lg text-ink-400 hover:bg-parchment-100 hover:text-ink-600 transition-colors"
+                                  size="icon"
+                                  variant="outline"
+                                  iconOnly
+                                  leftIcon={<Dice5 className="h-4 w-4" />}
+                                  aria-label="Generate random settlement name"
+                                  title="Generate random settlement name"
                                   onClick={() => updateMapResource(
                                     entry.territoryIndex,
                                     resource.id,
@@ -825,8 +1200,8 @@ export default function SetupWizard() {
                                     generatePlaceName()
                                   )}
                                 >
-                                  &#x2684;
-                                </button>
+                                  Generate random settlement name
+                                </Button>
                               </div>
                               <Select
                                 label={resourceIndex === 0 ? 'Size' : undefined}
@@ -840,12 +1215,12 @@ export default function SetupWizard() {
                                 )}
                               />
                             </div>
-                          </div>
+                          </ListRow>
                         );
                       })}
 
-                      <Button variant="outline" size="sm" onClick={() => addResourceToTerritory(entry.territoryIndex)}>
-                        + Add Resource
+                      <Button className="w-full sm:w-auto" variant="outline" size="sm" leftIcon={<Plus className="h-4 w-4" />} onClick={() => addResourceToTerritory(entry.territoryIndex)}>
+                        Add Resource
                       </Button>
                     </div>
                   </div>
@@ -854,43 +1229,54 @@ export default function SetupWizard() {
             );
           })}
 
-          <div className="flex justify-between">
-            <Button variant="ghost" onClick={() => setStep('territories')}>Back</Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={doGenerateMap}>Re-roll All</Button>
-              <Button variant="accent" onClick={() => setStep('assignments')}>Next: Assign Owners</Button>
-            </div>
-          </div>
         </div>
       ) : null}
 
       {step === 'assignments' ? (
         <div className="space-y-6">
-          <h2 className="mb-4 text-2xl">Assign Ownership</h2>
+          <h2 id={STEP_HEADING_IDS.assignments} tabIndex={-1} className="mb-4 text-2xl focus:outline-none">
+            Assign Ownership
+          </h2>
           <p className="mb-4 text-sm text-ink-300">
             Assign each Realm territory to a player slot or NPC realm. Neutral territories have no owner.
           </p>
+          <ValidationSummary
+            id={VALIDATION_SUMMARY_IDS.assignments}
+            validation={assignmentValidation}
+            title="Assignment validation"
+          />
 
           {territories.map((territory, index) => {
             const assignment = assignments[index];
             const ownerKind = territory.type === 'Neutral' ? 'neutral' : assignment?.kind || 'player';
+            const ownerError = assignmentValidation.fieldErrors[`assignments.${index}.kind`];
 
             return (
-              <Card key={index} variant={territory.type === 'Realm' ? 'gold' : 'default'}>
+              <Card key={index} variant={territory.type === 'Realm' ? 'emphasis' : 'panel'}>
                 <CardHeader>
                   <CardTitle>{territory.name || `Territory ${index + 1}`}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <Select
-                      label="Owner"
-                      options={territory.type === 'Neutral'
-                        ? [{ value: 'neutral', label: 'Neutral' }]
-                        : OWNER_KIND_OPTIONS.slice(0, 3)}
-                      value={ownerKind}
-                      onChange={(event) => updateAssignment(index, { kind: event.target.value as OwnerKind })}
-                      disabled={territory.type === 'Neutral'}
-                    />
+                    <div>
+                      <Select
+                        id={`assignment-${index}-kind`}
+                        label="Owner"
+                        options={territory.type === 'Neutral'
+                          ? [{ value: 'neutral', label: 'Neutral' }]
+                          : OWNER_KIND_OPTIONS.filter((option) => option.value !== 'neutral')}
+                        value={ownerKind}
+                        aria-invalid={Boolean(ownerError)}
+                        aria-describedby={`assignment-${index}-kind-error`}
+                        onChange={(event) => updateAssignment(index, { kind: event.target.value as OwnerKind })}
+                        disabled={territory.type === 'Neutral'}
+                      />
+                      {ownerError ? (
+                        <p id={`assignment-${index}-kind-error`} className="mt-1 text-xs text-red-600">
+                          {ownerError}
+                        </p>
+                      ) : null}
+                    </div>
 
                     {ownerKind === 'player' ? (
                       <Input
@@ -903,7 +1289,9 @@ export default function SetupWizard() {
 
                     {ownerKind === 'npc' ? (
                       <Input
+                        id={`assignment-${index}-realm-name`}
                         label="NPC Realm Name"
+                        placeholder={`${territory.name || `Territory ${index + 1}`} NPC Realm`}
                         value={assignment?.realmName || ''}
                         onChange={(event) => updateAssignment(index, { realmName: event.target.value })}
                       />
@@ -913,17 +1301,20 @@ export default function SetupWizard() {
               </Card>
             );
           })}
-
-          <div className="flex justify-between">
-            <Button variant="ghost" onClick={() => setStep('map')}>Back</Button>
-            <Button variant="accent" onClick={() => setStep('review')}>Next: Review</Button>
-          </div>
         </div>
       ) : null}
 
       {step === 'review' ? (
         <div className="space-y-6">
-          <Card>
+          <h2 id={STEP_HEADING_IDS.review} tabIndex={-1} className="text-2xl focus:outline-none">
+            Review Setup
+          </h2>
+          <ValidationSummary
+            id={VALIDATION_SUMMARY_IDS.review}
+            validation={reviewValidation}
+            title={reviewValidation.isValid ? 'Setup is ready to save' : 'Setup blockers'}
+          />
+          <Card variant="panel">
             <CardHeader>
               <CardTitle>Territories</CardTitle>
             </CardHeader>
@@ -944,24 +1335,26 @@ export default function SetupWizard() {
                     <div key={index} className="border-b border-ink-800 pb-5 last:border-0">
                       <div className="mb-3 flex flex-wrap items-center gap-2">
                         <span className="font-semibold">{territory.name || `Territory ${index + 1}`}</span>
-                        <Badge variant={territory.type === 'Realm' ? 'gold' : 'default'}>{territory.type}</Badge>
+                        <StatusPill tone={territory.type === 'Realm' ? 'active' : 'muted'}>{territory.type}</StatusPill>
                         <Badge>{getOwnerLabel(territory, assignment)}</Badge>
                       </div>
 
-                      <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-                        <div>
+                      <div className="grid min-w-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
+                        <div className="min-w-0">
                           {territoryMap ? (
                             <TerritoryHexMap data={territoryMap} placements={placements} />
                           ) : null}
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="min-w-0 space-y-2">
                           {resources.map((resource) => (
-                            <div key={resource.id} className="text-sm text-ink-300">
-                              <Badge variant={resource.rarity === 'Luxury' ? 'gold' : 'default'} className="mr-2">
+                            <div key={resource.id} className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-ink-300">
+                              <Badge variant={resource.rarity === 'Luxury' ? 'gold' : 'default'}>
                                 {resource.resourceType}
                               </Badge>
-                              {resource.settlement.name} ({resource.settlement.size}) on {getPlacementSummary(resource)}
+                              <span className="min-w-0 break-words">
+                                {resource.settlement.name} ({resource.settlement.size}) on {getPlacementSummary(resource)}
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -972,20 +1365,28 @@ export default function SetupWizard() {
               </div>
             </CardContent>
           </Card>
-
-          <div className="flex justify-between">
-            <Button variant="ghost" onClick={() => setStep('assignments')}>Back</Button>
-            <Button
-              variant="accent"
-              size="lg"
-              onClick={() => void handleFinish()}
-              disabled={saving || unplacedSettlementCount > 0}
-            >
-              {saving ? 'Saving...' : 'Finish Setup'}
-            </Button>
-          </div>
         </div>
       ) : null}
-    </main>
+
+      <SetupWizardFooter
+        step={step}
+        stepIndex={getStepIndex(step)}
+        stepCount={SETUP_STEPS.length}
+        validation={validationByStep[step]}
+        progress={progressByStep[step]}
+        saving={saving}
+        primaryLabel={{
+          territories: 'Generate Map',
+          map: 'Assign Owners',
+          assignments: 'Review Setup',
+          review: 'Finish Setup',
+        }[step]}
+        secondaryLabel={step === 'map' ? 'Re-roll All' : undefined}
+        onBack={goBack}
+        onPrimary={goNext}
+        onSecondary={step === 'map' ? rerollAllTerritories : undefined}
+        onFocusSummary={() => focusValidationSummary(step)}
+      />
+    </AppPage>
   );
 }

@@ -70,6 +70,34 @@
   --success: var(--green-500);
   --info: var(--blue-500);
 
+  /* ---------- AUTHENTICATED APP SURFACES ---------- */
+  --surface-page: #f8f0e2;
+  --surface-panel: rgba(245, 234, 214, 0.86);
+  --surface-panel-muted: rgba(236, 220, 184, 0.48);
+  --surface-row: rgba(253, 248, 240, 0.66);
+  --surface-row-hover: rgba(236, 220, 184, 0.7);
+  --border-subtle: rgba(184, 164, 142, 0.58);
+  --border-accent-soft: rgba(218, 165, 32, 0.36);
+
+  --status-success-bg: rgba(45, 90, 39, 0.1);
+  --status-success-border: rgba(45, 90, 39, 0.32);
+  --status-success-fg: #1e4a1a;
+  --status-warning-bg: rgba(218, 165, 32, 0.14);
+  --status-warning-border: rgba(196, 144, 0, 0.38);
+  --status-warning-fg: #6f4c00;
+  --status-danger-bg: rgba(139, 32, 32, 0.1);
+  --status-danger-border: rgba(139, 32, 32, 0.34);
+  --status-danger-fg: #6b1515;
+  --status-info-bg: rgba(42, 74, 122, 0.1);
+  --status-info-border: rgba(42, 74, 122, 0.32);
+  --status-info-fg: #1f2f56;
+  --status-neutral-bg: rgba(184, 164, 142, 0.18);
+  --status-neutral-border: rgba(139, 115, 85, 0.28);
+  --status-neutral-fg: var(--ink-500);
+  --status-muted-bg: rgba(224, 213, 200, 0.38);
+  --status-muted-border: rgba(184, 164, 142, 0.3);
+  --status-muted-fg: var(--ink-300);
+
   /* ---------- FONT STACKS ----------
      Three-voice stack: display (Roman capitals), serif (editorial), body.
      --font-display, --font-serif, --font-body are set on <html> by
@@ -125,6 +153,12 @@
   --shadow-2: 0 2px 8px rgba(74, 55, 40, 0.1);
   --shadow-3: 0 8px 24px rgba(74, 55, 40, 0.14);
   --shadow-gold: 0 2px 8px rgba(218, 165, 32, 0.18);
+
+  /* ---------- RULES HELP SURFACE ---------- */
+  --rules-help-safe-bottom: 1rem;
+  --rules-help-safe-right: 1rem;
+  --rules-help-top-offset: 3.5rem;
+  --rules-help-panel-width: 24rem;
 
   /* ---------- MOTION (slow, deliberate, ceremonial) ---------- */
   --ease-quill: cubic-bezier(.2, .7, .2, 1);
@@ -187,6 +221,13 @@
   --color-danger: var(--danger);
   --color-success: var(--success);
   --color-info: var(--info);
+  --color-surface-page: var(--surface-page);
+  --color-surface-panel: var(--surface-panel);
+  --color-surface-panel-muted: var(--surface-panel-muted);
+  --color-surface-row: var(--surface-row);
+  --color-surface-row-hover: var(--surface-row-hover);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-accent-soft: var(--border-accent-soft);
 
   /* Fonts resolve via next/font vars set on <html>. */
   --font-display: var(--font-display, 'Cinzel', serif);
@@ -344,6 +385,45 @@ h1, h2, h3, h4, h5, h6 {
   font-size: var(--fs-1);
   letter-spacing: var(--tracking-wide);
   color: var(--ink-600);
+}
+.t-app-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.625rem, 1.4rem + 0.8vw, 2rem);
+  line-height: var(--lh-tight);
+  letter-spacing: 0.02em;
+  color: var(--ink-700);
+}
+.t-app-section {
+  font-family: var(--font-serif);
+  font-weight: 650;
+  font-size: clamp(1.375rem, 1.25rem + 0.45vw, 1.625rem);
+  line-height: var(--lh-snug);
+  letter-spacing: 0;
+  color: var(--ink-600);
+}
+.t-app-label {
+  font-family: var(--font-display);
+  font-weight: 650;
+  font-size: var(--fs-00);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+.t-app-body {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: var(--lh-body);
+  letter-spacing: 0;
+  color: var(--ink-700);
+}
+.t-app-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-0);
+  line-height: var(--lh-body);
+  letter-spacing: 0;
+  color: var(--ink-400);
 }
 
 /* ---------- ILLUMINATED BORDER (brand ornament) ---------- */

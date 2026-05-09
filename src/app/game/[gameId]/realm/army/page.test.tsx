@@ -169,4 +169,33 @@ describe('ArmyPage', () => {
     expect(screen.getByText('First Army')).toBeInTheDocument();
     expect(screen.getByText(/General:\s*General Rowan/i)).toBeInTheDocument();
   });
+
+  it('creates a fleet for a GM-managed realm using the realm settlement territory', async () => {
+    const user = userEvent.setup();
+
+    render(<ArmyPage />);
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(4);
+    });
+
+    await user.click(screen.getByRole('button', { name: /naval forces/i }));
+    await user.click(screen.getByRole('button', { name: /^new fleet$/i }));
+    await user.type(screen.getByLabelText('Fleet Name'), 'Western Fleet');
+    await user.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(9);
+    });
+
+    const postCall = vi.mocked(fetch).mock.calls[4];
+    const requestInit = postCall?.[1] as RequestInit | undefined;
+    expect(postCall?.[0]).toBe('/api/game/game-1/fleets');
+    expect(requestInit).toMatchObject({ method: 'POST' });
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      realmId: 'realm-managed',
+      name: 'Western Fleet',
+      locationTerritoryId: 'territory-1',
+    });
+  });
 });

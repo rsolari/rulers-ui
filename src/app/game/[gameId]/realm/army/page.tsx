@@ -126,6 +126,9 @@ async function fetchArmyData(gameId: string, realmId: string) {
 
 async function fetchFleetData(gameId: string, realmId: string) {
   const response = await fetch(`/api/game/${gameId}/fleets?realmId=${realmId}`);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to load fleets'));
+  }
   const data = await response.json();
 
   return {
@@ -262,6 +265,7 @@ export default function ArmyPage() {
   )
     ? constructionSettlementIdOverride
     : (recruitableSettlements[0]?.id ?? '');
+  const defaultFleetTerritoryId = territoryId ?? settlements[0]?.territoryId ?? '';
 
   const activeTroopRecruitmentOptions = troopRecruitmentOptionsBySettlement[selectedRecruitmentSettlementId]
     ?? troopRecruitmentOptions;
@@ -357,7 +361,21 @@ export default function ArmyPage() {
   }
 
   async function createFleet() {
-    if (!newFleetName.trim() || !realmId || !territoryId) return;
+    const trimmedName = newFleetName.trim();
+    if (!trimmedName) {
+      setCreateFleetError('Enter a fleet name.');
+      return;
+    }
+
+    if (!realmId) {
+      setCreateFleetError('No realm selected.');
+      return;
+    }
+
+    if (!defaultFleetTerritoryId) {
+      setCreateFleetError('No territory is available to place a fleet.');
+      return;
+    }
 
     setIsCreatingFleet(true);
     setCreateFleetError('');
@@ -368,7 +386,7 @@ export default function ArmyPage() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ realmId, name: newFleetName.trim(), locationTerritoryId: territoryId }),
+          body: JSON.stringify({ realmId, name: trimmedName, locationTerritoryId: defaultFleetTerritoryId }),
         },
         'Failed to create fleet',
       );
@@ -383,7 +401,10 @@ export default function ArmyPage() {
   }
 
   async function recruitTroop() {
-    if (!realmId || !selectedRecruitmentSettlementId) return;
+    if (!realmId || !selectedRecruitmentSettlementId) {
+      setRecruitError('Choose a settlement before recruiting.');
+      return;
+    }
 
     setIsRecruiting(true);
     setRecruitError('');
@@ -413,7 +434,10 @@ export default function ArmyPage() {
   }
 
   async function constructShip() {
-    if (!realmId || !selectedConstructionSettlementId) return;
+    if (!realmId || !selectedConstructionSettlementId) {
+      setConstructShipError('Choose a settlement before constructing a ship.');
+      return;
+    }
 
     setIsConstructingShip(true);
     setConstructShipError('');
@@ -848,7 +872,7 @@ export default function ArmyPage() {
           </DialogContent>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setCreateFleetOpen(false)} disabled={isCreatingFleet}>Cancel</Button>
-            <Button variant="accent" onClick={createFleet} disabled={!newFleetName.trim() || isCreatingFleet}>
+            <Button variant="accent" onClick={() => void createFleet()} disabled={!newFleetName.trim() || !realmId || !defaultFleetTerritoryId || isCreatingFleet}>
               {isCreatingFleet ? 'Creating...' : 'Create'}
             </Button>
           </DialogFooter>
@@ -984,7 +1008,7 @@ export default function ArmyPage() {
             <Button variant="ghost" onClick={() => setConstructShipOpen(null)} disabled={isConstructingShip}>Cancel</Button>
             <Button
               variant="accent"
-              onClick={constructShip}
+              onClick={() => void constructShip()}
               disabled={!selectedConstructionSettlementId || !selectedShipConstructionOption?.canConstruct || isConstructingShip}
             >
               {isConstructingShip ? 'Constructing...' : 'Construct'}

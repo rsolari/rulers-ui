@@ -5,6 +5,7 @@ const MODEL = 'google/gemini-2.5-flash';
 const MAX_TURNS = 40;
 const MAX_MESSAGE_CHARS = 4000;
 const MAX_TOTAL_CHARS = 24000;
+const MAX_LOGGED_PROVIDER_ERROR_CHARS = 2000;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -75,6 +76,7 @@ function enqueueOpenRouterLine(
 export async function POST(request: Request) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
+    console.error('[rules-chat] OPENROUTER_API_KEY is not configured');
     return Response.json({ error: 'OPENROUTER_API_KEY is not configured' }, { status: 500 });
   }
 
@@ -93,7 +95,13 @@ export async function POST(request: Request) {
     return Response.json({ error: 'messages array is required' }, { status: 400 });
   }
 
-  const systemPrompt = buildSystemPrompt();
+  let systemPrompt: string;
+  try {
+    systemPrompt = buildSystemPrompt();
+  } catch (error) {
+    console.error('[rules-chat] Failed to build system prompt', error);
+    return Response.json({ error: 'Rules advisor failed to load rules content' }, { status: 500 });
+  }
 
   let openRouterResponse: Response;
   try {
@@ -113,11 +121,18 @@ export async function POST(request: Request) {
         ],
       }),
     });
-  } catch {
+  } catch (error) {
+    console.error('[rules-chat] OpenRouter request failed', error);
     return Response.json({ error: 'Rules advisor provider is unavailable' }, { status: 502 });
   }
 
   if (!openRouterResponse.ok) {
+    const providerError = await openRouterResponse.text().catch(() => '');
+    console.error('[rules-chat] OpenRouter returned non-OK response', {
+      status: openRouterResponse.status,
+      statusText: openRouterResponse.statusText,
+      body: providerError.slice(0, MAX_LOGGED_PROVIDER_ERROR_CHARS),
+    });
     return Response.json(
       { error: `Rules advisor provider returned ${openRouterResponse.status}` },
       { status: 502 },
@@ -125,6 +140,7 @@ export async function POST(request: Request) {
   }
 
   if (!openRouterResponse.body) {
+    console.error('[rules-chat] OpenRouter response did not include a body');
     return Response.json({ error: 'No response body from OpenRouter' }, { status: 502 });
   }
 

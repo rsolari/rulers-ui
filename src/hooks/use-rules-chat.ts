@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { readErrorMessage } from '@/lib/http';
 
 export interface ChatMessage {
@@ -9,15 +9,54 @@ export interface ChatMessage {
   content: string;
 }
 
+export type RulesChatStatus = 'idle' | 'streaming' | 'error';
+
+const MESSAGES_KEY = 'rulers.rulesChat.messages.v1';
+const MAX_TURNS = 40;
+
+function loadPersistedMessages(): ChatMessage[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = sessionStorage.getItem(MESSAGES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      sessionStorage.removeItem(MESSAGES_KEY);
+      return [];
+    }
+    return parsed.slice(-MAX_TURNS);
+  } catch {
+    sessionStorage.removeItem(MESSAGES_KEY);
+    return [];
+  }
+}
+
+function persistMessages(messages: ChatMessage[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-MAX_TURNS)));
+  } catch {
+    // storage full or unavailable
+  }
+}
+
 export function useRulesChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadPersistedMessages());
+  const [status, setStatus] = useState<RulesChatStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  useEffect(() => {
+    if (status !== 'streaming') {
+      persistMessages(messagesRef.current);
+    }
+  }, [messages, status]);
 
   const sendMessage = useCallback(async (content: string) => {
     const trimmed = content.trim();
-    if (!trimmed || isStreaming) return;
+    if (!trimmed || status === 'streaming') return;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -34,9 +73,9 @@ export function useRulesChat() {
       content: '',
     };
 
-    const updatedMessages = [...messages, userMessage];
+    const updatedMessages = [...messagesRef.current, userMessage];
     setMessages([...updatedMessages, assistantMessage]);
-    setIsStreaming(true);
+    setStatus('streaming');
     setError(null);
 
     try {
@@ -70,8 +109,18 @@ export function useRulesChat() {
           return next;
         });
       }
+
+      setStatus('idle');
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
+      if ((err as Error).name === 'AbortError') {
+        if (assistantMessage.content) {
+          setStatus('idle');
+        } else {
+          setMessages((prev) => (prev[prev.length - 1]?.content === '' ? prev.slice(0, -1) : prev));
+          setStatus('idle');
+        }
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Something went wrong');
       setMessages((prev) => {
         if (prev[prev.length - 1]?.content === '') {
@@ -79,17 +128,38 @@ export function useRulesChat() {
         }
         return prev;
       });
-    } finally {
-      setIsStreaming(false);
+      setStatus('error');
     }
-  }, [messages, isStreaming]);
+  }, [status]);
+
+  const abort = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  const retryLast = useCallback(() => {
+    const msgs = messagesRef.current;
+    const lastUserIdx = msgs.findLastIndex((m) => m.role === 'user');
+    if (lastUserIdx === -1) return;
+
+    const lastUserContent = msgs[lastUserIdx].content;
+    setMessages(msgs.slice(0, lastUserIdx));
+    setError(null);
+    setStatus('idle');
+
+    setTimeout(() => {
+      void sendMessage(lastUserContent);
+    }, 0);
+  }, [sendMessage]);
 
   const clearChat = useCallback(() => {
     abortRef.current?.abort();
     setMessages([]);
     setError(null);
-    setIsStreaming(false);
+    setStatus('idle');
+    sessionStorage.removeItem(MESSAGES_KEY);
   }, []);
 
-  return { messages, isStreaming, error, sendMessage, clearChat };
+  const isStreaming = status === 'streaming';
+
+  return { messages, status, isStreaming, error, sendMessage, clearChat, abort, retryLast };
 }

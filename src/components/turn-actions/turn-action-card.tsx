@@ -22,6 +22,7 @@ import { ActionComments } from '@/components/turn-actions/action-comments';
 import { ActionKindBadge, ActionOutcomeBadge, ActionStatusBadge } from '@/components/turn-actions/action-status-badge';
 import { lookupLabel, type SelectOption } from '@/components/turn-actions/options';
 import { Badge } from '@/components/ui/badge';
+import { TogglePill } from '@/components/ui/toggle-pill';
 
 const BUILDING_OPTIONS = Object.entries(BUILDING_DEFS).map(([value, def]) => {
   const sizeData = BUILDING_SIZE_DATA[def.size];
@@ -528,14 +529,14 @@ export function TurnActionCard({
                 {ACTION_WORDS.map((word) => {
                   const selected = (draft.actionWords ?? []).includes(word);
                   return (
-                    <Badge
+                    <TogglePill
                       key={word}
-                      variant={selected ? 'gold' : 'default'}
-                      className={editable ? 'cursor-pointer' : ''}
-                      onClick={() => editable && toggleActionWord(word)}
+                      selected={selected}
+                      disabled={!editable}
+                      onSelectedChange={() => toggleActionWord(word)}
                     >
                       {word}
-                    </Badge>
+                    </TogglePill>
                   );
                 })}
               </div>

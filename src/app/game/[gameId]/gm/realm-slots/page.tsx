@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import type { GameMapData } from '@/components/map/types';
 import { TerritoryHexMap, type TerritoryMapPlacement } from '@/components/map/TerritoryHexMap';
 import { Badge } from '@/components/ui/badge';
@@ -246,17 +246,14 @@ export default function RealmSlotsPage() {
   }
 
   return (
-    <main className="min-h-screen max-w-6xl mx-auto p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Realm Slots</h1>
+    <main className="min-h-screen min-w-0 max-w-6xl mx-auto px-4 py-5 sm:p-6">
+      <div className="mb-6 grid gap-3 sm:flex sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold sm:text-3xl">Realm Slots</h1>
           <p className="text-ink-300">
             Prepare territories for players. Each slot includes a territory, settlements, and a claim code.
           </p>
         </div>
-        <Link href={`/game/${gameId}/gm`}>
-          <Button variant="ghost">Back to Dashboard</Button>
-        </Link>
       </div>
 
       {error ? <p className="mb-4 text-red-500">{error}</p> : null}
@@ -276,9 +273,9 @@ export default function RealmSlotsPage() {
           return (
             <Card key={slot.id} variant="gold">
               <CardHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <CardTitle>{territory?.name ?? 'Unknown Territory'}</CardTitle>
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <CardTitle className="min-w-0 break-words">{territory?.name ?? 'Unknown Territory'}</CardTitle>
                     <Badge variant={getStatusVariant(slot.setupState)}>
                       {SETUP_STATE_LABELS[slot.setupState] || slot.setupState}
                     </Badge>
@@ -286,9 +283,10 @@ export default function RealmSlotsPage() {
                       <span className="text-sm text-ink-400">for {slot.displayName}</span>
                     ) : null}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-lg tracking-widest text-ink-500">{slot.claimCode}</span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+                    <span className="break-all font-mono text-lg tracking-widest text-ink-500">{slot.claimCode}</span>
                     <Button
+                      className="w-full sm:w-auto"
                       variant="outline"
                       size="sm"
                       onClick={() => copyClaimCode(slot.claimCode)}
@@ -300,8 +298,8 @@ export default function RealmSlotsPage() {
               </CardHeader>
 
               <CardContent>
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <div>
+                <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <div className="min-w-0">
                     {territoryMap ? (
                       <TerritoryHexMap data={territoryMap} placements={placements} />
                     ) : null}
@@ -312,8 +310,8 @@ export default function RealmSlotsPage() {
                       <p className="mb-2 font-heading font-semibold text-sm">Settlements ({slotSettlements.length})</p>
                       <div className="space-y-1.5">
                         {slotSettlements.map((settlement) => (
-                          <div key={settlement.id} className="flex items-center justify-between rounded medieval-border px-3 py-1.5">
-                            <span className="text-sm">{settlement.name}</span>
+                          <div key={settlement.id} className="grid gap-1 rounded medieval-border px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                            <span className="min-w-0 break-words text-sm">{settlement.name}</span>
                             <Badge>{settlement.size}</Badge>
                           </div>
                         ))}
@@ -371,6 +369,7 @@ export default function RealmSlotsPage() {
       {!showNewSlotForm ? (
         <div className="mt-8">
           <Button
+            className="w-full sm:w-auto"
             variant="accent"
             onClick={() => setShowNewSlotForm(true)}
             disabled={unassignedTerritories.length === 0}
@@ -384,9 +383,9 @@ export default function RealmSlotsPage() {
       ) : (
         <Card className="mt-8" variant="gold">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="grid gap-3 sm:flex sm:items-center sm:justify-between">
               <CardTitle>Prepare New Realm Slot</CardTitle>
-              <Button variant="ghost" size="sm" onClick={resetNewSlotForm}>Cancel</Button>
+              <Button className="w-full sm:w-auto" variant="ghost" size="sm" onClick={resetNewSlotForm}>Cancel</Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -417,8 +416,8 @@ export default function RealmSlotsPage() {
             </div>
 
             {newSlotTerritoryId ? (
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="space-y-2">
+              <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="min-w-0 space-y-2">
                   {newSlotTerritoryMap ? (
                     <TerritoryHexMap
                       data={newSlotTerritoryMap}
@@ -445,30 +444,31 @@ export default function RealmSlotsPage() {
                           isActive ? 'border-accent bg-gold-500/8' : 'border-ink-200/70 bg-parchment-50/60'
                         }`}
                       >
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-heading text-sm font-semibold">
+                        <div className="mb-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <span className="min-w-0 break-words font-heading text-sm font-semibold">
                               {draft.name || `Settlement ${index + 1}`}
                             </span>
                             <span className="text-sm text-ink-400">
                               {draft.hexId ? `Placed` : 'Unplaced'}
                             </span>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="grid grid-cols-1 gap-2 sm:flex">
                             <Button
                               variant={isActive ? 'accent' : 'outline'}
                               size="sm"
+                              className="w-full sm:w-auto"
                               onClick={() => setNewSlotActiveSettlement(index)}
                             >
                               {isActive ? 'Placing' : 'Place'}
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => removeSettlementDraft(index)}>
+                            <Button className="w-full sm:w-auto" variant="ghost" size="sm" onClick={() => removeSettlementDraft(index)}>
                               Remove
                             </Button>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-[1fr_1fr] gap-2">
+                        <div className="grid gap-2 sm:grid-cols-2">
                           <Input
                             label="Settlement Name"
                             value={draft.name}
@@ -485,15 +485,16 @@ export default function RealmSlotsPage() {
                     );
                   })}
 
-                  <Button variant="outline" size="sm" onClick={addSettlementDraft}>
-                    + Add Settlement
+                  <Button className="w-full sm:w-auto" variant="outline" size="sm" leftIcon={<Plus className="h-4 w-4" />} onClick={addSettlementDraft}>
+                    Add Settlement
                   </Button>
                 </div>
               </div>
             ) : null}
 
-            <div className="flex justify-end">
+            <div className="grid sm:flex sm:justify-end">
               <Button
+                className="w-full sm:w-auto"
                 variant="accent"
                 onClick={() => void handlePrepareSlot()}
                 disabled={

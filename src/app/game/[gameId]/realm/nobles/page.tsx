@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogTitle, DialogDescription, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { NobleActivityBadge } from '@/components/governance/NobleActivityBadge';
 import { useRole } from '@/hooks/use-role';
 import { deriveNobleActivity } from '@/lib/noble-activity';
@@ -352,21 +353,15 @@ export default function NoblesPage() {
 
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
-      <nav className="mb-4 text-sm text-ink-300">
-        <Link href={`/game/${gameId}/realm${isGmManaging ? `?realmId=${realmId}` : ''}`} className="hover:text-ink-100">← Realm</Link>
-      </nav>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Noble Families</h1>
         <div className="flex items-center gap-3">
-          <Link href={`/game/${gameId}/realm${isGmManaging ? `?realmId=${realmId}` : ''}`}>
-            <Button variant="ghost">Back to Realm</Button>
-          </Link>
           {!nobles.some((noble) => noble.isRuler) ? (
             <Link href={`/game/${gameId}/realm/ruler/create${isGmManaging ? `?realmId=${realmId}` : ''}`}>
               <Button variant="outline">Create Ruler</Button>
             </Link>
           ) : null}
-          <Button variant="accent" onClick={() => setAddFamilyOpen(true)}>+ New Family</Button>
+          <Button variant="accent" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddFamilyOpen(true)}>New Family</Button>
         </div>
       </div>
 
@@ -380,7 +375,7 @@ export default function NoblesPage() {
                   <CardTitle>House {family.name}</CardTitle>
                   <div className="flex items-center gap-2">
                     {family.isRulingFamily ? <Badge variant="gold">Ruling Family</Badge> : null}
-                    <Button variant="outline" size="sm" onClick={() => handleGenerateNoble(family.id)}>+ Add Noble</Button>
+                    <Button variant="outline" size="sm" leftIcon={<Plus className="h-4 w-4" />} onClick={() => handleGenerateNoble(family.id)}>Add Noble</Button>
                   </div>
                 </div>
               </CardHeader>
@@ -419,8 +414,13 @@ export default function NoblesPage() {
       </div>
 
       {selectedNoble ? (
-        <Dialog open onClose={closeNobleDetail}>
+        <Dialog open onClose={closeNobleDetail} size="xl">
           <DialogTitle>{isEditingSelectedNoble ? `Edit ${selectedNoble.name}` : selectedNoble.name}</DialogTitle>
+          <DialogDescription>
+            {isEditingSelectedNoble
+              ? 'Update this noble identity, governance, character details, and GM notes.'
+              : 'Review this noble status, governance, character details, and GM notes.'}
+          </DialogDescription>
           <DialogContent>
             <div className="space-y-4">
               <div className="medieval-border rounded p-3">
@@ -624,8 +624,11 @@ export default function NoblesPage() {
       ) : null}
 
       {addNobleOpen && generatedNoble ? (
-        <Dialog open onClose={() => { setAddNobleOpen(null); setGeneratedNoble(null); }}>
+        <Dialog open onClose={() => { setAddNobleOpen(null); setGeneratedNoble(null); }} size="lg">
           <DialogTitle>Add Noble</DialogTitle>
+          <DialogDescription>
+            Review the generated traits, choose a name, and add this noble to the family.
+          </DialogDescription>
           <DialogContent>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 medieval-border rounded p-3">

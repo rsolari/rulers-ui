@@ -28,6 +28,7 @@ interface TerritoryHexMapProps {
   selectableHexIds?: string[];
   variant?: 'compact' | 'full';
   showContext?: boolean;
+  heightClassName?: string;
   onHexSelect?: (hexId: string) => void;
 }
 
@@ -38,6 +39,7 @@ export function TerritoryHexMap({
   selectableHexIds,
   variant = 'compact',
   showContext = false,
+  heightClassName,
   onHexSelect,
 }: TerritoryHexMapProps) {
   const hexSize = HEX_SIZE_BY_VARIANT[variant];
@@ -192,9 +194,9 @@ export function TerritoryHexMap({
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden rounded-xl border border-ink-200/80 bg-[radial-gradient(circle_at_top,_rgba(253,248,240,0.95),_rgba(236,220,184,0.9))] ${
+      className={`relative min-w-0 overflow-hidden rounded-xl border border-ink-200/80 bg-[radial-gradient(circle_at_top,_rgba(253,248,240,0.95),_rgba(236,220,184,0.9))] ${
         variant === 'full' ? 'shadow-[0_12px_30px_rgba(74,55,40,0.12)]' : ''
-      } ${zoom > MIN_ZOOM ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      } ${zoom > MIN_ZOOM ? 'touch-none cursor-grab active:cursor-grabbing' : 'touch-pan-y'}`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -204,27 +206,27 @@ export function TerritoryHexMap({
         <button
           type="button"
           onClick={zoomIn}
-          className="flex h-6 w-6 items-center justify-center rounded bg-parchment-50/90 text-xs font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded bg-parchment-50/90 text-base font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60 sm:min-h-9 sm:min-w-9 sm:text-sm"
           aria-label="Zoom in"
         >+</button>
         <button
           type="button"
           onClick={zoomOut}
-          className="flex h-6 w-6 items-center justify-center rounded bg-parchment-50/90 text-xs font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded bg-parchment-50/90 text-base font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60 sm:min-h-9 sm:min-w-9 sm:text-sm"
           aria-label="Zoom out"
         >−</button>
         {zoom > MIN_ZOOM ? (
           <button
             type="button"
             onClick={resetZoom}
-            className="flex h-6 w-6 items-center justify-center rounded bg-parchment-50/90 text-[9px] font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded bg-parchment-50/90 text-sm font-bold text-ink-600 shadow hover:bg-parchment-100 border border-ink-200/60 sm:min-h-9 sm:min-w-9 sm:text-xs"
             aria-label="Reset zoom"
           >⟲</button>
         ) : null}
       </div>
       <svg
         data-testid={`territory-map-${data.territoryId}`}
-        className={variant === 'full' ? 'h-72 w-full' : 'h-44 w-full'}
+        className={heightClassName ?? (variant === 'full' ? 'h-64 w-full sm:h-72 md:h-80' : 'h-40 w-full sm:h-44')}
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
         role={onHexSelect ? 'application' : 'img'}
         aria-label={`${data.territoryName} territory map`}

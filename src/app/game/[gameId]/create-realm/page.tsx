@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { CheckboxChip, CheckboxChipGroup } from '@/components/ui/toggle-pill';
 import { useRole } from '@/hooks/use-role';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
@@ -145,17 +146,18 @@ export default function CreateRealmPage() {
     }
   }, [capitalHexId, selectableHexIds]);
 
-  function toggleTradition(tradition: Tradition) {
-    if (traditions.includes(tradition)) {
-      setTraditions((current) => current.filter((value) => value !== tradition));
-      return;
-    }
+  function setTraditionSelected(tradition: Tradition, selected: boolean) {
+    setTraditions((current) => {
+      if (!selected) {
+        return current.filter((value) => value !== tradition);
+      }
 
-    if (traditions.length >= 3) {
-      return;
-    }
+      if (current.includes(tradition) || current.length >= 3) {
+        return current;
+      }
 
-    setTraditions((current) => [...current, tradition]);
+      return [...current, tradition];
+    });
   }
 
   async function handleSubmit() {
@@ -288,42 +290,41 @@ export default function CreateRealmPage() {
               </p>
             </div>
 
-            <div>
-              <div className="mb-2 flex items-baseline justify-between">
-                <p className="font-heading text-sm font-medium text-ink-500">Traditions ({traditions.length}/3)</p>
-                <Link href="/rules/13-traditions" target="_blank" className="text-xs text-ink-300 underline hover:text-ink-500">
-                  Rules: Traditions
-                </Link>
-              </div>
+            <CheckboxChipGroup
+              legend={
+                <span className="flex items-baseline justify-between gap-3">
+                  <span>Traditions</span>
+                  <Link href="/rules/13-traditions" target="_blank" className="text-xs text-ink-300 underline hover:text-ink-500">
+                    Rules: Traditions
+                  </Link>
+                </span>
+              }
+              helpText="Choose up to 3 traditions."
+              statusText={`${traditions.length} of 3 selected.`}
+            >
               <div className="space-y-1.5">
                 {TRADITION_OPTIONS.map((option) => {
-                  const def = TRADITION_DEFS[option.value as Tradition];
-                  const selected = traditions.includes(option.value as Tradition);
+                  const value = option.value as Tradition;
+                  const def = TRADITION_DEFS[value];
+                  const selected = traditions.includes(value);
                   const disabled = !selected && traditions.length >= 3;
+
                   return (
-                    <button
+                    <CheckboxChip
                       key={option.value}
-                      type="button"
-                      className={`w-full text-left rounded-md border px-3 py-2 transition-colors ${
-                        selected
-                          ? 'border-gold-500 bg-gold-500/10'
-                          : disabled
-                            ? 'border-ink-200/40 bg-parchment-50/30 opacity-50 cursor-not-allowed'
-                            : 'border-ink-200/70 bg-parchment-50/70 hover:border-ink-300 cursor-pointer'
-                      }`}
-                      onClick={() => toggleTradition(option.value as Tradition)}
+                      id={`create-realm-tradition-${option.value}`}
+                      label={def.displayName}
+                      meta={def.category}
+                      description={def.effect}
+                      selected={selected}
                       disabled={disabled}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-heading text-sm font-medium">{def.displayName}</span>
-                        <Badge variant="default" className="text-[10px] px-1.5 py-0">{def.category}</Badge>
-                      </div>
-                      <p className="mt-0.5 text-xs text-ink-300">{def.effect}</p>
-                    </button>
+                      layout="row"
+                      onSelectedChange={(nextSelected) => setTraditionSelected(value, nextSelected)}
+                    />
                   );
                 })}
               </div>
-            </div>
+            </CheckboxChipGroup>
 
             <Button
               variant="accent"

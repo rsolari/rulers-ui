@@ -2,12 +2,22 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Plus } from 'lucide-react';
+import { AppPage } from '@/components/layout/app-page';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { EmptyState, LoadingState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { ListRow } from '@/components/ui/list-row';
 import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StatusPill } from '@/components/ui/status-pill';
+import { CheckboxChip, CheckboxChipGroup, TogglePill } from '@/components/ui/toggle-pill';
+import { GmCommandHeader } from '@/components/gm/GmCommandHeader';
+import { GmStatusSummary } from '@/components/gm/GmStatusSummary';
+import { GmTabs, getGmTabPanelIds, type GmTabItem } from '@/components/gm/GmTabs';
 import { TechnicalKnowledgeBadges } from '@/components/technical-knowledge/technical-knowledge-badges';
 import { TerritoryHexMap } from '@/components/map/TerritoryHexMap';
 import { NobleAssignmentSelect } from '@/components/governance/NobleAssignmentSelect';
@@ -78,6 +88,20 @@ const TROOP_TYPE_OPTIONS = [
   'MountedArchers', 'Dragoons',
 ].map((t) => ({ value: t, label: t }));
 
+type GmWorkflowTab = 'overview' | 'setup' | 'realms' | 'world' | 'governance' | 'turns';
+
+const GM_WORKFLOW_TABS: GmTabItem[] = [
+  { id: 'overview', label: 'Overview', description: 'Command summary and realm watch' },
+  { id: 'setup', label: 'Setup', description: 'Readiness, player slots, and launch state' },
+  { id: 'realms', label: 'Realms & Turmoil', description: 'Realm profiles, capitals, turmoil, and troops' },
+  { id: 'world', label: 'World & Assets', description: 'Territories, settlements, buildings, and overrides' },
+  { id: 'governance', label: 'Governance & G.O.S.', description: 'Nobles, offices, and G.O.S. data' },
+  { id: 'turns', label: 'Turn Operations', description: 'Submitted turn actions and resolution queue' },
+];
+
+const GM_WORKFLOW_TAB_IDS = new Set(GM_WORKFLOW_TABS.map((tab) => tab.id));
+const GM_TABS_ID_BASE = 'gm-dashboard';
+
 function formatSetupStateLabel(setupState: string) {
   return setupState
     .split('_')
@@ -91,6 +115,72 @@ interface GMDashboardGOS {
   type: string;
   treasury: number;
   realmIds: string[];
+}
+
+type DashboardSlice =
+  | 'game'
+  | 'realms'
+  | 'territories'
+  | 'playerSlots'
+  | 'economy'
+  | 'settlements'
+  | 'map'
+  | 'gos';
+
+type RefreshReason = 'initial' | 'poll' | 'manual' | 'mutation';
+
+type DraftKey =
+  | `realm:${string | 'new'}`
+  | `territory:${string}`
+  | `settlement:${string}`
+  | `settlement-transfer:${string}`
+  | `settlement-new:${string}`
+  | `turmoil:${string}`
+  | `capital:${string}`
+  | `building-new:${string}`
+  | `troop-new:${string}`
+  | `realm-management:${string}`
+  | `governance-noble:${string}`
+  | `troop-transfer:${string}`;
+
+interface DashboardDraft {
+  key: DraftKey;
+  label: string;
+  slices: DashboardSlice[];
+  dirty: boolean;
+  startedAt: number;
+  lastTouchedAt: number;
+}
+
+interface DashboardSnapshot {
+  game: GameDto;
+  realms: RealmDto[];
+  territories: GameTerritoryDto[];
+  playerSlots: PlayerSlotDto[];
+  economyOverview: Record<string, EconomyOverviewRealmDto>;
+  worldSettlements: GameSettlementDto[];
+  gameMapData: GameMapData | null;
+  gmGosList: GMDashboardGOS[];
+}
+
+const ALL_DASHBOARD_SLICES: DashboardSlice[] = [
+  'game',
+  'realms',
+  'territories',
+  'playerSlots',
+  'economy',
+  'settlements',
+  'map',
+  'gos',
+];
+
+function formatRefreshAge(timestamp: number | null) {
+  if (!timestamp) return 'Not updated yet';
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (elapsedSeconds < 10) return 'Updated just now';
+  if (elapsedSeconds < 60) return `Updated ${elapsedSeconds}s ago`;
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  return `Updated ${elapsedMinutes} min ago`;
 }
 
 function getSetupStateBadgeVariant(setupState: string): 'default' | 'gold' | 'green' {
@@ -109,6 +199,8 @@ function getSetupStateBadgeVariant(setupState: string): 'default' | 'gold' | 'gr
 export default function GMDashboard() {
   const params = useParams();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const gameId = params.gameId as string;
   const { role, loading: roleLoading } = useRole();
   const [game, setGame] = useState<GameDto | null>(null);
@@ -148,66 +240,321 @@ export default function GMDashboard() {
   const [addingTroop, setAddingTroop] = useState<{ realmId: string; settlementId: string; type: string; chargeGosId: string } | null>(null);
   const [savingTroop, setSavingTroop] = useState(false);
   const [gmGosList, setGmGosList] = useState<GMDashboardGOS[]>([]);
+  const [territoryDrafts, setTerritoryDrafts] = useState<Record<string, Partial<GameTerritoryDto>>>({});
+  const [settlementDrafts, setSettlementDrafts] = useState<Record<string, Partial<GameSettlementDto>>>({});
+  const [nestedDrafts, setNestedDrafts] = useState<Record<string, DashboardDraft>>({});
+  const [lastDashboardRefreshAt, setLastDashboardRefreshAt] = useState<number | null>(null);
+  const [refreshingDashboard, setRefreshingDashboard] = useState(false);
+  const [deferredRefreshAt, setDeferredRefreshAt] = useState<number | null>(null);
+  const [pendingRefreshReason, setPendingRefreshReason] = useState<string | null>(null);
+  const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
+  const [draftResetToken, setDraftResetToken] = useState(0);
+  const [copiedClaimCodeSlotId, setCopiedClaimCodeSlotId] = useState<string | null>(null);
   const realmFormRef = useRef<HTMLDivElement>(null);
+  const refreshButtonRef = useRef<HTMLButtonElement>(null);
+  const keepEditingButtonRef = useRef<HTMLButtonElement>(null);
+  const activeDraftsRef = useRef<DashboardDraft[]>([]);
+  const pendingSnapshotRef = useRef<DashboardSnapshot | null>(null);
+  const refreshGenerationRef = useRef(0);
+  const draftGenerationRef = useRef(0);
+  const requestedTab = searchParams.get('tab');
+  const workflowGameIsActive = game?.initState === 'active' || game?.initState === 'completed';
+  const defaultWorkflowTab: GmWorkflowTab = workflowGameIsActive ? 'overview' : 'setup';
+  const activeTab = (requestedTab && GM_WORKFLOW_TAB_IDS.has(requestedTab)
+    ? requestedTab
+    : defaultWorkflowTab) as GmWorkflowTab;
 
-  const loadDashboard = useCallback(async () => {
+  const activeDrafts = useMemo<DashboardDraft[]>(() => {
+    const now = Date.now();
+    const drafts: DashboardDraft[] = [];
+
+    if (showRealmForm) {
+      drafts.push({
+        key: `realm:${editingRealmId ?? 'new'}`,
+        label: editingRealmId ? 'Realm edit' : 'New realm',
+        slices: ['realms', 'territories', 'economy', 'gos'],
+        dirty: true,
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+    if (editingTerritoryId) {
+      drafts.push({
+        key: `territory:${editingTerritoryId}`,
+        label: 'Territory edit',
+        slices: ['territories', 'settlements', 'map', 'economy'],
+        dirty: Object.keys(territoryDrafts[editingTerritoryId] ?? {}).length > 0,
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+    if (editingSettlementId) {
+      drafts.push({
+        key: `settlement:${editingSettlementId}`,
+        label: 'Settlement edit',
+        slices: ['settlements', 'territories', 'map', 'economy'],
+        dirty: Object.keys(settlementDrafts[editingSettlementId] ?? {}).length > 0,
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+    if (transferringSettlementId) {
+      drafts.push({
+        key: `settlement-transfer:${transferringSettlementId}`,
+        label: 'Settlement transfer',
+        slices: ['settlements', 'territories', 'map', 'economy'],
+        dirty: Boolean(transferTargetRealmId || transferTerritory),
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+    if (addingSettlement) {
+      drafts.push({
+        key: `settlement-new:${addingSettlement.territoryId}`,
+        label: 'New settlement',
+        slices: ['settlements', 'territories', 'map', 'economy'],
+        dirty: Boolean(addingSettlement.name.trim() || addingSettlement.hexId || addingSettlement.size !== 'Village'),
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+    if (turmoilForm) {
+      drafts.push({
+        key: `turmoil:${turmoilForm.realmId}`,
+        label: 'Turmoil source',
+        slices: ['realms', 'economy'],
+        dirty: true,
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+    if (capitalPlacement) {
+      drafts.push({
+        key: `capital:${capitalPlacement.realmId}`,
+        label: 'Capital placement',
+        slices: ['realms', 'settlements', 'territories', 'map'],
+        dirty: Boolean(capitalPlacement.name.trim() || capitalPlacement.hexId || capitalPlacement.size !== 'Town'),
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+    if (addingBuilding) {
+      drafts.push({
+        key: `building-new:${addingBuilding.settlementId}`,
+        label: 'New building',
+        slices: ['settlements', 'economy', 'gos'],
+        dirty: Boolean(addingBuilding.type || addingBuilding.chargeGosId),
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+    if (addingTroop) {
+      drafts.push({
+        key: `troop-new:${addingTroop.settlementId}`,
+        label: 'New troop',
+        slices: ['settlements', 'economy'],
+        dirty: Boolean(addingTroop.type || addingTroop.chargeGosId),
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    }
+
+    return [...drafts, ...Object.values(nestedDrafts)];
+  }, [
+    addingBuilding,
+    addingSettlement,
+    addingTroop,
+    capitalPlacement,
+    editingRealmId,
+    editingSettlementId,
+    editingTerritoryId,
+    nestedDrafts,
+    settlementDrafts,
+    showRealmForm,
+    transferTargetRealmId,
+    transferTerritory,
+    transferringSettlementId,
+    turmoilForm,
+    territoryDrafts,
+  ]);
+
+  const fetchDashboardSnapshot = useCallback(async (): Promise<DashboardSnapshot> => {
+    const [gameResponse, realmsResponse, territoriesResponse, slotsResponse, overviewResponse, settlementsResponse, mapResponse, gosResponse] = await Promise.all([
+      fetch(`/api/game/${gameId}`, { cache: 'no-store' }),
+      fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
+      fetch(`/api/game/${gameId}/territories`, { cache: 'no-store' }),
+      fetch(`/api/game/${gameId}/player-slots`, { cache: 'no-store' }),
+      fetch(`/api/game/${gameId}/economy/overview`, { cache: 'no-store' }),
+      fetch(`/api/game/${gameId}/settlements`, { cache: 'no-store' }),
+      fetch(`/api/game/${gameId}/map`, { cache: 'no-store' }),
+      fetch(`/api/game/${gameId}/gos?all=true`, { cache: 'no-store' }),
+    ]);
+
+    if (!gameResponse.ok) {
+      throw new Error(await readErrorMessage(gameResponse, 'Failed to load the GM dashboard'));
+    }
+
+    if (!realmsResponse.ok || !territoriesResponse.ok || !slotsResponse.ok) {
+      const failingResponse = [realmsResponse, territoriesResponse, slotsResponse].find((response) => !response.ok);
+      throw new Error(await readErrorMessage(failingResponse!, 'Failed to load GM-only setup data'));
+    }
+
+    const realmList: RealmDto[] = (await realmsResponse.json() as RealmResponseDto[]).map((realm) => ({
+      ...realm,
+      technicalKnowledge: parseTechnicalKnowledge(realm.technicalKnowledge),
+    }));
+    const overviewData = overviewResponse.ok ? await overviewResponse.json() : null;
+
+    return {
+      game: await gameResponse.json(),
+      realms: realmList,
+      territories: await territoriesResponse.json(),
+      playerSlots: await slotsResponse.json(),
+      economyOverview: overviewData
+        ? Object.fromEntries(overviewData.realms.map((entry: EconomyOverviewRealmDto) => [entry.realmId, entry]))
+        : {},
+      worldSettlements: settlementsResponse.ok ? await settlementsResponse.json() : [],
+      gameMapData: mapResponse.ok ? await mapResponse.json() : null,
+      gmGosList: gosResponse.ok ? await gosResponse.json() : [],
+    };
+  }, [gameId]);
+
+  const applyDashboardSnapshot = useCallback((snapshot: DashboardSnapshot, slices?: DashboardSlice[]) => {
+    const protectedSlices = new Set(activeDraftsRef.current.flatMap((draft) => draft.slices));
+    const slicesToApply = slices ?? ALL_DASHBOARD_SLICES.filter((slice) => !protectedSlices.has(slice));
+
+    for (const slice of slicesToApply) {
+      if (slice === 'game') setGame(snapshot.game);
+      if (slice === 'realms') setRealms(snapshot.realms);
+      if (slice === 'territories') setTerritories(snapshot.territories);
+      if (slice === 'playerSlots') setPlayerSlots(snapshot.playerSlots);
+      if (slice === 'economy') setEconomyOverview(snapshot.economyOverview);
+      if (slice === 'settlements') setWorldSettlements(snapshot.worldSettlements);
+      if (slice === 'map') setGameMapData(snapshot.gameMapData);
+      if (slice === 'gos') setGmGosList(snapshot.gmGosList);
+    }
+    setLastDashboardRefreshAt(Date.now());
+    setDeferredRefreshAt(null);
+    setPendingRefreshReason(null);
+    pendingSnapshotRef.current = null;
+  }, []);
+
+  const refreshDashboard = useCallback(async ({
+    reason,
+    slices,
+    force = false,
+  }: {
+    reason: RefreshReason;
+    slices?: DashboardSlice[];
+    force?: boolean;
+  }) => {
+    const draftsAtStart = activeDraftsRef.current;
+
+    if (reason === 'poll' && draftsAtStart.length > 0 && !force) {
+      setDeferredRefreshAt(Date.now());
+      setPendingRefreshReason('Auto-refresh paused while editing');
+      return;
+    }
+
+    const generation = ++refreshGenerationRef.current;
+    const draftGenerationAtStart = draftGenerationRef.current;
+    setRefreshingDashboard(true);
+    if (reason === 'initial') setLoadingDashboard(true);
+    setError('');
+
     try {
-      setLoadingDashboard(true);
-      setError('');
+      const snapshot = await fetchDashboardSnapshot();
+      if (generation !== refreshGenerationRef.current) return;
 
-      const [gameResponse, realmsResponse, territoriesResponse, slotsResponse, overviewResponse, settlementsResponse, mapResponse, gosResponse] = await Promise.all([
-        fetch(`/api/game/${gameId}`, { cache: 'no-store' }),
-        fetch(`/api/game/${gameId}/realms`, { cache: 'no-store' }),
-        fetch(`/api/game/${gameId}/territories`, { cache: 'no-store' }),
-        fetch(`/api/game/${gameId}/player-slots`, { cache: 'no-store' }),
-        fetch(`/api/game/${gameId}/economy/overview`, { cache: 'no-store' }),
-        fetch(`/api/game/${gameId}/settlements`, { cache: 'no-store' }),
-        fetch(`/api/game/${gameId}/map`, { cache: 'no-store' }),
-        fetch(`/api/game/${gameId}/gos?all=true`, { cache: 'no-store' }),
-      ]);
-
-      if (!gameResponse.ok) {
-        throw new Error(await readErrorMessage(gameResponse, 'Failed to load the GM dashboard'));
+      if (!force && reason !== 'initial' && draftGenerationAtStart !== draftGenerationRef.current && activeDraftsRef.current.length > 0) {
+        pendingSnapshotRef.current = snapshot;
+        setDeferredRefreshAt(Date.now());
+        setPendingRefreshReason('Updates available - refresh when ready');
+        return;
       }
 
-      if (!realmsResponse.ok || !territoriesResponse.ok || !slotsResponse.ok) {
-        const failingResponse = [realmsResponse, territoriesResponse, slotsResponse].find((response) => !response.ok);
-        throw new Error(await readErrorMessage(failingResponse!, 'Failed to load GM-only setup data'));
-      }
-
-      setGame(await gameResponse.json());
-      const realmList: RealmDto[] = (await realmsResponse.json() as RealmResponseDto[]).map((realm) => ({
-        ...realm,
-        technicalKnowledge: parseTechnicalKnowledge(realm.technicalKnowledge),
-      }));
-      setRealms(realmList);
-      setTerritories(await territoriesResponse.json());
-      setPlayerSlots(await slotsResponse.json());
-      if (settlementsResponse.ok) {
-        setWorldSettlements(await settlementsResponse.json());
-      }
-      if (mapResponse.ok) {
-        setGameMapData(await mapResponse.json());
-      }
-      if (gosResponse.ok) {
-        setGmGosList(await gosResponse.json());
-      } else {
-        setGmGosList([]);
-      }
-      if (overviewResponse.ok) {
-        const overviewData = await overviewResponse.json();
-        setEconomyOverview(Object.fromEntries(
-          overviewData.realms.map((entry: EconomyOverviewRealmDto) => [entry.realmId, entry]),
-        ));
-      } else {
-        setEconomyOverview({});
-      }
+      applyDashboardSnapshot(snapshot, force ? (slices ?? ALL_DASHBOARD_SLICES) : slices);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load the GM dashboard');
     } finally {
-      setLoadingDashboard(false);
+      if (generation === refreshGenerationRef.current) {
+        setRefreshingDashboard(false);
+        setLoadingDashboard(false);
+      }
     }
-  }, [gameId]);
+  }, [applyDashboardSnapshot, fetchDashboardSnapshot]);
+
+  const setNestedDraft = useCallback((ownerKey: string, draft: DashboardDraft | null) => {
+    setNestedDrafts((current) => {
+      if (!draft) {
+        if (!(ownerKey in current)) return current;
+        const next = { ...current };
+        delete next[ownerKey];
+        return next;
+      }
+      const existing = current[ownerKey];
+      if (
+        existing
+        && existing.key === draft.key
+        && existing.label === draft.label
+        && existing.dirty === draft.dirty
+        && existing.slices.join('|') === draft.slices.join('|')
+      ) {
+        return current;
+      }
+      return { ...current, [ownerKey]: draft };
+    });
+  }, []);
+
+  const clearDrafts = useCallback(() => {
+    setShowRealmForm(false);
+    setEditingRealmId(null);
+    setEditingTerritoryId(null);
+    setEditingSettlementId(null);
+    setTransferringSettlementId(null);
+    setTransferTargetRealmId('');
+    setTransferTerritory(false);
+    setAddingSettlement(null);
+    setTurmoilForm(null);
+    setCapitalPlacement(null);
+    setAddingBuilding(null);
+    setAddingTroop(null);
+    setTerritoryDrafts({});
+    setSettlementDrafts({});
+    setNestedDrafts({});
+    setDraftResetToken((token) => token + 1);
+  }, []);
+
+  const requestManualRefresh = useCallback(() => {
+    if (activeDraftsRef.current.some((draft) => draft.dirty)) {
+      setShowRefreshConfirm(true);
+      return;
+    }
+    void refreshDashboard({ reason: 'manual', force: true });
+  }, [refreshDashboard]);
+
+  const discardDraftsAndRefresh = useCallback(() => {
+    setShowRefreshConfirm(false);
+    clearDrafts();
+    void refreshDashboard({ reason: 'manual', force: true });
+    refreshButtonRef.current?.focus();
+  }, [clearDrafts, refreshDashboard]);
+
+  useEffect(() => {
+    if (showRefreshConfirm) {
+      keepEditingButtonRef.current?.focus();
+    }
+  }, [showRefreshConfirm]);
+
+  useEffect(() => {
+    activeDraftsRef.current = activeDrafts;
+    draftGenerationRef.current += 1;
+
+    if (activeDrafts.length === 0 && pendingSnapshotRef.current) {
+      const pendingSnapshot = pendingSnapshotRef.current;
+      applyDashboardSnapshot(pendingSnapshot);
+    }
+  }, [activeDrafts, applyDashboardSnapshot]);
 
   useEffect(() => {
     if (roleLoading) {
@@ -219,20 +566,30 @@ export default function GMDashboard() {
       return;
     }
 
-    void loadDashboard();
-  }, [gameId, loadDashboard, role, roleLoading, router]);
+    void refreshDashboard({ reason: 'initial', force: true });
+  }, [gameId, refreshDashboard, role, roleLoading, router]);
 
   useEffect(() => {
     if (role !== 'gm') {
       return;
     }
 
+    const intervalMs = activeTab === 'setup' && !workflowGameIsActive
+      ? 5000
+      : activeTab === 'overview' && workflowGameIsActive
+        ? 12000
+        : null;
+
+    if (!intervalMs) {
+      return;
+    }
+
     const intervalId = window.setInterval(() => {
-      void loadDashboard();
-    }, 5000);
+      void refreshDashboard({ reason: 'poll' });
+    }, intervalMs);
 
     return () => window.clearInterval(intervalId);
-  }, [loadDashboard, role]);
+  }, [activeTab, refreshDashboard, role, workflowGameIsActive]);
 
   async function startGame() {
     setStarting(true);
@@ -246,7 +603,7 @@ export default function GMDashboard() {
         return;
       }
 
-      await loadDashboard();
+      await refreshDashboard({ reason: 'mutation', slices: ['game', 'playerSlots', 'realms', 'economy'], force: true });
     } finally {
       setStarting(false);
     }
@@ -264,7 +621,7 @@ export default function GMDashboard() {
         return;
       }
 
-      await loadDashboard();
+      await refreshDashboard({ reason: 'mutation', slices: ['game', 'playerSlots'], force: true });
     } finally {
       setMarkingReady(false);
     }
@@ -290,12 +647,14 @@ export default function GMDashboard() {
     });
   }
 
-  function toggleTradition(tradition: Tradition) {
+  function setTraditionSelected(tradition: Tradition, selected: boolean) {
     setRealmForm((current) => {
-      if (current.traditions.includes(tradition)) {
+      if (!selected) {
         return { ...current, traditions: current.traditions.filter((v) => v !== tradition) };
       }
-      if (current.traditions.length >= 3) return current;
+
+      if (current.traditions.includes(tradition) || current.traditions.length >= 3) return current;
+
       return { ...current, traditions: [...current.traditions, tradition] };
     });
   }
@@ -341,8 +700,9 @@ export default function GMDashboard() {
         return;
       }
 
-      await loadDashboard();
       setShowRealmForm(false);
+      setEditingRealmId(null);
+      await refreshDashboard({ reason: 'mutation', slices: ['realms', 'territories', 'settlements', 'economy', 'gos'], force: true });
     } finally {
       setSavingRealm(false);
     }
@@ -370,7 +730,7 @@ export default function GMDashboard() {
         return;
       }
       setTurmoilForm(null);
-      await loadDashboard();
+      await refreshDashboard({ reason: 'mutation', slices: ['realms', 'economy'], force: true });
     } finally {
       setSavingTurmoil(false);
     }
@@ -387,7 +747,7 @@ export default function GMDashboard() {
       setError(await readErrorMessage(response, 'Failed to remove turmoil source'));
       return;
     }
-    await loadDashboard();
+    await refreshDashboard({ reason: 'mutation', slices: ['realms', 'economy'], force: true });
   }
 
   async function assignTerritory(territoryId: string, realmId: string | null) {
@@ -404,7 +764,7 @@ export default function GMDashboard() {
       return;
     }
 
-    await loadDashboard();
+    await refreshDashboard({ reason: 'mutation', slices: ['territories', 'realms', 'settlements', 'map', 'economy'], force: true });
   }
 
   function territoriesForRealm(realmId: string) {
@@ -424,7 +784,13 @@ export default function GMDashboard() {
       setError(await readErrorMessage(response, 'Failed to update territory'));
       return;
     }
-    await loadDashboard();
+    setEditingTerritoryId(null);
+    setTerritoryDrafts((current) => {
+      const next = { ...current };
+      delete next[territoryId];
+      return next;
+    });
+    await refreshDashboard({ reason: 'mutation', slices: ['territories', 'realms', 'settlements', 'map', 'economy'], force: true });
   }
 
   async function saveSettlement(settlementId: string, updates: { name?: string; size?: string }) {
@@ -438,8 +804,13 @@ export default function GMDashboard() {
       setError(await readErrorMessage(response, 'Failed to update settlement'));
       return;
     }
-    await loadDashboard();
     setEditingSettlementId(null);
+    setSettlementDrafts((current) => {
+      const next = { ...current };
+      delete next[settlementId];
+      return next;
+    });
+    await refreshDashboard({ reason: 'mutation', slices: ['settlements', 'territories', 'realms', 'map', 'economy', 'gos'], force: true });
   }
 
   async function deleteSettlement(settlementId: string) {
@@ -453,7 +824,7 @@ export default function GMDashboard() {
       setError(await readErrorMessage(response, 'Failed to delete settlement'));
       return;
     }
-    await loadDashboard();
+    await refreshDashboard({ reason: 'mutation', slices: ['settlements', 'territories', 'realms', 'map', 'economy', 'gos'], force: true });
   }
 
   async function transferSettlement(settlementId: string) {
@@ -471,7 +842,7 @@ export default function GMDashboard() {
     setTransferringSettlementId(null);
     setTransferTargetRealmId('');
     setTransferTerritory(false);
-    await loadDashboard();
+    await refreshDashboard({ reason: 'mutation', slices: ['settlements', 'territories', 'realms', 'map', 'economy', 'gos'], force: true });
   }
 
   async function addSettlement(territoryId: string, name: string, size: string, hexId: string | null) {
@@ -487,7 +858,7 @@ export default function GMDashboard() {
       return;
     }
     setAddingSettlement(null);
-    await loadDashboard();
+    await refreshDashboard({ reason: 'mutation', slices: ['settlements', 'territories', 'realms', 'map', 'economy', 'gos'], force: true });
   }
 
   async function deleteBuilding(buildingId: string) {
@@ -501,7 +872,7 @@ export default function GMDashboard() {
       setError(await readErrorMessage(response, 'Failed to delete building'));
       return;
     }
-    await loadDashboard();
+    await refreshDashboard({ reason: 'mutation', slices: ['settlements', 'economy', 'gos'], force: true });
   }
 
   async function placeCapital() {
@@ -525,7 +896,7 @@ export default function GMDashboard() {
         return;
       }
       setCapitalPlacement(null);
-      await loadDashboard();
+      await refreshDashboard({ reason: 'mutation', slices: ['realms', 'settlements', 'territories', 'map'], force: true });
     } finally {
       setSavingCapital(false);
     }
@@ -551,7 +922,7 @@ export default function GMDashboard() {
         return;
       }
       setAddingBuilding(null);
-      await loadDashboard();
+      await refreshDashboard({ reason: 'mutation', slices: ['settlements', 'economy', 'gos'], force: true });
     } finally {
       setSavingBuilding(false);
     }
@@ -579,7 +950,7 @@ export default function GMDashboard() {
         return;
       }
       setAddingTroop(null);
-      await loadDashboard();
+      await refreshDashboard({ reason: 'mutation', slices: ['settlements', 'economy'], force: true });
     } finally {
       setSavingTroop(false);
     }
@@ -597,9 +968,9 @@ export default function GMDashboard() {
 
   if (roleLoading || role !== 'gm' || (loadingDashboard && !game)) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="font-heading text-ink-300 text-lg">Loading GM dashboard...</p>
-      </main>
+      <AppPage width="wide">
+        <LoadingState label="Loading GM dashboard..." />
+      </AppPage>
     );
   }
 
@@ -614,142 +985,292 @@ export default function GMDashboard() {
   const readyPlayerCount = playerSlots.filter((slot) => slot.setupState === 'ready').length;
   const unclaimedSlotCount = playerSlots.length - claimedPlayerSlots.length;
   const gmSetupReady = game.gmSetupState === 'ready';
+  const activeDraftCount = activeDrafts.length;
+  const refreshStatusText = refreshingDashboard
+    ? 'Refreshing...'
+    : deferredRefreshAt
+      ? pendingRefreshReason ?? 'Updates available - refresh when ready'
+      : activeDraftCount > 0
+        ? 'Auto-refresh paused while editing'
+        : formatRefreshAge(lastDashboardRefreshAt);
+  const selectedRealmId = searchParams.get('realmId');
+  const selectedRealm = selectedRealmId ? realms.find((realm) => realm.id === selectedRealmId) ?? null : null;
+  const tabPanelIds = getGmTabPanelIds(activeTab, GM_TABS_ID_BASE);
+  const gosTreasuryTotal = gmGosList.reduce((sum, gos) => sum + gos.treasury, 0);
+
+  const setDashboardQuery = (updates: { tab?: GmWorkflowTab; realmId?: string | null }) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (updates.tab) {
+      nextParams.set('tab', updates.tab);
+    }
+    if ('realmId' in updates) {
+      if (updates.realmId) {
+        nextParams.set('realmId', updates.realmId);
+      } else {
+        nextParams.delete('realmId');
+      }
+    }
+    const query = nextParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  const selectWorkflowTab = (tabId: string) => {
+    setDashboardQuery({ tab: tabId as GmWorkflowTab });
+  };
+
+  const selectRealmDetail = (realmId: string | null, tab: GmWorkflowTab = 'realms') => {
+    setDashboardQuery({ tab, realmId });
+  };
+
+  const copyClaimCode = async (slot: PlayerSlotDto) => {
+    if (!slot.claimCode || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(slot.claimCode);
+      setCopiedClaimCodeSlotId(slot.id);
+      window.setTimeout(() => {
+        setCopiedClaimCodeSlotId((current) => current === slot.id ? null : current);
+      }, 1500);
+    } catch {
+      setError('Failed to copy claim code');
+    }
+  };
 
   return (
-    <main className="min-h-screen p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">{game.name}</h1>
-          <p className="text-ink-300">GM Dashboard</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {game.initState !== 'active' && game.initState !== 'completed' && (
-            <Badge>Init: {game.initState}</Badge>
-          )}
-          {game.initState !== 'active' && game.initState !== 'completed' && (
-            <Badge variant={game.gmSetupState === 'ready' ? 'green' : 'gold'}>GM Setup: {game.gmSetupState}</Badge>
-          )}
-          <Badge variant="gold">Phase: {game.gamePhase}</Badge>
-          <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
-          <Badge>Turn: {game.turnPhase}</Badge>
-        </div>
-      </div>
+    <AppPage width="wide">
+      <GmCommandHeader
+        game={game}
+        gameId={gameId}
+        isActive={isActive}
+        canStartGame={canStartGame}
+        gmSetupReady={gmSetupReady}
+        starting={starting}
+        markingReady={markingReady}
+        refreshingDashboard={refreshingDashboard}
+        refreshStatusText={refreshStatusText}
+        activeDraftCount={activeDraftCount}
+        onMarkReady={() => void markGMReady()}
+        onStartGame={() => void startGame()}
+        onRefresh={requestManualRefresh}
+        refreshButtonRef={refreshButtonRef}
+      />
 
-      {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
+      {error && <Alert className="mb-4" tone="danger">{error}</Alert>}
 
-      {!isActive && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-          <Card>
-            <CardContent>
-              <p className="text-sm text-ink-300 pt-4">GM Code</p>
-              <p className="font-mono text-2xl">{game.gmCode || '—'}</p>
-              <p className="text-sm text-ink-300">Share with co-GMs</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent>
-              <p className="text-sm text-ink-300 pt-4">Player Readiness</p>
-              <p className="text-3xl font-heading font-bold">
-                {readyPlayerCount}<span className="text-ink-300">/{playerSlots.length}</span>
-              </p>
-              <p className="text-sm text-ink-300">
-                {playerSlots.length === 0
-                  ? 'No player slots yet'
-                  : `${claimedPlayerSlots.length} claimed · ${unclaimedSlotCount} unclaimed`}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent>
-              <p className="text-sm text-ink-300 pt-4">Next Step</p>
-              {canStartGame ? (
-                <>
-                  <p className="text-xl font-heading font-bold text-green-700">Ready to start</p>
-                  <p className="text-sm text-ink-300">Press Start Game above.</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-xl font-heading font-bold">Waiting on</p>
-                  <p className="text-sm text-ink-300">
-                    {[
-                      !gmSetupReady ? 'GM setup' : null,
-                      playerSlots.length === 0
-                        ? 'player slots'
-                        : !allPlayersReady
-                          ? `${playerSlots.length - readyPlayerCount} player${playerSlots.length - readyPlayerCount === 1 ? '' : 's'}`
-                          : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || '—'}
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
+      <GmStatusSummary
+        game={game}
+        isActive={isActive}
+        canStartGame={canStartGame}
+        allPlayersReady={allPlayersReady}
+        gmSetupReady={gmSetupReady}
+        readyPlayerCount={readyPlayerCount}
+        claimedPlayerCount={claimedPlayerSlots.length}
+        unclaimedSlotCount={unclaimedSlotCount}
+        playerSlots={playerSlots}
+        realms={realms}
+        territories={territories}
+        settlements={worldSettlements}
+        economyOverview={economyOverview}
+        gosTreasuryTotal={gosTreasuryTotal}
+      />
+
+      {showRefreshConfirm && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded border border-gold-500/50 bg-parchment-100 p-3"
+          role="alertdialog"
+          aria-label="Discard drafts before refresh"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setShowRefreshConfirm(false);
+              refreshButtonRef.current?.focus();
+            }
+          }}
+        >
+          <p className="text-sm text-ink-500">Refreshing now will discard unsaved GM dashboard edits.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              ref={keepEditingButtonRef}
+              variant="outline"
+              onClick={() => {
+                setShowRefreshConfirm(false);
+                refreshButtonRef.current?.focus();
+              }}
+            >
+              Keep Editing
+            </Button>
+            <Button variant="accent" onClick={discardDraftsAndRefresh}>
+              Discard Drafts and Refresh
+            </Button>
+          </div>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div className="flex flex-wrap items-center gap-3">
-          {!isActive && game.gmSetupState !== 'ready' && (
-            <Button variant="outline" onClick={() => void markGMReady()} disabled={markingReady}>
-              {markingReady ? 'Saving...' : 'Mark GM Setup Ready'}
-            </Button>
-          )}
-          {canStartGame && !isActive && (
-            <Button variant="accent" onClick={() => void startGame()} disabled={starting}>
-              {starting ? 'Starting...' : 'Start Game'}
-            </Button>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="ghost" onClick={() => void loadDashboard()} disabled={loadingDashboard}>
-            {loadingDashboard ? 'Refreshing...' : 'Refresh'}
-          </Button>
-          <Link href={`/game/${gameId}/map`}>
-            <Button variant="outline">Map</Button>
-          </Link>
-          <Button
-            variant="outline"
-            onClick={() => {
-              const a = document.createElement('a');
-              a.href = `/api/game/${gameId}/export`;
-              a.download = '';
-              a.click();
-            }}
-          >
-            Export Database
-          </Button>
-        </div>
-      </div>
-
-      {!isActive && (
-        <>
+      <section className="space-y-6">
+        <h2 id="gm-workflow-heading" className="sr-only">GM Workflows</h2>
+        <GmTabs
+          tabs={GM_WORKFLOW_TABS}
+          activeTab={activeTab}
+          onTabChange={selectWorkflowTab}
+          idBase={GM_TABS_ID_BASE}
+          labelledBy="gm-workflow-heading"
+        />
+        <div
+          id={tabPanelIds.panelId}
+          role="tabpanel"
+          aria-labelledby={tabPanelIds.tabId}
+          tabIndex={0}
+          className="pt-6 focus:outline-none"
+        >
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <CardTitle>Command Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded border border-card-border bg-parchment-100/40 p-4">
+                  <p className="text-sm text-ink-300">Current Turn</p>
+                  <p className="font-heading text-xl font-bold">{game.currentSeason} {game.currentYear}</p>
+                  <p className="text-sm text-ink-300">{game.gamePhase} / {game.turnPhase}</p>
+                </div>
+                <div className="rounded border border-card-border bg-parchment-100/40 p-4">
+                  <p className="text-sm text-ink-300">Setup Blockers</p>
+                  <p className="font-heading text-xl font-bold">{canStartGame ? 'None' : 'Open'}</p>
+                  <p className="text-sm text-ink-300">
+                    {isActive
+                      ? 'Setup is archived for this game.'
+                      : [
+                        !gmSetupReady ? 'GM setup' : null,
+                        playerSlots.length === 0 ? 'player slots' : !allPlayersReady ? 'player readiness' : null,
+                      ].filter(Boolean).join(' / ') || 'Ready to start'}
+                  </p>
+                </div>
+                <div className="rounded border border-card-border bg-parchment-100/40 p-4">
+                  <p className="text-sm text-ink-300">World Assets</p>
+                  <p className="font-heading text-xl font-bold">{realms.length} realms</p>
+                  <p className="text-sm text-ink-300">{territories.length} territories / {worldSettlements.length} settlements</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Realm Watch</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {realms.map((realm) => {
+                  const projectedTurmoil = realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0;
+                  const slotForRealm = playerSlots.find((slot) => slot.realmId === realm.id);
+                  return (
+                    <div key={realm.id} className="grid gap-3 rounded border border-card-border bg-parchment-100/40 p-3 md:grid-cols-[1fr_auto] md:items-center">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-heading font-semibold">{realm.name}</span>
+                          <Badge variant={realm.isNPC ? 'gold' : 'default'}>{realm.isNPC ? 'NPC' : 'Player'}</Badge>
+                          <Badge
+                            variant={projectedTurmoil > 5 ? 'red' : projectedTurmoil > 2 ? 'gold' : 'green'}
+                          >
+                            Turmoil {projectedTurmoil}
+                          </Badge>
+                          {realm.openTurmoilEventId ? (
+                            <Badge variant={realm.winterUnrestPending ? 'red' : 'gold'}>
+                              {realm.winterUnrestPending ? 'Winter unrest' : 'Review open'}
+                            </Badge>
+                          ) : null}
+                          {economyOverview[realm.id]?.warningCount ? (
+                            <Badge variant="gold">{economyOverview[realm.id].warningCount} warnings</Badge>
+                          ) : null}
+                          {!realm.isNPC && slotForRealm && !isActive && (
+                            <Badge variant={getSetupStateBadgeVariant(slotForRealm.setupState)}>
+                              {formatSetupStateLabel(slotForRealm.setupState)}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-ink-300">
+                          Treasury {realm.treasury.toLocaleString()}gc
+                          {economyOverview[realm.id]
+                            ? ` / projected ${economyOverview[realm.id].projectedTreasury.toLocaleString()}gc`
+                            : ''}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => selectRealmDetail(realm.id, 'realms')}>
+                        Open Realm Detail
+                      </Button>
+                    </div>
+                  );
+                })}
+                {realms.length === 0 && <p className="text-sm text-ink-300">No realms yet.</p>}
+              </div>
+            </CardContent>
+          </Card>
+
+          {isActive && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Turn Operations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-3 text-sm text-ink-300">Review submitted actions and resolution queue in the dedicated workflow.</p>
+                <Button variant="outline" onClick={() => selectWorkflowTab('turns')}>Open Turn Operations</Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'setup' && (
+        <>
+          {isActive && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Setup Archive</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-ink-300">
+                  This game has already started. Player readiness and claim codes remain available for reference.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader>
+              <div className="grid gap-3 sm:flex sm:items-center sm:justify-between">
                 <CardTitle>Player Slots &amp; Claim Codes</CardTitle>
-                <Link href={`/game/${gameId}/gm/realm-slots`}>
-                  <Button variant="outline" size="sm">Manage Realm Slots</Button>
+                <Link href={`/game/${gameId}/gm/realm-slots`} className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto" variant="outline" size="sm">Manage Realm Slots</Button>
                 </Link>
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {playerSlots.map((slot) => (
-                  <div key={slot.id} className="p-3 medieval-border rounded flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-heading font-semibold">{slot.realmName || slot.territoryName || slot.territoryId}</p>
+                  <ListRow key={slot.id} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <div className="min-w-0">
+                      <p className="break-words font-heading font-semibold">{slot.realmName || slot.territoryName || slot.territoryId}</p>
                       <p className="text-sm text-ink-300">{slot.displayName || 'Unlabeled player slot'}</p>
                     </div>
-                    <div className="text-right">
-                      <Badge variant={slot.status === 'claimed' ? 'green' : 'gold'}>{slot.status}</Badge>
+                    <div className="sm:text-right">
+                      <StatusPill tone={slot.status === 'claimed' ? 'success' : 'warning'}>{slot.status}</StatusPill>
                       <p className="text-xs text-ink-300 mt-1">{slot.setupState}</p>
-                      <p className="font-mono text-lg mt-1">{slot.claimCode}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 sm:justify-end">
+                        <p className="break-all font-mono text-lg">{slot.claimCode}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!slot.claimCode}
+                          onClick={() => void copyClaimCode(slot)}
+                        >
+                          {copiedClaimCodeSlotId === slot.id ? 'Copied' : 'Copy'}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  </ListRow>
                 ))}
-                {playerSlots.length === 0 && <p className="text-ink-300 text-sm">No player slots yet.</p>}
+                {playerSlots.length === 0 && (
+                  <EmptyState compact title="No player slots yet" description="Create realm slots before sharing claim codes with players." />
+                )}
               </div>
             </CardContent>
           </Card>
@@ -766,19 +1287,19 @@ export default function GMDashboard() {
                     : 0;
 
                   return (
-                    <div key={slot.id} className="rounded border border-card-border bg-parchment-100/40 p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="font-heading font-semibold">{slot.realmName || slot.displayName || slot.territoryName || 'Claimed slot'}</p>
+                    <ListRow key={slot.id} className="space-y-3 px-4 py-4">
+                      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                        <div className="min-w-0">
+                          <p className="break-words font-heading font-semibold">{slot.realmName || slot.displayName || slot.territoryName || 'Claimed slot'}</p>
                           <p className="text-sm text-ink-300">
                             {slot.territoryName || slot.territoryId}
                             {slot.realmId ? ` · realm created` : ' · realm not created yet'}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <Badge variant={getSetupStateBadgeVariant(slot.setupState)}>
+                        <div className="sm:text-right">
+                          <StatusPill tone={slot.setupState === 'ready' ? 'success' : 'warning'}>
                             {formatSetupStateLabel(slot.setupState)}
-                          </Badge>
+                          </StatusPill>
                           <p className="mt-1 text-xs text-ink-300">
                             {slot.checklist ? `${completedChecklistItems}/7 setup items complete` : 'Awaiting setup data'}
                           </p>
@@ -795,11 +1316,11 @@ export default function GMDashboard() {
                       ) : (
                         <p className="text-sm text-green-700">All player setup requirements are complete.</p>
                       )}
-                    </div>
+                    </ListRow>
                   );
                 })}
                 {claimedPlayerSlots.length === 0 && (
-                  <p className="text-sm text-ink-300">No player slots have been claimed yet.</p>
+                  <EmptyState compact title="No claimed slots yet" description="Claimed player realms will report their setup progress here." />
                 )}
               </div>
             </CardContent>
@@ -807,20 +1328,37 @@ export default function GMDashboard() {
         </>
       )}
 
-      {isActive && <GmTurnReviewPanel gameId={gameId} />}
+      {activeTab === 'turns' && (
+        <section id="turn-review" className="scroll-mt-28">
+          {isActive ? (
+            <GmTurnReviewPanel gameId={gameId} />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Turn Operations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-ink-300">Turn operations become available after the game starts.</p>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      )}
 
-      <Card className="mt-6">
-        <CardHeader className="flex flex-row items-center justify-between">
+      {activeTab === 'realms' && (
+      <Card>
+        <CardHeader className="grid gap-3 sm:flex sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Realms</CardTitle>
           {!showRealmForm && (
-            <Button variant="outline" onClick={() => openRealmForm()}>
-              + Add NPC Realm
+            <Button className="w-full sm:w-auto" variant="outline" leftIcon={<Plus className="h-4 w-4" />} onClick={() => openRealmForm()}>
+              Add NPC Realm
             </Button>
           )}
         </CardHeader>
         <CardContent>
           {showRealmForm && (
-            <div ref={realmFormRef} className="p-4 medieval-border rounded mb-4 space-y-3">
+            <Card ref={realmFormRef} variant="panel" className="mb-4">
+              <CardContent className="space-y-3">
               <p className="font-heading font-semibold">{editingRealmId ? 'Edit Realm' : 'New NPC Realm'}</p>
               <Input
                 label="Realm Name"
@@ -833,21 +1371,33 @@ export default function GMDashboard() {
                 value={realmForm.governmentType}
                 onChange={(e) => setRealmForm((c) => ({ ...c, governmentType: e.target.value as GovernmentType }))}
               />
-              <div>
-                <p className="font-heading text-sm font-medium text-ink-500 mb-2">Traditions ({realmForm.traditions.length}/3)</p>
+              <CheckboxChipGroup
+                legend="Traditions"
+                helpText="Choose up to 3 traditions."
+                statusText={`${realmForm.traditions.length} of 3 selected.`}
+              >
                 <div className="flex flex-wrap gap-2">
-                  {TRADITION_OPTIONS.map((option) => (
-                    <Badge
-                      key={option.value}
-                      variant={realmForm.traditions.includes(option.value as Tradition) ? 'gold' : 'default'}
-                      className="cursor-pointer"
-                      onClick={() => toggleTradition(option.value as Tradition)}
-                    >
-                      {option.label}
-                    </Badge>
-                  ))}
+                  {TRADITION_OPTIONS.map((option) => {
+                    const value = option.value as Tradition;
+                    const def = TRADITION_DEFS[value];
+                    const selected = realmForm.traditions.includes(value);
+                    const disabled = !selected && realmForm.traditions.length >= 3;
+
+                    return (
+                      <CheckboxChip
+                        key={option.value}
+                        id={`gm-realm-tradition-${option.value}`}
+                        label={def.displayName}
+                        meta={def.category}
+                        description={def.effect}
+                        selected={selected}
+                        disabled={disabled}
+                        onSelectedChange={(nextSelected) => setTraditionSelected(value, nextSelected)}
+                      />
+                    );
+                  })}
                 </div>
-              </div>
+              </CheckboxChipGroup>
               <Input
                 label="Treasury (gc)"
                 type="number"
@@ -855,7 +1405,7 @@ export default function GMDashboard() {
                 onChange={(e) => setRealmForm((c) => ({ ...c, treasury: Number(e.target.value) || 0 }))}
               />
               <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="mb-2 grid gap-1 sm:flex sm:items-center sm:justify-between sm:gap-3">
                   <p className="font-heading text-sm font-medium text-ink-500">
                     Technical Knowledge ({realmForm.technicalKnowledge.length})
                   </p>
@@ -876,19 +1426,14 @@ export default function GMDashboard() {
                     const isSelected = realmForm.technicalKnowledge.includes(option.value);
 
                     return (
-                      <button
+                      <TogglePill
                         key={option.value}
-                        type="button"
-                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-heading font-semibold transition-colors ${
-                          isSelected
-                            ? 'border-gold-500 bg-gold-400 text-ink-700'
-                            : 'border-ink-200 bg-parchment-50 text-ink-500 hover:bg-parchment-200'
-                        }`}
+                        selected={isSelected}
                         title={option.description}
-                        onClick={() => toggleTechnicalKnowledge(option.value)}
+                        onSelectedChange={() => toggleTechnicalKnowledge(option.value)}
                       >
                         {option.label}
-                      </button>
+                      </TogglePill>
                     );
                   })}
                 </div>
@@ -899,9 +1444,10 @@ export default function GMDashboard() {
                   <p className="font-heading text-sm font-medium text-ink-500 mb-2">Territories</p>
                   <div className="space-y-2">
                     {territoriesForRealm(editingRealmId).map((territory) => (
-                      <div key={territory.id} className="flex items-center justify-between p-2 bg-parchment-100 rounded">
-                        <span className="text-sm">{territory.name}</span>
+                      <div key={territory.id} className="grid gap-2 p-2 bg-parchment-100 rounded sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                        <span className="min-w-0 break-words text-sm">{territory.name}</span>
                         <Button
+                          className="w-full sm:w-auto"
                           variant="ghost"
                           onClick={() => void assignTerritory(territory.id, null)}
                         >
@@ -910,7 +1456,7 @@ export default function GMDashboard() {
                       </div>
                     ))}
                     {territoriesForRealm(editingRealmId).length === 0 && (
-                      <p className="text-ink-300 text-sm">No territories assigned.</p>
+                      <EmptyState compact title="No territories assigned" description="Assign a territory before placing realm-specific assets." />
                     )}
                   </div>
                   {unassignedTerritories.length > 0 && (
@@ -934,39 +1480,49 @@ export default function GMDashboard() {
                   gameId={gameId}
                   realmId={editingRealmId}
                   settlements={worldSettlements.filter((settlement) => settlement.realmId === editingRealmId)}
-                  onChanged={loadDashboard}
+                  onChanged={(slices) => refreshDashboard({ reason: 'mutation', slices, force: true })}
+                  onDraftChange={(draft) => setNestedDraft(`realm-management:${editingRealmId}`, draft)}
+                  resetToken={draftResetToken}
                 />
               )}
 
-              <div className="flex gap-2">
-                <Button variant="accent" onClick={() => void saveRealm()} disabled={savingRealm || !realmForm.name.trim()}>
+              <div className="grid gap-2 sm:flex">
+                <Button className="w-full sm:w-auto" variant="accent" onClick={() => void saveRealm()} disabled={savingRealm || !realmForm.name.trim()}>
                   {savingRealm ? 'Saving...' : editingRealmId ? 'Update Realm' : 'Create Realm'}
                 </Button>
-                <Button variant="outline" onClick={() => setShowRealmForm(false)}>Cancel</Button>
+                <Button className="w-full sm:w-auto" variant="outline" onClick={() => setShowRealmForm(false)}>Cancel</Button>
               </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
           <div className="space-y-3">
             {realms.map((realm) => {
               const realmTerritories = territoriesForRealm(realm.id);
               const slotForRealm = playerSlots.find((s) => s.realmId === realm.id);
+              const isRealmDetailOpen = selectedRealmId === realm.id;
               return (
-                <div key={realm.id} className="p-3 medieval-border rounded space-y-2">
-                  <div className="flex items-center justify-between">
+                <ListRow key={realm.id} className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <span className="font-heading font-semibold">{realm.name}</span>
                       <span className="text-ink-300 ml-2">{realm.governmentType}</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {realm.isNPC && (
                         <Link href={`/game/${gameId}/realm?realmId=${realm.id}`}>
                           <Button variant="outline">Manage Realm</Button>
                         </Link>
                       )}
+                      <Button
+                        variant={isRealmDetailOpen ? 'accent' : 'outline'}
+                        onClick={() => selectRealmDetail(isRealmDetailOpen ? null : realm.id, 'realms')}
+                      >
+                        {isRealmDetailOpen ? 'Close Detail' : 'Open Detail'}
+                      </Button>
                       <Button variant="outline" onClick={() => openRealmForm(realm)}>
                         Edit
                       </Button>
-                      <Badge variant={realm.isNPC ? 'gold' : 'default'}>{realm.isNPC ? 'NPC' : 'Player'}</Badge>
+                      <StatusPill tone={realm.isNPC ? 'active' : 'muted'}>{realm.isNPC ? 'NPC' : 'Player'}</StatusPill>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
@@ -976,21 +1532,21 @@ export default function GMDashboard() {
                         Projected {economyOverview[realm.id].projectedTreasury.toLocaleString()}gc
                       </span>
                     )}
-                    <Badge
-                      variant={
+                      <StatusPill
+                      tone={
                         (realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0) > 5
-                          ? 'red'
+                          ? 'danger'
                           : (realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0) > 2
-                            ? 'gold'
-                            : 'green'
+                            ? 'warning'
+                            : 'success'
                       }
                     >
                       Turmoil {realm.projectedTurmoil ?? economyOverview[realm.id]?.projectedTurmoil ?? 0}
-                    </Badge>
+                    </StatusPill>
                     {realm.openTurmoilEventId ? (
-                      <Badge variant={realm.winterUnrestPending ? 'red' : 'gold'}>
+                      <StatusPill tone={realm.winterUnrestPending ? 'danger' : 'warning'}>
                         {realm.winterUnrestPending ? 'Winter unrest' : 'Review open'}
-                      </Badge>
+                      </StatusPill>
                     ) : null}
                     {economyOverview[realm.id]?.warningCount ? (
                       <Badge variant="gold">{economyOverview[realm.id].warningCount} warnings</Badge>
@@ -1010,6 +1566,8 @@ export default function GMDashboard() {
                       ))}
                     </div>
                   )}
+                  {isRealmDetailOpen && (
+                    <>
                   {realmTerritories.length > 0 && (
                     <div className="flex items-center gap-2 text-sm text-ink-300">
                       <span>Territories:</span>
@@ -1022,7 +1580,7 @@ export default function GMDashboard() {
                     capitalPlacement?.realmId === realm.id ? (
                       <div className="mt-2 space-y-3 rounded border border-ink-200 bg-parchment-50/70 p-3">
                         <p className="font-heading text-sm font-semibold">Place Capital</p>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid gap-2 sm:grid-cols-2">
                           <Input
                             label="Capital Name"
                             value={capitalPlacement.name}
@@ -1051,8 +1609,9 @@ export default function GMDashboard() {
                         ) : (
                           <p className="text-sm text-ink-300">Loading territory map...</p>
                         )}
-                        <div className="flex gap-2">
+                        <div className="grid gap-2 sm:flex">
                           <Button
+                            className="w-full sm:w-auto"
                             variant="accent"
                             size="sm"
                             disabled={savingCapital || !capitalPlacement.name.trim() || !capitalPlacement.hexId}
@@ -1060,7 +1619,7 @@ export default function GMDashboard() {
                           >
                             {savingCapital ? 'Placing...' : 'Place Capital'}
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => setCapitalPlacement(null)}>
+                          <Button className="w-full sm:w-auto" variant="outline" size="sm" onClick={() => setCapitalPlacement(null)}>
                             Cancel
                           </Button>
                         </div>
@@ -1097,18 +1656,18 @@ export default function GMDashboard() {
                     <div className="mt-3 space-y-4 border-t border-card-border pt-3">
                       <details className="group">
                         <summary className="cursor-pointer font-heading text-sm font-semibold text-ink-500 select-none">
-                          Governance
-                        </summary>
-                        <div className="mt-3">
-                          <GovernanceRealmPanel gameId={gameId} realmId={realm.id} />
-                        </div>
-                      </details>
-                      <details className="group">
-                        <summary className="cursor-pointer font-heading text-sm font-semibold text-ink-500 select-none">
                           Troops
                         </summary>
                         <div className="mt-3">
-                          <RealmTroopPanel gameId={gameId} realmId={realm.id} settlements={worldSettlements} realmNames={realmMap} />
+                          <RealmTroopPanel
+                            gameId={gameId}
+                            realmId={realm.id}
+                            settlements={worldSettlements}
+                            realmNames={realmMap}
+                            onChanged={(slices) => refreshDashboard({ reason: 'mutation', slices, force: true })}
+                            onDraftChange={(draft) => setNestedDraft(`troop-transfer:${realm.id}`, draft)}
+                            resetToken={draftResetToken}
+                          />
                         </div>
                       </details>
                       <details className="group">
@@ -1120,21 +1679,21 @@ export default function GMDashboard() {
                             <p className="text-ink-300 text-sm">No turmoil sources.</p>
                           )}
                           {realm.buildingTurmoilReduction ? (
-                            <div className="flex items-center justify-between p-2 bg-parchment-100 rounded text-sm">
-                              <div className="flex items-center gap-2">
+                            <div className="grid gap-2 p-2 bg-parchment-100 rounded text-sm">
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
                                 <Badge variant="green">-{realm.buildingTurmoilReduction}</Badge>
-                                <span>Building reductions</span>
+                                <span className="min-w-0 break-words">Building reductions</span>
                                 <Badge variant="default">buildings</Badge>
                               </div>
                             </div>
                           ) : null}
                           {(realm.turmoilBreakdown ?? []).map((source) => (
-                            <div key={source.id} className="flex items-center justify-between p-2 bg-parchment-100 rounded text-sm">
-                              <div className="flex items-center gap-2">
+                            <div key={source.id} className="grid gap-2 p-2 bg-parchment-100 rounded text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
                                 <Badge variant={source.amount > 0 ? 'red' : 'green'}>
                                   {source.amount > 0 ? '+' : ''}{source.amount}
                                 </Badge>
-                                <span>{source.description}</span>
+                                <span className="min-w-0 break-words">{source.description}</span>
                                 <Badge variant="default">
                                   {source.kind === 'gm_manual' ? 'GM' : source.kind.replace(/_/g, ' ')}
                                 </Badge>
@@ -1198,6 +1757,7 @@ export default function GMDashboard() {
                             </div>
                           ) : (
                             <Button
+                              leftIcon={<Plus className="h-4 w-4" />}
                               variant="outline"
                               onClick={() => setTurmoilForm({
                                 realmId: realm.id,
@@ -1208,24 +1768,89 @@ export default function GMDashboard() {
                                 notes: '',
                               })}
                             >
-                              + Add Turmoil Source
+                              Add Turmoil Source
                             </Button>
                           )}
                         </div>
                       </details>
                     </div>
                   )}
-                </div>
+                    </>
+                  )}
+                </ListRow>
               );
             })}
-            {realms.length === 0 && <p className="text-ink-300 text-sm">No realms yet.</p>}
+            {realms.length === 0 && (
+              <EmptyState compact title="No realms yet" description="Add an NPC realm or wait for players to claim their slots." />
+            )}
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {isActive && <GlobalGOSPanel gameId={gameId} />}
+      {activeTab === 'governance' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Governance &amp; G.O.S.</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-[minmax(220px,360px)_auto] md:items-end">
+                <Select
+                  label="Realm"
+                  placeholder="Select a realm..."
+                  options={realms.map((realm) => ({ value: realm.id, label: realm.name }))}
+                  value={selectedRealmId ?? ''}
+                  onChange={(event) => selectRealmDetail(event.target.value || null, 'governance')}
+                />
+                {selectedRealm && (
+                  <Link href={`/game/${gameId}/realm?realmId=${selectedRealm.id}`}>
+                    <Button variant="outline">Manage Realm Page</Button>
+                  </Link>
+                )}
+              </div>
+              {!selectedRealm && (
+                <p className="mt-3 text-sm text-ink-300">Select a realm to load noble, office, and realm G.O.S. controls.</p>
+              )}
+            </CardContent>
+          </Card>
 
-      <Card className="mt-6">
+          {selectedRealm && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{selectedRealm.name} Governance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RealmManagementEditor
+                  gameId={gameId}
+                  realmId={selectedRealm.id}
+                  settlements={worldSettlements.filter((settlement) => settlement.realmId === selectedRealm.id)}
+                  onChanged={(slices) => refreshDashboard({ reason: 'mutation', slices, force: true })}
+                  onDraftChange={(draft) => setNestedDraft(`realm-management:${selectedRealm.id}`, draft)}
+                  resetToken={draftResetToken}
+                />
+                {isActive ? (
+                  <div className="mt-6 border-t border-card-border pt-6">
+                    <GovernanceRealmPanel
+                      gameId={gameId}
+                      realmId={selectedRealm.id}
+                      onDraftChange={(draft) => setNestedDraft(`governance-noble:${selectedRealm.id}`, draft)}
+                      resetToken={draftResetToken}
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-ink-300">Office assignments become available after the game starts.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {isActive && <GlobalGOSPanel gameId={gameId} />}
+        </div>
+      )}
+
+      {activeTab === 'world' && (
+      <Card>
         <CardHeader>
           <CardTitle>World Management</CardTitle>
         </CardHeader>
@@ -1234,30 +1859,55 @@ export default function GMDashboard() {
             {territories.map((territory) => {
               const isExpanded = expandedTerritory === territory.id;
               const isEditing = editingTerritoryId === territory.id;
+              const territoryDraft = territoryDrafts[territory.id] ?? {};
+              const editableTerritory = { ...territory, ...territoryDraft };
               const territorySettlements = worldSettlements.filter((s) => s.territoryId === territory.id);
 
               return (
                 <div key={territory.id} className="medieval-border rounded">
-                  <div
-                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-parchment-100/50"
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-parchment-100/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+                    aria-expanded={isExpanded}
+                    aria-controls={`territory-panel-${territory.id}`}
                     onClick={() => setExpandedTerritory(isExpanded ? null : territory.id)}
                   >
-                    <div className="flex items-center gap-2">
+                    <span className="flex flex-wrap items-center gap-2">
                       <span className={`inline-block text-xs transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
                       <span className="font-heading font-semibold">{territory.name}</span>
                       {territory.realmId && <Badge variant="gold">{realmMap[territory.realmId] || 'Unknown'}</Badge>}
                       {!territory.realmId && <Badge variant="default">Neutral</Badge>}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-ink-300">
+                    </span>
+                    <span className="flex items-center gap-2 text-sm text-ink-300">
                       <span>{territorySettlements.length} settlements</span>
-                    </div>
-                  </div>
+                    </span>
+                  </button>
 
                   {isExpanded && (
-                    <div className="p-3 pt-0 space-y-4">
+                    <div id={`territory-panel-${territory.id}`} className="p-3 pt-0 space-y-4">
                       {/* Territory Edit */}
                       <div className="flex gap-2 items-end">
-                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setEditingTerritoryId(isEditing ? null : territory.id); }}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isEditing) {
+                              setEditingTerritoryId(null);
+                              setTerritoryDrafts((current) => {
+                                const next = { ...current };
+                                delete next[territory.id];
+                                return next;
+                              });
+                            } else {
+                              setEditingTerritoryId(territory.id);
+                              setTerritoryDrafts((current) => ({
+                                ...current,
+                                [territory.id]: {},
+                              }));
+                            }
+                          }}
+                        >
                           {isEditing ? 'Cancel Edit' : 'Edit Territory'}
                         </Button>
                         <Select
@@ -1270,28 +1920,37 @@ export default function GMDashboard() {
 
                       {isEditing && (
                         <div className="p-3 bg-parchment-100/50 rounded space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid gap-3 sm:grid-cols-2">
                             <Input
                               label="Name"
-                              value={territory.name}
+                              value={editableTerritory.name}
                               onChange={(e) => {
-                                setTerritories((prev) => prev.map((t) => t.id === territory.id ? { ...t, name: e.target.value } : t));
+                                setTerritoryDrafts((current) => ({
+                                  ...current,
+                                  [territory.id]: { ...(current[territory.id] ?? {}), name: e.target.value },
+                                }));
                               }}
                             />
                             <Input
                               label="Food Cap Base"
                               type="number"
-                              value={String(territory.foodCapBase)}
+                              value={String(editableTerritory.foodCapBase)}
                               onChange={(e) => {
-                                setTerritories((prev) => prev.map((t) => t.id === territory.id ? { ...t, foodCapBase: Number(e.target.value) || 0 } : t));
+                                setTerritoryDrafts((current) => ({
+                                  ...current,
+                                  [territory.id]: { ...(current[territory.id] ?? {}), foodCapBase: Number(e.target.value) || 0 },
+                                }));
                               }}
                             />
                             <Input
                               label="Food Cap Bonus"
                               type="number"
-                              value={String(territory.foodCapBonus)}
+                              value={String(editableTerritory.foodCapBonus)}
                               onChange={(e) => {
-                                setTerritories((prev) => prev.map((t) => t.id === territory.id ? { ...t, foodCapBonus: Number(e.target.value) || 0 } : t));
+                                setTerritoryDrafts((current) => ({
+                                  ...current,
+                                  [territory.id]: { ...(current[territory.id] ?? {}), foodCapBonus: Number(e.target.value) || 0 },
+                                }));
                               }}
                             />
                           </div>
@@ -1299,9 +1958,12 @@ export default function GMDashboard() {
                             <label className="flex items-center gap-2 text-sm">
                               <input
                                 type="checkbox"
-                                checked={territory.hasRiverAccess}
+                                checked={editableTerritory.hasRiverAccess}
                                 onChange={(e) => {
-                                  setTerritories((prev) => prev.map((t) => t.id === territory.id ? { ...t, hasRiverAccess: e.target.checked } : t));
+                                  setTerritoryDrafts((current) => ({
+                                    ...current,
+                                    [territory.id]: { ...(current[territory.id] ?? {}), hasRiverAccess: e.target.checked },
+                                  }));
                                 }}
                               />
                               River Access
@@ -1309,9 +1971,12 @@ export default function GMDashboard() {
                             <label className="flex items-center gap-2 text-sm">
                               <input
                                 type="checkbox"
-                                checked={territory.hasSeaAccess}
+                                checked={editableTerritory.hasSeaAccess}
                                 onChange={(e) => {
-                                  setTerritories((prev) => prev.map((t) => t.id === territory.id ? { ...t, hasSeaAccess: e.target.checked } : t));
+                                  setTerritoryDrafts((current) => ({
+                                    ...current,
+                                    [territory.id]: { ...(current[territory.id] ?? {}), hasSeaAccess: e.target.checked },
+                                  }));
                                 }}
                               />
                               Sea Access
@@ -1319,13 +1984,12 @@ export default function GMDashboard() {
                           </div>
                           <Button variant="accent" size="sm" onClick={() => {
                             void saveTerritory(territory.id, {
-                              name: territory.name,
-                              foodCapBase: territory.foodCapBase,
-                              foodCapBonus: territory.foodCapBonus,
-                              hasRiverAccess: territory.hasRiverAccess,
-                              hasSeaAccess: territory.hasSeaAccess,
+                              name: editableTerritory.name,
+                              foodCapBase: editableTerritory.foodCapBase,
+                              foodCapBonus: editableTerritory.foodCapBonus,
+                              hasRiverAccess: editableTerritory.hasRiverAccess,
+                              hasSeaAccess: editableTerritory.hasSeaAccess,
                             });
-                            setEditingTerritoryId(null);
                           }}>
                             Save Territory
                           </Button>
@@ -1338,16 +2002,37 @@ export default function GMDashboard() {
                         <div className="space-y-2">
                           {territorySettlements.map((settlement) => {
                             const isEditingSett = editingSettlementId === settlement.id;
+                            const settlementDraft = settlementDrafts[settlement.id] ?? {};
+                            const editableSettlement = { ...settlement, ...settlementDraft };
                             return (
                               <div key={settlement.id} className="p-2 bg-parchment-100/50 rounded space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold">{settlement.name}</span>
+                                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                    <span className="min-w-0 break-words font-semibold">{settlement.name}</span>
                                     <Badge>{settlement.size}</Badge>
                                     {settlement.buildings && <span className="text-xs text-ink-300">{settlement.buildings.length} buildings</span>}
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => setEditingSettlementId(isEditingSett ? null : settlement.id)}>
+                                  <div className="grid gap-1 sm:flex sm:items-center">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (isEditingSett) {
+                                          setEditingSettlementId(null);
+                                          setSettlementDrafts((current) => {
+                                            const next = { ...current };
+                                            delete next[settlement.id];
+                                            return next;
+                                          });
+                                        } else {
+                                          setEditingSettlementId(settlement.id);
+                                          setSettlementDrafts((current) => ({
+                                            ...current,
+                                            [settlement.id]: {},
+                                          }));
+                                        }
+                                      }}
+                                    >
                                       {isEditingSett ? 'Cancel' : 'Edit'}
                                     </Button>
                                     <Button variant="ghost" size="sm" onClick={() => {
@@ -1364,34 +2049,40 @@ export default function GMDashboard() {
                                       {transferringSettlementId === settlement.id ? 'Cancel' : 'Transfer'}
                                     </Button>
                                     <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete ${settlement.name}?`)) void deleteSettlement(settlement.id); }}>
-                                      Delete
+                                      Delete {settlement.name}
                                     </Button>
                                   </div>
                                 </div>
 
                                 {isEditingSett && (
                                   <div className="p-2 border border-ink-200 rounded space-y-2">
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid gap-2 sm:grid-cols-2">
                                       <Input
                                         label="Name"
-                                        value={settlement.name}
+                                        value={editableSettlement.name}
                                         onChange={(e) => {
-                                          setWorldSettlements((prev) => prev.map((s) => s.id === settlement.id ? { ...s, name: e.target.value } : s));
+                                          setSettlementDrafts((current) => ({
+                                            ...current,
+                                            [settlement.id]: { ...(current[settlement.id] ?? {}), name: e.target.value },
+                                          }));
                                         }}
                                       />
                                       <Select
                                         label="Size"
                                         options={SETTLEMENT_SIZE_OPTIONS}
-                                        value={settlement.size}
+                                        value={editableSettlement.size}
                                         onChange={(e) => {
-                                          setWorldSettlements((prev) => prev.map((s) => s.id === settlement.id ? { ...s, size: e.target.value as GameSettlementDto['size'] } : s));
+                                          setSettlementDrafts((current) => ({
+                                            ...current,
+                                            [settlement.id]: { ...(current[settlement.id] ?? {}), size: e.target.value as GameSettlementDto['size'] },
+                                          }));
                                         }}
                                       />
                                     </div>
                                     <Button variant="accent" size="sm" onClick={() => {
                                       void saveSettlement(settlement.id, {
-                                        name: settlement.name,
-                                        size: settlement.size,
+                                        name: editableSettlement.name,
+                                        size: editableSettlement.size,
                                       });
                                     }}>
                                       Save Settlement
@@ -1432,7 +2123,7 @@ export default function GMDashboard() {
                                           }
                                         }}
                                       >
-                                        Confirm Transfer
+                                        Transfer {settlement.name}
                                       </Button>
                                     </div>
                                   </div>
@@ -1442,15 +2133,15 @@ export default function GMDashboard() {
                                 {settlement.buildings && settlement.buildings.length > 0 && (
                                   <div className="ml-4 space-y-1">
                                     {settlement.buildings.map((building) => (
-                                      <div key={building.id} className="flex items-center justify-between text-sm">
-                                        <div className="flex items-center gap-2">
-                                          <span>{building.type}</span>
+                                      <div key={building.id} className="grid gap-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                          <span className="min-w-0 break-words">{building.type}</span>
                                           <Badge variant="default">{building.size}</Badge>
                                           {!building.isOperational && <Badge variant="gold">Non-operational</Badge>}
                                           {building.constructionTurnsRemaining > 0 && <Badge variant="default">{building.constructionTurnsRemaining} turns left</Badge>}
                                         </div>
                                         <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete ${building.type}?`)) void deleteBuilding(building.id); }}>
-                                          Delete
+                                          Delete {building.type}
                                         </Button>
                                       </div>
                                     ))}
@@ -1498,8 +2189,8 @@ export default function GMDashboard() {
                                   </div>
                                 ) : (
                                   <div className="ml-4 mt-1 flex gap-2">
-                                    <Button variant="ghost" size="sm" onClick={() => setAddingBuilding({ settlementId: settlement.id, type: '', chargeGosId: '' })}>
-                                      + Add Building
+                                    <Button variant="ghost" size="sm" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddingBuilding({ settlementId: settlement.id, type: '', chargeGosId: '' })}>
+                                      Add Building
                                     </Button>
                                     {territory.realmId && (
                                       addingTroop?.settlementId === settlement.id ? (
@@ -1541,8 +2232,8 @@ export default function GMDashboard() {
                                           <Button variant="outline" size="sm" onClick={() => setAddingTroop(null)}>Cancel</Button>
                                         </div>
                                       ) : (
-                                        <Button variant="ghost" size="sm" onClick={() => setAddingTroop({ realmId: territory.realmId!, settlementId: settlement.id, type: '', chargeGosId: '' })}>
-                                          + Recruit Troop
+                                        <Button variant="ghost" size="sm" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddingTroop({ realmId: territory.realmId!, settlementId: settlement.id, type: '', chargeGosId: '' })}>
+                                          Recruit Troop
                                         </Button>
                                       )
                                     )}
@@ -1555,7 +2246,7 @@ export default function GMDashboard() {
                         </div>
                         {addingSettlement?.territoryId === territory.id ? (
                           <div className="mt-3 space-y-3 rounded border border-ink-200 bg-parchment-50/70 p-3">
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid gap-2 sm:grid-cols-2">
                               <Input
                                 label="Name"
                                 value={addingSettlement.name}
@@ -1584,8 +2275,9 @@ export default function GMDashboard() {
                             ) : (
                               <p className="text-sm text-ink-300">Loading territory map...</p>
                             )}
-                            <div className="flex gap-2">
+                            <div className="grid gap-2 sm:flex">
                               <Button
+                                className="w-full sm:w-auto"
                                 variant="accent"
                                 size="sm"
                                 disabled={!addingSettlement.name.trim() || !addingSettlement.hexId}
@@ -1593,7 +2285,7 @@ export default function GMDashboard() {
                               >
                                 Create Settlement
                               </Button>
-                              <Button variant="outline" size="sm" onClick={() => setAddingSettlement(null)}>
+                              <Button className="w-full sm:w-auto" variant="outline" size="sm" onClick={() => setAddingSettlement(null)}>
                                 Cancel
                               </Button>
                             </div>
@@ -1603,9 +2295,10 @@ export default function GMDashboard() {
                             variant="outline"
                             size="sm"
                             className="mt-2"
+                            leftIcon={<Plus className="h-4 w-4" />}
                             onClick={() => setAddingSettlement({ territoryId: territory.id, name: '', size: 'Village', hexId: null })}
                           >
-                            + Add Settlement
+                            Add Settlement
                           </Button>
                         )}
                       </div>
@@ -1618,8 +2311,11 @@ export default function GMDashboard() {
           </div>
         </CardContent>
       </Card>
+      )}
 
-    </main>
+        </div>
+      </section>
+    </AppPage>
   );
 }
 
@@ -1680,11 +2376,15 @@ function RealmManagementEditor({
   realmId,
   settlements,
   onChanged,
+  onDraftChange,
+  resetToken,
 }: {
   gameId: string;
   realmId: string;
   settlements: GameSettlementDto[];
-  onChanged: () => Promise<void>;
+  onChanged: (slices: DashboardSlice[]) => Promise<void>;
+  onDraftChange?: (draft: DashboardDraft | null) => void;
+  resetToken?: number;
 }) {
   const [families, setFamilies] = useState<RealmNobleFamily[]>([]);
   const [nobles, setNobles] = useState<RealmManagedNoble[]>([]);
@@ -1717,6 +2417,49 @@ function RealmManagementEditor({
     treasury: number;
     leaderId: string;
   } | null>(null);
+  const onDraftChangeRef = useRef(onDraftChange);
+
+  useEffect(() => {
+    onDraftChangeRef.current = onDraftChange;
+  }, [onDraftChange]);
+
+  useEffect(() => () => onDraftChangeRef.current?.(null), []);
+
+  useEffect(() => {
+    const hasDraft = Boolean(
+      newFamilyName.trim()
+      || newNoble.name.trim()
+      || editingNoble
+      || newGos.name.trim()
+      || newGos.focus.trim()
+      || newGos.treasury !== 0
+      || newGos.type !== 'Guild'
+      || editingGos,
+    );
+    if (!onDraftChange) return undefined;
+    if (hasDraft) {
+      const now = Date.now();
+      onDraftChange({
+        key: `realm-management:${realmId}`,
+        label: 'Realm management',
+        slices: ['realms', 'settlements', 'gos', 'economy'],
+        dirty: true,
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    } else {
+      onDraftChange(null);
+    }
+    return undefined;
+  }, [editingGos, editingNoble, newFamilyName, newGos, newNoble.name, onDraftChange, realmId]);
+
+  useEffect(() => {
+    setNewFamilyName('');
+    setNewNoble((current) => ({ ...current, name: '' }));
+    setEditingNoble(null);
+    setNewGos({ name: '', type: 'Guild', focus: '', treasury: 0 });
+    setEditingGos(null);
+  }, [resetToken]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1758,7 +2501,7 @@ function RealmManagementEditor({
   }, [load]);
 
   async function refreshAfterChange() {
-    await Promise.all([load(), onChanged()]);
+    await Promise.all([load(), onChanged(['realms', 'settlements', 'gos', 'economy'])]);
   }
 
   async function createFamily() {
@@ -1933,8 +2676,8 @@ function RealmManagementEditor({
 
   return (
     <div className="space-y-4 border-t border-card-border pt-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-heading text-sm font-semibold text-ink-500">Nobles &amp; G.O.S.</p>
+      <div className="grid gap-1 sm:flex sm:items-center sm:justify-between sm:gap-3">
+        <p className="min-w-0 break-words font-heading text-sm font-semibold text-ink-500">Nobles &amp; G.O.S.</p>
         {loading ? <span className="text-xs text-ink-300">Loading...</span> : null}
       </div>
       {error && <p className="text-sm text-red-500">{error}</p>}
@@ -2276,7 +3019,17 @@ interface NobleEditForm {
   locationHexId: string;
 }
 
-function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: string }) {
+function GovernanceRealmPanel({
+  gameId,
+  realmId,
+  onDraftChange,
+  resetToken,
+}: {
+  gameId: string;
+  realmId: string;
+  onDraftChange?: (draft: DashboardDraft | null) => void;
+  resetToken?: number;
+}) {
   const [nobles, setNobles] = useState<GovNoble[]>([]);
   const [settlements, setSettlements] = useState<GovSettlement[]>([]);
   const [armies, setArmies] = useState<GovArmy[]>([]);
@@ -2285,6 +3038,35 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
   const [loaded, setLoaded] = useState(false);
   const [editingNoble, setEditingNoble] = useState<NobleEditForm | null>(null);
   const [savingNoble, setSavingNoble] = useState(false);
+  const onDraftChangeRef = useRef(onDraftChange);
+
+  useEffect(() => {
+    onDraftChangeRef.current = onDraftChange;
+  }, [onDraftChange]);
+
+  useEffect(() => () => onDraftChangeRef.current?.(null), []);
+
+  useEffect(() => {
+    if (!onDraftChange) return undefined;
+    if (editingNoble) {
+      const now = Date.now();
+      onDraftChange({
+        key: `governance-noble:${realmId}`,
+        label: 'Governance noble edit',
+        slices: ['realms', 'settlements', 'territories'],
+        dirty: true,
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    } else {
+      onDraftChange(null);
+    }
+    return undefined;
+  }, [editingNoble, onDraftChange, realmId]);
+
+  useEffect(() => {
+    setEditingNoble(null);
+  }, [resetToken]);
 
   const load = useCallback(async () => {
     const [noblesRes, settRes, armiesRes, gosRes] = await Promise.all([
@@ -2492,15 +3274,16 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
             <div className="space-y-3">
               {nobles.map((noble) => (
                 <div key={noble.id} className="p-3 medieval-border rounded space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-heading font-bold">{noble.name}</span>
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="min-w-0 break-words font-heading font-bold">{noble.name}</span>
                       {!noble.isAlive && <Badge variant="red">Dead</Badge>}
                       {noble.isPrisoner && <Badge variant="gold">Prisoner</Badge>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="grid gap-2 sm:flex sm:items-center">
                       <NobleActivityBadge noble={noble} />
                       <Button
+                        className="w-full sm:w-auto"
                         variant="ghost"
                         size="sm"
                         onClick={() => editingNoble?.nobleId === noble.id ? setEditingNoble(null) : openNobleEdit(noble)}
@@ -2512,7 +3295,7 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
 
                   {editingNoble?.nobleId === noble.id && (
                     <div className="p-3 border border-ink-200 rounded space-y-3">
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid gap-2 sm:grid-cols-3">
                         <Input
                           label="Name"
                           value={editingNoble.name}
@@ -2536,7 +3319,7 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
                           onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, age: e.target.value } : prev)}
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <Input
                           label="Personality"
                           value={editingNoble.personality}
@@ -2568,7 +3351,7 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
                           onChange={(e) => setEditingNoble((prev) => prev ? { ...prev, greatestDesire: e.target.value } : prev)}
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <Input
                           label="Reason Skill (0-5)"
                           type="number"
@@ -2636,11 +3419,56 @@ function GovernanceRealmPanel({ gameId, realmId }: { gameId: string; realmId: st
 
 // ── Troop sub-panel (loaded per realm) ──
 
-function RealmTroopPanel({ gameId, realmId, settlements: allSettlements, realmNames }: { gameId: string; realmId: string; settlements: GameSettlementDto[]; realmNames: Record<string, string> }) {
+function RealmTroopPanel({
+  gameId,
+  realmId,
+  settlements: allSettlements,
+  realmNames,
+  onChanged,
+  onDraftChange,
+  resetToken,
+}: {
+  gameId: string;
+  realmId: string;
+  settlements: GameSettlementDto[];
+  realmNames: Record<string, string>;
+  onChanged?: (slices: DashboardSlice[]) => Promise<void>;
+  onDraftChange?: (draft: DashboardDraft | null) => void;
+  resetToken?: number;
+}) {
   const [troops, setTroops] = useState<Troop[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [transfer, setTransfer] = useState<{ troopIds: string[]; targetSettlementId: string }>({ troopIds: [], targetSettlementId: '' });
+  const onDraftChangeRef = useRef(onDraftChange);
+
+  useEffect(() => {
+    onDraftChangeRef.current = onDraftChange;
+  }, [onDraftChange]);
+
+  useEffect(() => () => onDraftChangeRef.current?.(null), []);
+
+  useEffect(() => {
+    if (!onDraftChange) return undefined;
+    if (transfer.troopIds.length > 0 || transfer.targetSettlementId) {
+      const now = Date.now();
+      onDraftChange({
+        key: `troop-transfer:${realmId}`,
+        label: 'Troop transfer',
+        slices: ['settlements', 'economy'],
+        dirty: true,
+        startedAt: now,
+        lastTouchedAt: now,
+      });
+    } else {
+      onDraftChange(null);
+    }
+    return undefined;
+  }, [onDraftChange, realmId, transfer]);
+
+  useEffect(() => {
+    setTransfer({ troopIds: [], targetSettlementId: '' });
+  }, [resetToken]);
 
   async function load() {
     const response = await fetch(`/api/game/${gameId}/troops?realmId=${realmId}`, { cache: 'no-store' });
@@ -2663,7 +3491,7 @@ function RealmTroopPanel({ gameId, realmId, settlements: allSettlements, realmNa
       return;
     }
     setTransfer({ troopIds: [], targetSettlementId: '' });
-    await load();
+    await Promise.all([load(), onChanged?.(['settlements', 'economy'])]);
   }
 
   if (!loaded) {
@@ -2688,12 +3516,12 @@ function RealmTroopPanel({ gameId, realmId, settlements: allSettlements, realmNa
 
         return (
           <div key={key} className="p-3 medieval-border rounded space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-heading font-semibold">{locationName}</span>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="min-w-0 break-words font-heading font-semibold">{locationName}</span>
                 <Badge>{groupTroops.length} troops</Badge>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => {
+              <Button className="w-full sm:w-auto" variant="ghost" size="sm" onClick={() => {
                 if (allSelected) {
                   setTransfer((prev) => ({ ...prev, troopIds: prev.troopIds.filter((id) => !groupTroops.some((t) => t.id === id)) }));
                 } else {
@@ -2824,12 +3652,12 @@ function GlobalGOSPanel({ gameId }: { gameId: string }) {
   return (
     <Card className="mt-6">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="grid gap-3 sm:flex sm:items-center sm:justify-between">
           <CardTitle>Guilds, Orders &amp; Societies</CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Badge variant="gold">{gosList.length} total</Badge>
             <Badge>Combined treasury: {totalTreasury.toLocaleString()}gc</Badge>
-            <Button variant="outline" size="sm" onClick={() => void load()}>Refresh</Button>
+            <Button className="w-full sm:w-auto" variant="outline" size="sm" onClick={() => void load()}>Refresh</Button>
           </div>
         </div>
       </CardHeader>
@@ -2840,13 +3668,13 @@ function GlobalGOSPanel({ gameId }: { gameId: string }) {
         ) : (
           <div className="space-y-2">
             {gosList.map((gos) => (
-              <div key={gos.id} className="p-3 medieval-border rounded flex items-center justify-between gap-4">
-                <div>
-                  <span className="font-heading font-semibold">{gos.name}</span>
+              <div key={gos.id} className="grid gap-3 p-3 medieval-border rounded sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <div className="min-w-0">
+                  <span className="break-words font-heading font-semibold">{gos.name}</span>
                   <span className="text-ink-300 ml-2 text-sm">{gos.type}</span>
                   {gos.focus && <span className="text-ink-300 ml-1 text-sm">· {gos.focus}</span>}
                 </div>
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm sm:justify-end">
                   {gos.leader && <Badge variant="default">{gos.leader.name}</Badge>}
                   {gos.monopolyProduct && <Badge variant="gold">Monopoly: {gos.monopolyProduct}</Badge>}
                   <span className="text-ink-400">{gos.treasury.toLocaleString()}gc</span>
@@ -2855,8 +3683,8 @@ function GlobalGOSPanel({ gameId }: { gameId: string }) {
                       {realm.name}
                     </Badge>
                   ))}
-                  <Link href={`/game/${gameId}/realm/gos?realmId=${gos.realms.find((r) => r.isPrimary)?.id ?? gos.realms[0]?.id}`}>
-                    <Button variant="ghost" size="sm">Manage</Button>
+                  <Link href={`/game/${gameId}/realm/gos?realmId=${gos.realms.find((r) => r.isPrimary)?.id ?? gos.realms[0]?.id}`} className="w-full sm:w-auto">
+                    <Button className="w-full sm:w-auto" variant="ghost" size="sm">Manage</Button>
                   </Link>
                 </div>
               </div>

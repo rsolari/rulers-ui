@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { startTransition, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { HexMap } from '@/components/map/HexMap';
@@ -186,7 +185,6 @@ export default function GameMapPage() {
     }
   }
 
-  const backHref = role === 'gm' ? `/game/${gameId}/gm` : `/game/${gameId}/realm`;
   const selectedTerritory = selectedHex?.territoryId
     ? mapData?.territories.find((territory) => territory.id === selectedHex.territoryId) ?? null
     : null;
@@ -230,9 +228,6 @@ export default function GameMapPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-ink-300">{error}</p>
-            <Link href={backHref}>
-              <Button variant="outline">Return to dashboard</Button>
-            </Link>
           </CardContent>
         </Card>
       </main>
@@ -250,9 +245,6 @@ export default function GameMapPage() {
             <p className="text-ink-300">
               This game does not have an imported map yet. Finish world setup first.
             </p>
-            <Link href={backHref}>
-              <Button variant="outline">Return to dashboard</Button>
-            </Link>
           </CardContent>
         </Card>
       </main>
@@ -268,11 +260,6 @@ export default function GameMapPage() {
           <p className="max-w-2xl text-ink-300">
             Survey territories, borders, settlements, and field armies from a single strategic view.
           </p>
-        </div>
-        <div className="flex gap-3">
-          <Link href={backHref}>
-            <Button variant="outline">Back to dashboard</Button>
-          </Link>
         </div>
       </div>
 

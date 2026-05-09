@@ -3,15 +3,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { Building2, CheckCircle2, Circle, Coins, HandCoins, Landmark, Map as MapIcon, Shield, Star, Users } from 'lucide-react';
 import type { GameMapData } from '@/components/map/types';
 import { TerritoryHexMap } from '@/components/map/TerritoryHexMap';
+import { AppPage, AppPageHeader } from '@/components/layout/app-page';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState, LoadingState } from '@/components/ui/empty-state';
+import { ListRow } from '@/components/ui/list-row';
+import { InlineMutationMessage } from '@/components/ui/mutation-feedback';
+import { StatRow } from '@/components/ui/stat-row';
+import { CountPill, StatusPill } from '@/components/ui/status-pill';
+import { CheckboxChip, CheckboxChipGroup } from '@/components/ui/toggle-pill';
 import { TechnicalKnowledgeBadges } from '@/components/technical-knowledge/technical-knowledge-badges';
 import { useRole } from '@/hooks/use-role';
+import { ApiClientError, getApiErrorMessage, requestJson } from '@/lib/api-client';
 import { TRADITION_DEFS } from '@/lib/game-logic/constants';
 import { buildGameTerritoryMapData } from '@/lib/maps/territory-map';
 import type { EconomyProjectionDto } from '@/lib/economy-dto';
@@ -90,10 +100,13 @@ export default function RealmDashboard() {
   const [mapData, setMapData] = useState<GameMapData | null>(null);
   const [form, setForm] = useState({ name: '', governmentType: 'Monarch' as GovernmentType, traditions: [] as Tradition[] });
   const [saving, setSaving] = useState(false);
+  const [identityStatus, setIdentityStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [identityError, setIdentityError] = useState<string | null>(null);
   const [economyProjection, setEconomyProjection] = useState<EconomyProjectionDto | null>(null);
   const [setupChecklist, setSetupChecklist] = useState<PlayerSetupChecklist | null>(null);
   const [setupState, setSetupState] = useState<PlayerSetupState | null>(null);
   const [finalizingSetup, setFinalizingSetup] = useState(false);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) {
@@ -192,13 +205,13 @@ export default function RealmDashboard() {
     void loadChecklist();
   }, [gameId, realmId, initState, isGmManaging]);
 
-  function toggleTradition(tradition: Tradition) {
+  function setTraditionSelected(tradition: Tradition, selected: boolean) {
     setForm((current) => {
-      if (current.traditions.includes(tradition)) {
+      if (!selected) {
         return { ...current, traditions: current.traditions.filter((value) => value !== tradition) };
       }
 
-      if (current.traditions.length >= 3) {
+      if (current.traditions.includes(tradition) || current.traditions.length >= 3) {
         return current;
       }
 
@@ -207,44 +220,72 @@ export default function RealmDashboard() {
   }
 
   async function saveIdentity() {
-    if (!realmId) {
+    if (!realmId || saving) {
       return;
     }
 
     setSaving(true);
-    await fetch(`/api/game/${gameId}/realms`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        realmId,
+    setIdentityStatus('idle');
+    setIdentityError(null);
+
+    try {
+      await requestJson<{ updated: true }>(
+        `/api/game/${gameId}/realms`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            realmId,
+            name: form.name,
+            governmentType: form.governmentType,
+            traditions: form.traditions,
+          }),
+        },
+        'Failed to save realm identity',
+      );
+
+      setRealm((current) => current ? {
+        ...current,
         name: form.name,
         governmentType: form.governmentType,
-        traditions: form.traditions,
-      }),
-    });
-
-    setRealm((current) => current ? {
-      ...current,
-      name: form.name,
-      governmentType: form.governmentType,
-      traditions: JSON.stringify(form.traditions),
-    } : current);
-    setSaving(false);
+        traditions: JSON.stringify(form.traditions),
+      } : current);
+      setIdentityStatus('success');
+    } catch (error) {
+      setIdentityError(getApiErrorMessage(error, 'Failed to save realm identity'));
+      setIdentityStatus('error');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function finalizeSetup() {
+    if (finalizingSetup) {
+      return;
+    }
+
     setFinalizingSetup(true);
-    const response = await fetch(`/api/game/${gameId}/setup/finalize-player`, { method: 'POST' });
-    const data = await response.json();
-    if (response.ok) {
+    setFinalizeError(null);
+
+    try {
+      const data = await requestJson<{
+        checklist: PlayerSetupChecklist;
+        setupState: PlayerSetupState;
+      }>(
+        `/api/game/${gameId}/setup/finalize-player`,
+        { method: 'POST' },
+        'Failed to finalize setup',
+      );
       setSetupChecklist(data.checklist);
       setSetupState(data.setupState);
-    } else {
-      if (data.checklist) {
-        setSetupChecklist(data.checklist);
+    } catch (error) {
+      if (error instanceof ApiClientError && typeof error.payload === 'object' && error.payload !== null && 'checklist' in error.payload) {
+        setSetupChecklist(error.payload.checklist as PlayerSetupChecklist);
       }
+      setFinalizeError(getApiErrorMessage(error, 'Failed to finalize setup'));
+    } finally {
+      setFinalizingSetup(false);
     }
-    setFinalizingSetup(false);
   }
 
   const realmColor = useMemo(() => {
@@ -264,9 +305,9 @@ export default function RealmDashboard() {
 
   if (!game || !realm) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="font-heading text-ink-300 text-lg">Loading realm...</p>
-      </main>
+      <AppPage>
+        <LoadingState label="Loading realm..." />
+      </AppPage>
     );
   }
 
@@ -274,29 +315,28 @@ export default function RealmDashboard() {
   const realmLinkSuffix = isGmManaging ? `?realmId=${realmId}` : '';
 
   return (
-    <main className="min-h-screen p-6 max-w-6xl mx-auto">
-      {isGmManaging && (
-        <Link href={`/game/${gameId}/gm`} className="inline-flex items-center gap-1 text-sm text-ink-300 hover:text-ink-500 mb-4">
-          &larr; Back to GM Dashboard
-        </Link>
-      )}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">{realm.name}</h1>
-          <p className="text-ink-300">{game.name}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="gold">{game.turnPhase}</Badge>
-          <Badge>Year {game.currentYear}, {game.currentSeason}</Badge>
-          <Badge>{game.gamePhase}</Badge>
-          <Link href={`/game/${gameId}/map`}>
-            <Button variant="outline" size="sm">Map</Button>
+    <AppPage>
+      <AppPageHeader
+        title={realm.name}
+        subtitle={game.name}
+        status={
+          <>
+            <StatusPill tone="active">{game.turnPhase}</StatusPill>
+            <StatusPill tone="neutral">Year {game.currentYear}, {game.currentSeason}</StatusPill>
+            <StatusPill tone="muted">{game.gamePhase}</StatusPill>
+          </>
+        }
+        actions={
+          <Link href={`/game/${gameId}/map${realmLinkSuffix}`} className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto" variant="outline" leftIcon={<MapIcon className="h-4 w-4" />}>
+              Map
+            </Button>
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       {setupChecklist && !isGmManaging && (
-        <Card className="mb-6" variant="gold">
+        <Card className="mb-6" variant={setupState === 'ready' ? 'panel' : 'emphasis'}>
           <CardHeader>
             <CardTitle>{setupState === 'ready' ? 'Setup Complete' : 'Setup Checklist'}</CardTitle>
           </CardHeader>
@@ -318,16 +358,18 @@ export default function RealmDashboard() {
               ] as const).map((item) => {
                 const done = setupChecklist[item.key];
                 return (
-                  <li key={item.key} className="flex items-center gap-3">
-                    <span className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs ${done ? 'bg-green-600 border-green-600 text-white' : 'border-ink-200'}`}>
-                      {done ? '\u2713' : ''}
-                    </span>
+                  <li key={item.key} className="flex min-w-0 items-start gap-3">
+                    {done ? (
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-700" aria-hidden="true" />
+                    ) : (
+                      <Circle className="mt-0.5 h-5 w-5 flex-shrink-0 text-ink-300" aria-hidden="true" />
+                    )}
                     {!done && item.link ? (
-                      <Link href={item.link} className="text-sm hover:underline text-gold-700">
+                      <Link href={item.link} className="min-w-0 break-words text-sm hover:underline text-gold-700">
                         {item.label}
                       </Link>
                     ) : (
-                      <span className={`text-sm ${done ? 'text-ink-300 line-through' : ''}`}>{item.label}</span>
+                      <span className={`min-w-0 break-words text-sm ${done ? 'text-ink-300 line-through' : ''}`}>{item.label}</span>
                     )}
                   </li>
                 );
@@ -335,20 +377,29 @@ export default function RealmDashboard() {
             </ul>
             {setupState === 'ready' ? (
               <div className="pt-2">
-                <Badge variant="green">Ready</Badge>
+                <StatusPill tone="success" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>Ready</StatusPill>
               </div>
             ) : (
-              <div className="pt-2 flex items-center gap-4">
+              <div className="grid gap-3 pt-2 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
                 <p className="text-xs text-ink-300">
                   {Object.values(setupChecklist).filter(Boolean).length} of {Object.values(setupChecklist).length} complete
                 </p>
                 {Object.values(setupChecklist).every(Boolean) && (
-                  <Button variant="accent" onClick={() => void finalizeSetup()} disabled={finalizingSetup}>
+                  <Button className="w-full sm:w-auto" variant="accent" onClick={() => void finalizeSetup()} disabled={finalizingSetup}>
                     {finalizingSetup ? 'Finalizing...' : 'Finalize Setup'}
                   </Button>
                 )}
               </div>
             )}
+            {finalizingSetup ? (
+              <InlineMutationMessage status="pending" message="Finalizing setup..." />
+            ) : finalizeError ? (
+              <InlineMutationMessage
+                status="error"
+                message={finalizeError}
+                onRetry={() => void finalizeSetup()}
+              />
+            ) : null}
           </CardContent>
         </Card>
       )}
@@ -360,12 +411,12 @@ export default function RealmDashboard() {
       ) : null}
 
       {ruler ? (
-        <Card variant="gold" className="mb-6">
+        <Card variant="panel" className="mb-6">
           <CardHeader>
             <CardTitle>Ruler</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
+            <div className="min-w-0">
               <p className="text-2xl font-heading font-bold">{ruler.name}</p>
               <p className="text-ink-300">
                 of House {ruler.familyName}
@@ -373,12 +424,12 @@ export default function RealmDashboard() {
               </p>
             </div>
             <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`}>
-              <Button variant="outline">View Nobles</Button>
+              <Button className="w-full sm:w-auto" variant="outline">View Nobles</Button>
             </Link>
           </CardContent>
         </Card>
       ) : !setupChecklist ? (
-        <Card variant="gold" className="mb-6">
+        <Card variant="emphasis" className="mb-6">
           <CardHeader>
             <CardTitle>Your realm has no ruler</CardTitle>
           </CardHeader>
@@ -387,129 +438,158 @@ export default function RealmDashboard() {
               Create the noble who leads this realm before you continue building its politics,
               alliances, and succession.
             </p>
-            <Link href={`/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
-              <Button variant="accent">Create Ruler</Button>
+            <Link href={`/game/${gameId}/realm/ruler/create${realmLinkSuffix}`} className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto" variant="accent">Create Ruler</Button>
             </Link>
           </CardContent>
         </Card>
       ) : null}
 
-      <div className={canEditIdentity ? 'grid gap-6 lg:grid-cols-[1fr_0.9fr]' : ''}>
+      <div className={canEditIdentity ? 'grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]' : ''}>
         {canEditIdentity && (
-          <Card>
+          <Card variant="panel">
             <CardHeader>
               <CardTitle>Realm Identity</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4" aria-busy={saving}>
               <Input
                 label="Realm Name"
                 value={form.name}
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                disabled={!canEditIdentity}
+                onChange={(event) => {
+                  setIdentityStatus('idle');
+                  setIdentityError(null);
+                  setForm((current) => ({ ...current, name: event.target.value }));
+                }}
+                disabled={!canEditIdentity || saving}
+                aria-describedby={identityStatus === 'error' ? 'realm-identity-status' : undefined}
               />
               <Select
                 label="Government"
                 options={GOVERNMENT_OPTIONS}
                 value={form.governmentType}
-                onChange={(event) => setForm((current) => ({ ...current, governmentType: event.target.value as GovernmentType }))}
-                disabled={!canEditIdentity}
+                onChange={(event) => {
+                  setIdentityStatus('idle');
+                  setIdentityError(null);
+                  setForm((current) => ({ ...current, governmentType: event.target.value as GovernmentType }));
+                }}
+                disabled={!canEditIdentity || saving}
+                aria-describedby={identityStatus === 'error' ? 'realm-identity-status' : undefined}
               />
-              <div>
-                <p className="font-heading text-sm font-medium text-ink-500 mb-2">Traditions ({form.traditions.length}/3)</p>
+              <CheckboxChipGroup
+                legend="Traditions"
+                helpText="Choose up to 3 traditions."
+                statusText={`${form.traditions.length} of 3 selected.`}
+              >
                 <div className="flex flex-wrap gap-2">
-                  {TRADITION_OPTIONS.map((option) => (
-                    <Badge
-                      key={option.value}
-                      variant={form.traditions.includes(option.value as Tradition) ? 'gold' : 'default'}
-                      className={canEditIdentity ? 'cursor-pointer' : ''}
-                      title={TRADITION_DEFS[option.value as Tradition].effect}
-                      onClick={() => canEditIdentity && toggleTradition(option.value as Tradition)}
-                    >
-                      {option.label}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+                  {TRADITION_OPTIONS.map((option) => {
+                    const value = option.value as Tradition;
+                    const def = TRADITION_DEFS[value];
+                    const selected = form.traditions.includes(value);
+                    const disabled = saving || !canEditIdentity || (!selected && form.traditions.length >= 3);
 
-              <Button variant="accent" onClick={() => void saveIdentity()} disabled={saving}>
+                    return (
+                      <CheckboxChip
+                        key={option.value}
+                        id={`realm-identity-tradition-${option.value}`}
+                        label={def.displayName}
+                        meta={def.category}
+                        description={def.effect}
+                        selected={selected}
+                        disabled={disabled}
+                        onSelectedChange={(nextSelected) => {
+                          setIdentityStatus('idle');
+                          setIdentityError(null);
+                          setTraditionSelected(value, nextSelected);
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </CheckboxChipGroup>
+
+              {saving ? (
+                <InlineMutationMessage id="realm-identity-status" status="pending" message="Saving..." />
+              ) : identityStatus === 'success' ? (
+                <InlineMutationMessage id="realm-identity-status" status="success" message="Saved" />
+              ) : identityStatus === 'error' && identityError ? (
+                <InlineMutationMessage
+                  id="realm-identity-status"
+                  status="error"
+                  message={identityError}
+                  onRetry={() => void saveIdentity()}
+                />
+              ) : null}
+
+              <Button className="w-full sm:w-auto" variant="accent" onClick={() => void saveIdentity()} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Identity'}
               </Button>
             </CardContent>
           </Card>
         )}
 
-        <Card variant="gold">
+        <Card variant="panel">
           <CardHeader>
             <CardTitle>Realm Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span>Treasury</span>
+            <StatRow label="Treasury">
               <strong>{realm.treasury.toLocaleString()}gc</strong>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Net Income / Season</span>
+            </StatRow>
+            <StatRow label="Net Income / Season">
               <strong className={(economyProjection?.netChange ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}>
                 {economyProjection
                   ? `${economyProjection.netChange >= 0 ? '+' : ''}${economyProjection.netChange.toLocaleString()}gc`
                   : '...'}
               </strong>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Tax Policy</span>
+            </StatRow>
+            <StatRow label="Tax Policy">
               <strong>{economyProjection?.realm.taxTypeApplied ?? realm.taxType}</strong>
-            </div>
+            </StatRow>
 
             <hr className="border-gold-500/20" />
 
             {economyProjection && (
-              <div className="flex items-center justify-between">
-                <span>Food Balance</span>
+              <StatRow label="Food Balance">
                 <strong className={economyProjection.foodSurplus >= 0 ? 'text-green-700' : 'text-red-700'}>
                   {economyProjection.foodSurplus >= 0 ? '+' : ''}{economyProjection.foodSurplus}
                 </strong>
-              </div>
+              </StatRow>
             )}
-            <div className="flex items-center justify-between">
-              <span>Turmoil</span>
-              <Badge
-                variant={
+            <StatRow label="Turmoil">
+              <StatusPill
+                tone={
                   (economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0) > 5
-                    ? 'red'
+                    ? 'danger'
                     : (economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0) > 2
-                      ? 'gold'
-                      : 'green'
+                      ? 'warning'
+                      : 'success'
                 }
               >
                 {economyProjection?.projectedTurmoil ?? realm.projectedTurmoil ?? 0}
-              </Badge>
-            </div>
+              </StatusPill>
+            </StatRow>
             {economyProjection?.openTurmoilEventId ? (
-              <div className="flex items-center justify-between">
-                <span>Incident</span>
-                <Badge variant={economyProjection.winterUnrestPending ? 'red' : 'gold'}>
+              <StatRow label="Incident">
+                <StatusPill tone={economyProjection.winterUnrestPending ? 'danger' : 'warning'}>
                   {economyProjection.winterUnrestPending ? 'Winter unrest pending' : 'Turmoil review open'}
-                </Badge>
-              </div>
+                </StatusPill>
+              </StatRow>
             ) : null}
             {economyProjection && economyProjection.warnings.length > 0 && (
-              <div className="flex items-center justify-between">
-                <span>Warnings</span>
-                <Badge variant="gold">{economyProjection.warnings.length}</Badge>
-              </div>
+              <StatRow label="Warnings">
+                <CountPill>{economyProjection.warnings.length}</CountPill>
+              </StatRow>
             )}
 
             <hr className="border-gold-500/20" />
 
-            <div className="flex items-center justify-between">
-              <span>Settlements</span>
+            <StatRow label="Settlements">
               <strong>{settlements.length}</strong>
-            </div>
+            </StatRow>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span>Technical Knowledge</span>
+              <StatRow label="Technical Knowledge">
                 <strong>{realm.technicalKnowledge.length}</strong>
-              </div>
+              </StatRow>
               <TechnicalKnowledgeBadges
                 knowledge={realm.technicalKnowledge}
                 emptyLabel="No technical knowledge assigned."
@@ -517,10 +597,9 @@ export default function RealmDashboard() {
               />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span>Realm Traditions</span>
+              <StatRow label="Realm Traditions">
                 <strong>{form.traditions.length}</strong>
-              </div>
+              </StatRow>
               {form.traditions.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {form.traditions.map((tradition) => (
@@ -528,35 +607,28 @@ export default function RealmDashboard() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-ink-300">No traditions selected.</p>
+                <EmptyState compact title="No traditions selected" description="Traditions can be chosen while realm identity is editable." />
               )}
             </div>
-            <Link href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
-              <span>Nobles</span>
+            <StatRow label="Nobles" href={`/game/${gameId}/realm/nobles${realmLinkSuffix}`}>
               <strong>{nobles.length}</strong>
-            </Link>
-            <Link href={`/game/${gameId}/realm/army${realmLinkSuffix}`} className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors">
-              <span>Troops</span>
+            </StatRow>
+            <StatRow label="Troops" href={`/game/${gameId}/realm/army${realmLinkSuffix}`}>
               <strong>{(militaryData.troops || []).length}</strong>
-            </Link>
-            <div className="flex items-center justify-between">
-              <span>Ships</span>
+            </StatRow>
+            <StatRow label="Ships">
               <strong>{shipCount}</strong>
-            </div>
+            </StatRow>
             <div>
-              <Link
-                href={`/game/${gameId}/realm/gos${realmLinkSuffix}`}
-                className="flex items-center justify-between hover:bg-parchment-100/50 -mx-2 px-2 py-1 rounded transition-colors"
-              >
-                <span>Guilds, Orders & Societies</span>
+              <StatRow label="Guilds, Orders & Societies" href={`/game/${gameId}/realm/gos${realmLinkSuffix}`}>
                 <strong>{gos.length}</strong>
-              </Link>
+              </StatRow>
               {gos.length > 0 && (
-                <div className="mt-1 ml-4 space-y-1">
+                <div className="mt-1 space-y-1 sm:ml-4">
                   {gos.map((g) => (
-                    <div key={g.id} className="flex items-center justify-between text-sm">
-                      <span>{g.name}</span>
-                      <Badge>{g.type}</Badge>
+                    <div key={g.id} className="grid gap-1 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <span className="min-w-0 break-words">{g.name}</span>
+                      <StatusPill tone="muted">{g.type}</StatusPill>
                     </div>
                   ))}
                 </div>
@@ -578,43 +650,61 @@ export default function RealmDashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-6">
-        <Link href={ruler ? `/game/${gameId}/realm/nobles${realmLinkSuffix}` : `/game/${gameId}/realm/ruler/create${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent>
-              <p className="font-heading font-bold pt-4">
-                {ruler ? 'Ruler & Nobles' : 'Create Ruler'}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/gos${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Guilds, Orders & Societies</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/settlements${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Settlements & Buildings</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/army${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Armies & Troops</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/treasury${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Treasury</p></CardContent>
-          </Card>
-        </Link>
-        <Link href={`/game/${gameId}/realm/trade${realmLinkSuffix}`}>
-          <Card className="hover:border-gold-500 transition-colors cursor-pointer">
-            <CardContent><p className="font-heading font-bold pt-4">Trade & Resources</p></CardContent>
-          </Card>
-        </Link>
+        {[
+          {
+            href: ruler ? `/game/${gameId}/realm/nobles${realmLinkSuffix}` : `/game/${gameId}/realm/ruler/create${realmLinkSuffix}`,
+            title: ruler ? 'Ruler & Nobles' : 'Create Ruler',
+            description: `${nobles.length} nobles recorded`,
+            icon: <Users className="h-5 w-5" />,
+          },
+          {
+            href: `/game/${gameId}/realm/gos${realmLinkSuffix}`,
+            title: 'Guilds, Orders & Societies',
+            description: `${gos.length} organizations`,
+            icon: <Landmark className="h-5 w-5" />,
+          },
+          {
+            href: `/game/${gameId}/realm/settlements${realmLinkSuffix}`,
+            title: 'Settlements & Buildings',
+            description: `${settlements.length} settlements`,
+            icon: <Building2 className="h-5 w-5" />,
+          },
+          {
+            href: `/game/${gameId}/realm/army${realmLinkSuffix}`,
+            title: 'Armies & Troops',
+            description: `${(militaryData.troops || []).length} troops`,
+            icon: <Shield className="h-5 w-5" />,
+          },
+          {
+            href: `/game/${gameId}/realm/treasury${realmLinkSuffix}`,
+            title: 'Treasury',
+            description: `${realm.treasury.toLocaleString()}gc on hand`,
+            icon: <Coins className="h-5 w-5" />,
+          },
+          {
+            href: `/game/${gameId}/realm/trade${realmLinkSuffix}`,
+            title: 'Trade & Resources',
+            description: 'Resource flows and trade access',
+            icon: <HandCoins className="h-5 w-5" />,
+          },
+        ].map((item) => (
+          <Link key={item.href} className="block min-w-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400" href={item.href}>
+            <Card variant="interactive" className="h-full">
+              <CardContent className="flex min-h-24 items-start gap-3">
+                <span className="mt-1 inline-flex rounded-md border border-border-subtle bg-surface-row p-2 text-ink-500" aria-hidden="true">
+                  {item.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="block break-words font-heading font-bold text-ink-700">{item.title}</span>
+                  <span className="mt-1 block text-sm leading-snug text-ink-400">{item.description}</span>
+                </span>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
 
-      <Card className="mt-6">
+      <Card className="mt-6" variant="panel">
         <CardHeader>
           <CardTitle>Territories & Settlements</CardTitle>
         </CardHeader>
@@ -632,36 +722,38 @@ export default function RealmDashboard() {
                       .filter((s) => s.hexId)
                       .map((s) => ({ id: s.id, name: s.name, size: s.size, kind: s.kind, fill: realmColor, hexId: s.hexId }));
                     return (
-                      <div key={territory.id} className="p-3 medieval-border rounded space-y-2 border-gold-500/50">
-                        <div className="flex items-center justify-between">
-                          <span className="font-heading font-semibold">{territory.name}</span>
+                      <ListRow key={territory.id} className="space-y-3">
+                        <div className="grid gap-1 sm:flex sm:items-center sm:justify-between">
+                          <span className="min-w-0 break-words font-heading font-semibold">{territory.name}</span>
                         </div>
                         {territoryMap ? (
                           <TerritoryHexMap data={territoryMap} placements={placements} />
                         ) : null}
                         {territorySettlements.length > 0 && (
-                          <div className="space-y-1 ml-4">
+                          <div className="space-y-1 sm:ml-4">
                             {territorySettlements.map((settlement) => (
-                              <div key={settlement.id} className="flex items-center justify-between p-2 rounded bg-parchment-100/50">
-                                <div className="flex items-center gap-3">
-                                  <span>{settlement.name}</span>
+                              <ListRow key={settlement.id} className="grid gap-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                  <span className="min-w-0 break-words">{settlement.name}</span>
                                   <Badge>{settlement.size}</Badge>
                                   {settlement.id === realm.capitalSettlementId && (
-                                    <Badge variant="gold">&#9733; Capital</Badge>
+                                    <StatusPill tone="active" icon={<Star className="h-3.5 w-3.5" />}>Capital</StatusPill>
                                   )}
                                 </div>
-                                <span className="text-sm text-ink-300">{settlement.buildings?.length || 0} buildings</span>
-                              </div>
+                                <span className="text-sm text-ink-300 sm:text-right">{settlement.buildings?.length || 0} buildings</span>
+                              </ListRow>
                             ))}
                           </div>
                         )}
-                      </div>
+                      </ListRow>
                     );
                   })}
                 </>
               );
             })()}
-            {territories.length === 0 && <p className="text-ink-300 text-sm">No territories yet.</p>}
+            {territories.length === 0 && (
+              <EmptyState compact title="No territories yet" description="Territories will appear here after the GM completes setup." />
+            )}
           </div>
         </CardContent>
       </Card>
@@ -689,14 +781,14 @@ export default function RealmDashboard() {
       )}
 
       {claimCode && (
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-ink-200/40 pt-4 text-xs text-ink-300">
-          <span>
+        <Alert tone="neutral" className="mt-8">
+          <span className="min-w-0 break-words">
             <span className="font-medium">Claim code:</span>{' '}
-            <span className="font-mono">{claimCode}</span>
+            <span className="font-mono break-all">{claimCode}</span>
           </span>
-          <span className="text-ink-400">Use this to rejoin your realm on another device.</span>
-        </div>
+          <span className="mt-1 block text-ink-400">Use this to rejoin your realm on another device.</span>
+        </Alert>
       )}
-    </main>
+    </AppPage>
   );
 }

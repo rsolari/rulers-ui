@@ -91,6 +91,19 @@ function attachBuildingsToSettlements(
   }));
 }
 
+async function getSettlementInGame(gameId: string, settlementId: string) {
+  const row = await db.select({ settlement: settlements })
+    .from(settlements)
+    .innerJoin(territories, eq(settlements.territoryId, territories.id))
+    .where(and(
+      eq(settlements.id, settlementId),
+      eq(territories.gameId, gameId),
+    ))
+    .get();
+
+  return row?.settlement ?? null;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ gameId: string }> }
@@ -298,9 +311,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'settlementId required' }, { status: 400 });
     }
 
-    const settlement = await db.select().from(settlements)
-      .where(eq(settlements.id, body.settlementId))
-      .get();
+    const settlement = await getSettlementInGame(gameId, body.settlementId);
 
     if (!settlement) {
       return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
@@ -476,6 +487,11 @@ export async function DELETE(
 
     if (!body.settlementId) {
       return NextResponse.json({ error: 'settlementId required' }, { status: 400 });
+    }
+
+    const settlement = await getSettlementInGame(gameId, body.settlementId);
+    if (!settlement) {
+      return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
     }
 
     await db.delete(buildings).where(eq(buildings.settlementId, body.settlementId));

@@ -35,7 +35,7 @@ import { GET, PATCH, POST } from './route';
 
 function mockSelectWhereOnce(result: unknown) {
   const where = vi.fn().mockResolvedValue(result);
-  const from = vi.fn(() => ({ where }));
+  const from = vi.fn(() => ({ innerJoin: vi.fn(() => ({ where })), where }));
   dbMocks.select.mockReturnValueOnce({ from });
 }
 
@@ -166,7 +166,7 @@ describe('PATCH /api/game/[gameId]/buildings', () => {
   function mockSelectGetOnce(result: unknown) {
     const get = vi.fn().mockResolvedValue(result);
     const where = vi.fn(() => ({ get }));
-    const from = vi.fn(() => ({ where }));
+    const from = vi.fn(() => ({ innerJoin: vi.fn(() => ({ where })), where }));
     dbMocks.select.mockReturnValueOnce({ from });
   }
 

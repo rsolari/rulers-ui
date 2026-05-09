@@ -99,7 +99,18 @@ export function useRulesChat() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          const finalText = decoder.decode();
+          if (finalText) {
+            assistantMessage.content += finalText;
+            setMessages((prev) => {
+              const next = [...prev];
+              next[next.length - 1] = { ...assistantMessage };
+              return next;
+            });
+          }
+          break;
+        }
 
         const text = decoder.decode(value, { stream: true });
         assistantMessage.content += text;

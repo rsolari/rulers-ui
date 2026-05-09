@@ -8,24 +8,54 @@ import { createBuilding } from '@/lib/rules-action-service';
 
 const PLAYER_EDITABLE_FIELDS = new Set(['buildingId', 'ownerGosId', 'allottedGosId']);
 
-async function getBuildingRealmId(buildingId: string) {
+interface RealmScope {
+  found: boolean;
+  realmId: string | null;
+}
+
+async function getSettlementRealmForGame(gameId: string, settlementId: string) {
+  const row = await db.select({
+    realmId: settlements.realmId,
+  })
+    .from(settlements)
+    .innerJoin(territories, eq(settlements.territoryId, territories.id))
+    .where(and(
+      eq(settlements.id, settlementId),
+      eq(territories.gameId, gameId),
+    ))
+    .get();
+
+  return row
+    ? { found: true, realmId: row.realmId ?? null } satisfies RealmScope
+    : { found: false, realmId: null } satisfies RealmScope;
+}
+
+async function getTerritoryRealmForGame(gameId: string, territoryId: string) {
+  const territory = await db.select({ realmId: territories.realmId })
+    .from(territories)
+    .where(and(
+      eq(territories.id, territoryId),
+      eq(territories.gameId, gameId),
+    ))
+    .get();
+
+  return territory
+    ? { found: true, realmId: territory.realmId ?? null } satisfies RealmScope
+    : { found: false, realmId: null } satisfies RealmScope;
+}
+
+async function getBuildingAccess(gameId: string, buildingId: string) {
   const building = await db.select().from(buildings).where(eq(buildings.id, buildingId)).get();
   if (!building) return { building: null, realmId: null };
 
   if (building.settlementId) {
-    const settlement = await db.select({ realmId: settlements.realmId })
-      .from(settlements)
-      .where(eq(settlements.id, building.settlementId))
-      .get();
-    return { building, realmId: settlement?.realmId ?? null };
+    const scope = await getSettlementRealmForGame(gameId, building.settlementId);
+    return scope.found ? { building, realmId: scope.realmId } : { building: null, realmId: null };
   }
 
   if (building.territoryId) {
-    const territory = await db.select({ realmId: territories.realmId })
-      .from(territories)
-      .where(eq(territories.id, building.territoryId))
-      .get();
-    return { building, realmId: territory?.realmId ?? null };
+    const scope = await getTerritoryRealmForGame(gameId, building.territoryId);
+    return scope.found ? { building, realmId: scope.realmId } : { building: null, realmId: null };
   }
 
   return { building, realmId: null };
@@ -64,11 +94,21 @@ export async function GET(
     const territoryId = url.searchParams.get('territoryId');
 
     if (settlementId) {
+      const scope = await getSettlementRealmForGame(gameId, settlementId);
+      if (!scope.found) {
+        return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+      }
+
       const list = await db.select().from(buildings).where(eq(buildings.settlementId, settlementId));
       return NextResponse.json(list);
     }
 
     if (territoryId) {
+      const scope = await getTerritoryRealmForGame(gameId, territoryId);
+      if (!scope.found) {
+        return NextResponse.json({ error: 'Territory not found' }, { status: 404 });
+      }
+
       const list = await db.select().from(buildings).where(eq(buildings.territoryId, territoryId));
       return NextResponse.json(list);
     }
@@ -147,12 +187,17 @@ export async function PATCH(
       if (unsupportedField) {
         return NextResponse.json({ error: 'Player building edits may only assign G.O.S. ownership or allotment' }, { status: 403 });
       }
+    } else {
+      await requireGM(gameId);
+    }
 
-      const { building, realmId } = await getBuildingRealmId(body.buildingId);
-      if (!building) {
-        return NextResponse.json({ error: 'Building not found' }, { status: 404 });
-      }
+    const { building, realmId } = await getBuildingAccess(gameId, body.buildingId);
 
+    if (!building) {
+      return NextResponse.json({ error: 'Building not found' }, { status: 404 });
+    }
+
+    if (!isGm) {
       if (!realmId) {
         return NextResponse.json({ error: 'Building is not attached to a realm' }, { status: 409 });
       }
@@ -164,8 +209,6 @@ export async function PATCH(
 
       const allottedError = await assertGosBelongsToRealm(body.allottedGosId, realmId, 'allottedGosId');
       if (allottedError) return allottedError;
-    } else {
-      await requireGM(gameId);
     }
 
     const updates: Record<string, unknown> = {};
@@ -204,6 +247,11 @@ export async function DELETE(
 
     if (!body.buildingId) {
       return NextResponse.json({ error: 'buildingId required' }, { status: 400 });
+    }
+
+    const { building } = await getBuildingAccess(gameId, body.buildingId);
+    if (!building) {
+      return NextResponse.json({ error: 'Building not found' }, { status: 404 });
     }
 
     await db.delete(buildings).where(eq(buildings.id, body.buildingId));

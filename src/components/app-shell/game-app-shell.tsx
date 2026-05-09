@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { GameShellHeader } from '@/components/app-shell/game-shell-header';
 import { GameShellNav } from '@/components/app-shell/game-shell-nav';
@@ -20,20 +20,39 @@ export function GameAppShell({ gameId, children }: GameAppShellProps) {
   const realmId = searchParams.get('realmId');
   const [shell, setShell] = useState<GameShellDto | null>(null);
   const [loading, setLoading] = useState(true);
+  const [shellError, setShellError] = useState('');
+  const loadGenerationRef = useRef(0);
 
   const loadShell = useCallback(async () => {
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
     setLoading(true);
-    const query = realmId ? `?realmId=${encodeURIComponent(realmId)}` : '';
-    const response = await fetch(`/api/game/${gameId}/shell${query}`, { cache: 'no-store' });
+    setShellError('');
 
-    if (!response.ok) {
-      setShell(null);
-      setLoading(false);
-      return;
+    try {
+      const query = realmId ? `?realmId=${encodeURIComponent(realmId)}` : '';
+      const response = await fetch(`/api/game/${gameId}/shell${query}`, { cache: 'no-store' });
+
+      if (generation !== loadGenerationRef.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        setShell(null);
+        setShellError('Unable to load game navigation.');
+        return;
+      }
+
+      setShell(await response.json());
+    } catch {
+      if (generation === loadGenerationRef.current) {
+        setShellError('Unable to load game navigation.');
+      }
+    } finally {
+      if (generation === loadGenerationRef.current) {
+        setLoading(false);
+      }
     }
-
-    setShell(await response.json());
-    setLoading(false);
   }, [gameId, realmId]);
 
   useEffect(() => {
@@ -67,8 +86,9 @@ export function GameAppShell({ gameId, children }: GameAppShellProps) {
   if (loading && !shell) {
     return (
       <div className="min-h-screen bg-parchment-50">
-        <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="flex min-h-screen flex-col items-center justify-center p-6">
           <p className="font-heading text-lg text-ink-300">Loading game...</p>
+          {shellError ? <p className="mt-2 text-sm font-semibold text-red-600">{shellError}</p> : null}
         </div>
       </div>
     );
@@ -78,7 +98,7 @@ export function GameAppShell({ gameId, children }: GameAppShellProps) {
     return (
       <div className="min-h-screen bg-parchment-50">
         <div className="flex min-h-screen items-center justify-center p-6">
-          <p className="font-heading text-lg text-ink-300">Opening game...</p>
+          <p className="font-heading text-lg text-ink-300">{shellError || 'Opening game...'}</p>
         </div>
       </div>
     );

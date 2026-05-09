@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -152,11 +153,11 @@ function Dialog({
   }, [ariaLabel, labelledById, open]);
 
   const registerTitle = useCallback((id?: string) => {
-    setLabelledById(id);
+    setLabelledById((current) => current === id ? current : id);
   }, []);
 
   const registerDescription = useCallback((id?: string) => {
-    setDescribedById(id);
+    setDescribedById((current) => current === id ? current : id);
   }, []);
 
   const handleCancel = (event: React.SyntheticEvent<HTMLDialogElement, Event>) => {
@@ -181,14 +182,14 @@ function Dialog({
     }
   };
 
-  const contextValue: DialogContextValue = {
+  const contextValue: DialogContextValue = useMemo(() => ({
     titleId,
     descriptionId,
     closeLabel,
     close,
     registerDescription,
     registerTitle,
-  };
+  }), [close, closeLabel, descriptionId, registerDescription, registerTitle, titleId]);
 
   return (
     <DialogContext.Provider value={contextValue}>

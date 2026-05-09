@@ -36,7 +36,15 @@ vi.mock('@/lib/game-init-state', () => ({
   recomputeGameInitState: recomputeGameInitStateMock,
 }));
 
-import { POST } from './route';
+import { PATCH, POST } from './route';
+
+function mockSelectAllOnce(result: unknown) {
+  const all = vi.fn().mockResolvedValue(result);
+  const where = vi.fn(() => ({ all }));
+  const innerJoin = vi.fn(() => ({ where }));
+  const from = vi.fn(() => ({ innerJoin, where }));
+  dbMocks.db.select.mockReturnValueOnce({ from });
+}
 
 describe('/api/game/[gameId]/ships', () => {
   beforeEach(() => {
@@ -133,5 +141,27 @@ describe('/api/game/[gameId]/ships', () => {
       details: { shipType: 'Galleon', missingPrerequisite: 'Dockyard' },
     });
     expect(recomputeGameInitStateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/game/[gameId]/ships', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not bulk-update ships that are not scoped to the route game', async () => {
+    authMocks.requireGM.mockResolvedValue({ id: 'game-1' });
+    mockSelectAllOnce([]);
+
+    const response = await PATCH(new Request('http://localhost/api/game/game-1/ships', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shipId: 'foreign-ship', condition: 'Ready' }),
+    }), {
+      params: Promise.resolve({ gameId: 'game-1' }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(dbMocks.db.update).not.toHaveBeenCalled();
   });
 });

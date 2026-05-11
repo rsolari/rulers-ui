@@ -54,8 +54,30 @@ export interface PlayerSetupStatus {
   missingRequirements: string[];
 }
 
+type SettlementSetupRow = {
+  id: string;
+  name: string | null;
+  size: string;
+  isCapital?: boolean | null;
+};
+
 function hasNonEmptyName(value: string | null) {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function areSettlementsPlacedAndNamed(
+  settlementRows: SettlementSetupRow[],
+  capitalSettlementId: string | null | undefined,
+) {
+  const hasNamedCityCapital = settlementRows.some((settlement) => (
+    settlement.size === 'City'
+    && hasNonEmptyName(settlement.name)
+    && (settlement.isCapital || settlement.id === capitalSettlementId)
+  ));
+
+  return settlementRows.length > 0
+    && hasNamedCityCapital
+    && settlementRows.every((settlement) => hasNonEmptyName(settlement.name));
 }
 
 function getMissingSetupRequirements(checklist: PlayerSetupChecklist) {
@@ -160,6 +182,7 @@ async function getPlayerSetupStatuses(gameId: string): Promise<PlayerSetupStatus
         treasury: realms.treasury,
         taxType: realms.taxType,
         rulerNobleId: realms.rulerNobleId,
+        capitalSettlementId: realms.capitalSettlementId,
       }).from(realms).where(and(
         eq(realms.gameId, gameId),
         inArray(realms.id, realmIds),
@@ -193,10 +216,12 @@ async function getPlayerSetupStatuses(gameId: string): Promise<PlayerSetupStatus
       : Promise.resolve([]),
     territoryIds.length > 0
       ? db.select({
+        id: settlements.id,
         territoryId: settlements.territoryId,
         realmId: settlements.realmId,
         name: settlements.name,
         size: settlements.size,
+        isCapital: settlements.isCapital,
       }).from(settlements).where(inArray(settlements.territoryId, territoryIds))
       : Promise.resolve([]),
   ]);
@@ -225,9 +250,8 @@ async function getPlayerSetupStatuses(gameId: string): Promise<PlayerSetupStatus
 
   return slots.map((slot) => {
     const slotSettlements = settlementsBySlotKey.get(`${slot.territoryId}:${slot.realmId ?? ''}`) ?? [];
-    const hasNamedTown = slotSettlements.some((settlement) => settlement.size === 'Town' && hasNonEmptyName(settlement.name));
-    const settlementsPlacedNamed = slotSettlements.length > 0 && hasNamedTown && slotSettlements.every((settlement) => hasNonEmptyName(settlement.name));
     const realm = slot.realmId ? realmById.get(slot.realmId) : undefined;
+    const settlementsPlacedNamed = areSettlementsPlacedAndNamed(slotSettlements, realm?.capitalSettlementId);
     const checklist: PlayerSetupChecklist = {
       realmCreated: Boolean(slot.realmId && realm),
       rulerCreated: Boolean(slot.realmId && rulerRealmIds.has(slot.realmId)),

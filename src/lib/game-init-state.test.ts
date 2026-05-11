@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { deriveGameInitState, derivePlayerSetupState, toLegacyGamePhase } from './game-init-state';
+import {
+  areSettlementsPlacedAndNamed,
+  deriveGameInitState,
+  derivePlayerSetupState,
+  toLegacyGamePhase,
+} from './game-init-state';
 
 describe('game init state helpers', () => {
   it('keeps world setup as a hard gate', () => {
@@ -64,6 +69,27 @@ describe('game init state helpers', () => {
         economyInitialized: true,
       },
     })).toBe('ready');
+  });
+
+  it('treats a named City capital and named settlements as settlement setup complete', () => {
+    expect(areSettlementsPlacedAndNamed([
+      { id: 'capital-1', name: 'Highgate', size: 'City', isCapital: true },
+      { id: 'village-1', name: 'Mossford', size: 'Village', isCapital: false },
+    ], 'capital-1')).toBe(true);
+  });
+
+  it('does not satisfy settlement setup with only a named Town', () => {
+    expect(areSettlementsPlacedAndNamed([
+      { id: 'town-1', name: 'Highgate', size: 'Town', isCapital: false },
+      { id: 'village-1', name: 'Mossford', size: 'Village', isCapital: false },
+    ], null)).toBe(false);
+  });
+
+  it('does not satisfy settlement setup while any settlement remains unnamed', () => {
+    expect(areSettlementsPlacedAndNamed([
+      { id: 'capital-1', name: 'Highgate', size: 'City', isCapital: true },
+      { id: 'village-1', name: '   ', size: 'Village', isCapital: false },
+    ], 'capital-1')).toBe(false);
   });
 
   it('maps init states back to the legacy phase compatibility enum', () => {
